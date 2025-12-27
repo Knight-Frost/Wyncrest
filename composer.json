@@ -20,17 +20,26 @@
         "nunomaduro/collision": "^8.6",
         "phpunit/phpunit": "^11.5.3"
     },
-    "autoload": {
-        "psr-4": {
-            "App\\": "app/",
-            "Database\\Factories\\": "database/factories/",
-            "Database\\Seeders\\": "database/seeders/"
-        }
+"autoload": {
+  "psr-4": {
+    "App\\": "app/",
+    "Database\\Factories\\": "database/factories/",
+    "Database\\Seeders\\": "database/seeders/"
+  },
+  "files": [
+    "app/Legacy/SharedModels.php",
+    "app/Legacy/UserEvents.php",
+    "app/Legacy/ListingEvents.php",
+    "app/Legacy/EmailListeners.php",
+    "app/Legacy/AuditListeners.php"
+  ]
+
     },
     "autoload-dev": {
         "psr-4": {
             "Tests\\": "tests/"
         }
+        
     },
     "scripts": {
         "setup": [
