@@ -6,6 +6,8 @@ use App\Models\LedgerEntry;
 use App\Models\User;
 use App\Enums\LedgerType;
 use App\Enums\LedgerStatus;
+use App\Events\PaymentSucceeded;
+use App\Events\PaymentFailed;
 use Stripe\StripeClient;
 use Stripe\Exception\ApiErrorException;
 
@@ -14,6 +16,8 @@ use Stripe\Exception\ApiErrorException;
  * 
  * Handles Stripe payment processing.
  * Ledger remains the source of truth.
+ * 
+ * Phase 3.5: Fires domain events for notifications
  */
 class PaymentService
 {
@@ -111,6 +115,8 @@ class PaymentService
      * Record successful payment from Stripe webhook
      * Creates a new PAYMENT ledger entry
      * 
+     * Phase 3.5: Fires PaymentSucceeded event
+     * 
      * @param string $paymentIntentId Stripe payment intent ID
      * @return LedgerEntry The payment ledger entry
      */
@@ -172,11 +178,17 @@ class PaymentService
             severity: 'info'
         );
 
+        // Phase 3.5: Fire domain event for notification
+        $tenant = User::find($originalEntry->tenant_id);
+        event(new PaymentSucceeded($paymentEntry, $originalEntry, $tenant));
+
         return $paymentEntry;
     }
 
     /**
      * Record failed payment from Stripe webhook
+     * 
+     * Phase 3.5: Fires PaymentFailed event
      * 
      * @param string $paymentIntentId Stripe payment intent ID
      */
@@ -200,19 +212,25 @@ class PaymentService
             return;
         }
 
+        $errorMessage = $intent->last_payment_error?->message ?? 'Unknown error';
+
         // Audit log (warning severity - failed transaction)
         $this->auditService->log(
             actor: null, // System action from webhook
             action: 'payment_failed',
             subject: $originalEntry,
-            description: "Payment failed for ledger entry {$originalEntry->id}: {$intent->last_payment_error?->message}",
+            description: "Payment failed for ledger entry {$originalEntry->id}: {$errorMessage}",
             metadata: [
                 'stripe_payment_intent_id' => $paymentIntentId,
                 'error_code' => $intent->last_payment_error?->code,
-                'error_message' => $intent->last_payment_error?->message,
+                'error_message' => $errorMessage,
             ],
             severity: 'warning'
         );
+
+        // Phase 3.5: Fire domain event for notification
+        $tenant = User::find($originalEntry->tenant_id);
+        event(new PaymentFailed($paymentIntentId, $originalEntry, $tenant, $errorMessage));
     }
 
     /**

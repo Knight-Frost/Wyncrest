@@ -1,35 +1,50 @@
 <?php
 
-namespace App\Observers;
+namespace App\Providers;
 
-use App\Models\Contract;
-use App\Enums\ContractStatus;
-use App\Services\LedgerService;
+use App\Events\RentGenerated;
+use App\Events\LedgerEntryMarkedOverdue;
+use App\Events\PaymentSucceeded;
+use App\Events\PaymentFailed;
+use App\Listeners\CreateNotificationListener;
+use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
 
-/**
- * ContractObserver
- * 
- * Handles contract events.
- * When contract becomes ACTIVE, generate first rent ledger entry.
- */
-class ContractObserver
+class EventServiceProvider extends ServiceProvider
 {
-    public function __construct(
-        protected LedgerService $ledgerService
-    ) {}
+    /**
+     * The event to listener mappings for the application.
+     *
+     * @var array<class-string, array<int, class-string>>
+     */
+    protected $listen = [
+        // Phase 3.5: Notification Events
+        RentGenerated::class => [
+            CreateNotificationListener::class,
+        ],
+        LedgerEntryMarkedOverdue::class => [
+            CreateNotificationListener::class,
+        ],
+        PaymentSucceeded::class => [
+            CreateNotificationListener::class,
+        ],
+        PaymentFailed::class => [
+            CreateNotificationListener::class,
+        ],
+    ];
 
     /**
-     * Handle the Contract "updated" event.
+     * Register any events for your application.
      */
-    public function updated(Contract $contract): void
+    public function boot(): void
     {
-        // Get the original status before the update
-        $originalStatus = $contract->getOriginal('status');
-        
-        // Check if status changed to ACTIVE
-        if ($originalStatus !== ContractStatus::ACTIVE && $contract->status === ContractStatus::ACTIVE) {
-            // Generate first rent entry
-            $this->ledgerService->generateFirstRentEntry($contract);
-        }
+        //
+    }
+
+    /**
+     * Determine if events and listeners should be automatically discovered.
+     */
+    public function shouldDiscoverEvents(): bool
+    {
+        return false;
     }
 }

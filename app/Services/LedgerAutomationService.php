@@ -4,9 +4,12 @@ namespace App\Services;
 
 use App\Models\Contract;
 use App\Models\LedgerEntry;
+use App\Models\User;
 use App\Enums\ContractStatus;
 use App\Enums\LedgerType;
 use App\Enums\LedgerStatus;
+use App\Events\RentGenerated;
+use App\Events\LedgerEntryMarkedOverdue;
 use Carbon\Carbon;
 
 /**
@@ -17,6 +20,8 @@ use Carbon\Carbon;
  * - Overdue detection
  * 
  * All operations are idempotent and auditable.
+ * 
+ * Phase 3.5: Fires domain events for notifications
  */
 class LedgerAutomationService
 {
@@ -110,6 +115,8 @@ class LedgerAutomationService
      * 
      * Idempotent: Only creates if rent doesn't already exist for period
      * 
+     * Phase 3.5: Fires RentGenerated event
+     * 
      * @param Contract $contract
      * @return LedgerEntry|null Returns entry if created, null if skipped
      */
@@ -162,6 +169,10 @@ class LedgerAutomationService
             severity: 'info'
         );
         
+        // Phase 3.5: Fire domain event for notification
+        $tenant = User::find($contract->tenant_id);
+        event(new RentGenerated($rentEntry, $tenant));
+        
         return $rentEntry;
     }
 
@@ -169,6 +180,8 @@ class LedgerAutomationService
      * Mark overdue ledger entries
      * 
      * Updates status from PENDING to OVERDUE for entries past due date
+     * 
+     * Phase 3.5: Fires LedgerEntryMarkedOverdue event
      * 
      * @return int Number of entries marked overdue
      */
@@ -202,6 +215,10 @@ class LedgerAutomationService
                 ],
                 severity: 'warning'
             );
+            
+            // Phase 3.5: Fire domain event for notification
+            $tenant = User::find($entry->tenant_id);
+            event(new LedgerEntryMarkedOverdue($entry, $tenant));
             
             $count++;
         }

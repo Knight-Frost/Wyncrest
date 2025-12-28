@@ -41,6 +41,11 @@ use App\Http\Controllers\Admin\AdminLedgerController;
 // ============================================================================
 use App\Http\Controllers\StripeWebhookController;
 
+// ============================================================================
+// NOTIFICATION CONTROLLER - Phase 3.5
+// ============================================================================
+use App\Http\Controllers\NotificationController;
+
 /*
 |--------------------------------------------------------------------------
 | API Routes - Nexus
@@ -170,3 +175,14 @@ Route::middleware(['auth:sanctum,admin'])->prefix('admin')->group(function () {
 // STRIPE WEBHOOK - Phase 3.3 (NO AUTH - signature verified in controller)
 // ============================================================================
 Route::post('/webhooks/stripe', [StripeWebhookController::class, 'handle']);
+
+// ============================================================================
+// NOTIFICATION ROUTES - Phase 3.5
+// ============================================================================
+Route::middleware(['auth:sanctum'])->prefix('notifications')->group(function () {
+    Route::get('/', [NotificationController::class, 'index']);
+    Route::get('/unread', [NotificationController::class, 'unread']);
+    Route::get('/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::patch('/{notification}/read', [NotificationController::class, 'markAsRead']);
+    Route::post('/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+});
