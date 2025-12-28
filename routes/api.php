@@ -14,6 +14,7 @@ use App\Http\Controllers\Tenant\TenantDashboardController;
 use App\Http\Controllers\Tenant\SavedListingController;
 use App\Http\Controllers\Tenant\TenantContractController;
 use App\Http\Controllers\Tenant\TenantLedgerController;
+use App\Http\Controllers\Tenant\TenantPaymentController;
 
 // ============================================================================
 // LANDLORD CONTROLLERS
@@ -34,6 +35,11 @@ use App\Http\Controllers\Admin\AdminFeatureController;
 use App\Http\Controllers\Admin\AdminAuditController;
 use App\Http\Controllers\Admin\AdminContractController;
 use App\Http\Controllers\Admin\AdminLedgerController;
+
+// ============================================================================
+// WEBHOOK CONTROLLERS
+// ============================================================================
+use App\Http\Controllers\StripeWebhookController;
 
 /*
 |--------------------------------------------------------------------------
@@ -79,6 +85,10 @@ Route::middleware(['auth:sanctum', 'tenant'])->prefix('tenant')->group(function 
     // Ledger (Phase 3.2)
     Route::get('/ledger', [TenantLedgerController::class, 'index']);
     Route::get('/ledger/{ledgerEntry}', [TenantLedgerController::class, 'show']);
+
+    // Payments (Phase 3.3)
+    Route::post('/payments/initiate/{ledgerEntry}', [TenantPaymentController::class, 'initiate']);
+    Route::get('/payments/balance', [TenantPaymentController::class, 'balance']);
 });
 
 // ============================================================================
@@ -155,3 +165,8 @@ Route::middleware(['auth:sanctum,admin'])->prefix('admin')->group(function () {
     Route::get('/ledger/{ledgerEntry}', [AdminLedgerController::class, 'show']);
     Route::post('/ledger/{ledgerEntry}/late-fee', [AdminLedgerController::class, 'generateLateFee']);
 });
+
+// ============================================================================
+// STRIPE WEBHOOK - Phase 3.3 (NO AUTH - signature verified in controller)
+// ============================================================================
+Route::post('/webhooks/stripe', [StripeWebhookController::class, 'handle']);

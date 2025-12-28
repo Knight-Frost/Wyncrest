@@ -40,6 +40,7 @@ class LedgerEntry extends Model
         'due_date',
         'status',
         'related_rent_entry_id',
+        'stripe_payment_intent_id',
     ];
 
     protected $casts = [
@@ -77,7 +78,7 @@ class LedgerEntry extends Model
     }
 
     /**
-     * Get the related rent entry (for late fees)
+     * Get the related rent entry (for late fees and payments)
      */
     public function relatedRentEntry(): BelongsTo
     {
@@ -133,6 +134,23 @@ class LedgerEntry extends Model
     }
 
     /**
+     * Scope for payment entries only
+     */
+    public function scopePayments($query)
+    {
+        return $query->where('type', LedgerType::PAYMENT);
+    }
+
+    /**
+     * Scope for unpaid obligations
+     */
+    public function scopeUnpaid($query)
+    {
+        return $query->whereIn('type', [LedgerType::RENT->value, LedgerType::LATE_FEE->value])
+            ->whereIn('status', [LedgerStatus::PENDING->value, LedgerStatus::OVERDUE->value]);
+    }
+
+    /**
      * Check if entry is overdue
      */
     public function isOverdue(): bool
@@ -142,6 +160,14 @@ class LedgerEntry extends Model
         }
         
         return $this->due_date->isPast();
+    }
+
+    /**
+     * Check if this entry can be paid
+     */
+    public function canBePaid(): bool
+    {
+        return $this->type->isObligation() && $this->status->isDue();
     }
 
     /**
