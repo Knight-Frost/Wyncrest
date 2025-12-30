@@ -46,6 +46,19 @@ use App\Http\Controllers\StripeWebhookController;
 // ============================================================================
 use App\Http\Controllers\NotificationController;
 
+// ============================================================================
+// NOTIFICATION PREFERENCE CONTROLLER - Phase 3.8
+// ============================================================================
+use App\Http\Controllers\NotificationPreferenceController;
+
+// ============================================================================
+// ANALYTICS CONTROLLERS - Phase 4.0
+// ============================================================================
+use App\Http\Controllers\Analytics\NotificationAnalyticsController;
+use App\Http\Controllers\Analytics\FinancialAnalyticsController;
+use App\Http\Controllers\Analytics\ContractAnalyticsController;
+use App\Http\Controllers\Analytics\PlatformAnalyticsController;
+
 /*
 |--------------------------------------------------------------------------
 | API Routes - Nexus
@@ -185,4 +198,27 @@ Route::middleware(['auth:sanctum'])->prefix('notifications')->group(function () 
     Route::get('/unread-count', [NotificationController::class, 'unreadCount']);
     Route::patch('/{notification}/read', [NotificationController::class, 'markAsRead']);
     Route::post('/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+});
+
+// ============================================================================
+// NOTIFICATION PREFERENCE ROUTES - Phase 3.8
+// ============================================================================
+Route::middleware(['auth:sanctum'])->group(function () {
+    Route::get('/notification-preferences', [NotificationPreferenceController::class, 'index']);
+    Route::put('/notification-preferences', [NotificationPreferenceController::class, 'update']);
+});
+
+// ============================================================================
+// ANALYTICS ROUTES - Phase 4.0
+// ============================================================================
+Route::middleware('auth:sanctum')->prefix('analytics')->group(function () {
+    // Phase 4.0a - Notification Analytics
+    Route::get('/notifications', [NotificationAnalyticsController::class, 'index']);
+    
+    // Phase 4.0b - Financial Analytics
+    Route::get('/financial', [FinancialAnalyticsController::class, 'index']);
+    
+    // Phase 4.0c - Contract & Platform Analytics
+    Route::get('/contracts', [ContractAnalyticsController::class, 'index']);
+    Route::get('/platform', [PlatformAnalyticsController::class, 'index']);
 });

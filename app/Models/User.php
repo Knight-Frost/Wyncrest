@@ -141,4 +141,15 @@ class User extends Authenticatable
     {
         return $this->morphMany(AuditLog::class, 'actor');
     }
+
+    /**
+     * Get user's notification preferences
+     * 
+     * Phase 3.8: User preferences for notification channels
+     * Phase 3.9: Includes delivery_mode for digest timing
+     */
+    public function notificationPreferences()
+    {
+        return $this->hasMany(NotificationPreference::class);
+    }
 }

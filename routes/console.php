@@ -21,3 +21,31 @@ Schedule::command('ledger:mark-overdue')
     ->dailyAt('02:00')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/scheduler-overdue.log'));
+
+ // Phase 3.6 - Notification Delivery (Email)
+// Runs every 5 minutes
+Schedule::command('notifications:deliver')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/notifications-delivery.log'));
+
+ // Phase 3.7 - Notification Delivery (SMS)
+// Runs every 5 minutes
+Schedule::command('notifications:sms-deliver')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/notifications-sms.log'));
+
+    // Phase 3.9 - Daily Notification Digest
+// Runs daily at 8:00 AM
+Schedule::command('notifications:digest-daily')
+    ->dailyAt('08:00')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/notifications-digest-daily.log'));
+
+// Phase 3.9 - Weekly Notification Digest
+// Runs every Monday at 9:00 AM
+Schedule::command('notifications:digest-weekly')
+    ->weeklyOn(1, '09:00')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/notifications-digest-weekly.log'));
