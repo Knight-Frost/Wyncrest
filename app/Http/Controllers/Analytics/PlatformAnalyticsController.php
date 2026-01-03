@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Analytics;
 
 use App\Http\Controllers\Controller;
 use App\Services\Analytics\PlatformAnalyticsService;
+use App\Support\Cache\AnalyticsCacheKey;
+use App\Support\Cache\AnalyticsCache;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
@@ -12,6 +14,7 @@ use Illuminate\Support\Facades\Validator;
  * PlatformAnalyticsController
  * 
  * Phase 4.0c: API endpoint for platform health analytics
+ * Phase 5.1: Added Redis caching with 300s TTL
  */
 class PlatformAnalyticsController extends Controller
 {
@@ -51,6 +54,7 @@ class PlatformAnalyticsController extends Controller
 
         // Apply role-based scoping
         $user = $request->user();
+        $role = $user->user_type->value;
         $scopedTo = 'all';
 
         if ($user->user_type->value === 'tenant') {
@@ -70,8 +74,17 @@ class PlatformAnalyticsController extends Controller
             $scopedTo = 'landlord';
         }
 
-        // Get analytics
-        $analytics = $this->analyticsService->getAnalytics($filters);
+        // Generate cache key
+        $cacheKey = AnalyticsCacheKey::generate('platform', $request);
+
+        // Get analytics with caching (TTL: 300 seconds)
+        $analytics = AnalyticsCache::remember(
+            $cacheKey,
+            300,
+            fn() => $this->analyticsService->getAnalytics($filters),
+            $role,
+            $filters
+        );
 
         return response()->json([
             'analytics' => $analytics,

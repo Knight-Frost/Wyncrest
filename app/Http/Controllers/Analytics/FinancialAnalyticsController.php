@@ -4,108 +4,106 @@ namespace App\Http\Controllers\Analytics;
 
 use App\Http\Controllers\Controller;
 use App\Services\Analytics\FinancialAnalyticsService;
+use App\Support\Cache\AnalyticsCacheKey;
+use App\Support\Cache\AnalyticsCache;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
 
 /**
  * FinancialAnalyticsController
  * 
- * Phase 4.0b: Thin controller for financial analytics.
- * 
- * RESPONSIBILITIES ONLY:
- * - Authentication (handled by middleware)
- * - Validation
- * - Role-based scoping
- * - Call service
- * - Return JSON
- * 
- * NO AGGREGATION LOGIC HERE.
+ * Phase 4.0b: API endpoint for financial analytics
+ * Phase 5.1: Added Redis caching with 300s TTL
  */
 class FinancialAnalyticsController extends Controller
 {
-    public function __construct(
-        protected FinancialAnalyticsService $analyticsService
-    ) {}
+    protected FinancialAnalyticsService $analyticsService;
+
+    public function __construct(FinancialAnalyticsService $analyticsService)
+    {
+        $this->analyticsService = $analyticsService;
+    }
 
     /**
      * Get financial analytics
      * 
-     * GET /api/analytics/financial
-     * 
-     * Query parameters (all optional):
-     * - start_date: ISO date
-     * - end_date: ISO date
-     * - property_id: integer
-     * 
      * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     * @return JsonResponse
      */
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
-        // Validate query parameters
-        $validated = $request->validate([
-            'start_date' => 'sometimes|date',
-            'end_date' => 'sometimes|date|after_or_equal:start_date',
-            'property_id' => 'sometimes|integer|exists:properties,id',
+        // Validate filters
+        $validator = Validator::make($request->all(), [
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'property_id' => 'nullable|integer|exists:properties,id',
+            'group_by' => 'nullable|in:month,property',
         ]);
 
-        // Build filters from validated input
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        // Build filters
         $filters = [];
-        
-        if (isset($validated['start_date'])) {
-            $filters['start_date'] = Carbon::parse($validated['start_date']);
-        }
-        
-        if (isset($validated['end_date'])) {
-            $filters['end_date'] = Carbon::parse($validated['end_date']);
-        }
-        
-        if (isset($validated['property_id'])) {
-            $filters['property_id'] = $validated['property_id'];
+
+        if ($request->has('start_date')) {
+            $filters['start_date'] = Carbon::parse($request->input('start_date'));
         }
 
-        // Role-based scoping (MANDATORY)
+        if ($request->has('end_date')) {
+            $filters['end_date'] = Carbon::parse($request->input('end_date'));
+        }
+
+        if ($request->has('property_id')) {
+            $filters['property_id'] = $request->input('property_id');
+        }
+
+        if ($request->has('group_by')) {
+            $filters['group_by'] = $request->input('group_by');
+        }
+
+        // Apply role-based scoping
         $user = $request->user();
-        $scopeType = 'platform';
+        $role = $user->user_type->value;
+        $scopedTo = 'all';
 
-        // TENANT: Personal ledger only
-        if ($user->isTenant()) {
+        if ($user->user_type->value === 'tenant') {
+            // Tenants see only their own financial data
             $filters['user_id'] = $user->id;
-            $scopeType = 'personal';
-        }
-        
-        // LANDLORD: Properties they own
-        elseif ($user->isLandlord()) {
-            $scopeType = 'properties';
-            
-            // If property_id specified, verify ownership
-            if (isset($filters['property_id'])) {
-                $ownsProperty = $user->properties()
-                    ->where('id', $filters['property_id'])
-                    ->exists();
-                
-                if (!$ownsProperty) {
-                    return response()->json([
-                        'message' => 'Unauthorized - property not owned by landlord'
-                    ], 403);
+            $scopedTo = 'personal';
+        } elseif ($user->user_type->value === 'landlord') {
+            // Landlords see only their properties
+            if (!isset($filters['property_id'])) {
+                // Get first property owned by landlord
+                $property = $user->properties()->first();
+                if ($property) {
+                    $filters['property_id'] = $property->id;
                 }
             }
-            // If no property_id specified, we'll get all their properties
-            // The service will handle aggregation across all properties
-            // Note: For landlord-wide scope, we could enhance the service
-            // to accept an array of property_ids, but for now this works
+            $scopedTo = 'landlord';
         }
-        
-        // ADMIN: Entire platform (no additional filters)
-        // scopeType remains 'platform'
 
-        // Get analytics from service
-        $analytics = $this->analyticsService->getAnalytics($filters);
+        // Generate cache key
+        $cacheKey = AnalyticsCacheKey::generate('financial', $request);
+
+        // Get analytics with caching (TTL: 300 seconds)
+        $analytics = AnalyticsCache::remember(
+            $cacheKey,
+            300,
+            fn() => $this->analyticsService->getAnalytics($filters),
+            $role,
+            $filters
+        );
 
         return response()->json([
             'analytics' => $analytics,
-            'filters' => $filters,
-            'scoped_to' => $scopeType,
+            'scoped_to' => $scopedTo,
         ]);
     }
 }

@@ -4,82 +4,97 @@ namespace App\Http\Controllers\Analytics;
 
 use App\Http\Controllers\Controller;
 use App\Services\Analytics\NotificationAnalyticsService;
+use App\Support\Cache\AnalyticsCacheKey;
+use App\Support\Cache\AnalyticsCache;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Validator;
+use Carbon\Carbon;
 
 /**
  * NotificationAnalyticsController
  * 
- * Thin controller for notification analytics.
- * Phase 4.0a: Read-only metrics, role-aware scoping.
+ * Phase 4.0a: API endpoint for notification analytics
+ * Phase 5.1: Added Redis caching with 300s TTL
+ * Phase 5.1 Fix: Normalize 'type' parameter to service expectation
  */
 class NotificationAnalyticsController extends Controller
 {
-    public function __construct(
-        protected NotificationAnalyticsService $analyticsService
-    ) {}
+    protected NotificationAnalyticsService $analyticsService;
+
+    public function __construct(NotificationAnalyticsService $analyticsService)
+    {
+        $this->analyticsService = $analyticsService;
+    }
 
     /**
      * Get notification analytics
      * 
-     * GET /api/analytics/notifications
-     * 
-     * Query params:
-     * - start_date: ISO date (optional)
-     * - end_date: ISO date (optional)
-     * - type: notification type (optional)
-     * 
      * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     * @return JsonResponse
      */
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
-        // Validate query parameters
-        $validated = $request->validate([
-            'start_date' => 'sometimes|date',
-            'end_date' => 'sometimes|date|after_or_equal:start_date',
-            'type' => 'sometimes|string|in:rent_generated,payment_succeeded,payment_failed,rent_overdue',
+        // Validate filters (accept 'type' parameter as service expects)
+        $validator = Validator::make($request->all(), [
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'type' => 'nullable|string',
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
 
         // Build filters
         $filters = [];
-        
-        if (isset($validated['start_date'])) {
-            $filters['start_date'] = \Carbon\Carbon::parse($validated['start_date']);
-        }
-        
-        if (isset($validated['end_date'])) {
-            $filters['end_date'] = \Carbon\Carbon::parse($validated['end_date']);
-        }
-        
-        if (isset($validated['type'])) {
-            $filters['type'] = $validated['type'];
+
+        if ($request->has('start_date')) {
+            $filters['start_date'] = Carbon::parse($request->input('start_date'));
         }
 
-        // Role-based scoping
+        if ($request->has('end_date')) {
+            $filters['end_date'] = Carbon::parse($request->input('end_date'));
+        }
+
+        // Pass 'type' directly (service expects 'type', not 'notification_type')
+        if ($request->has('type')) {
+            $filters['type'] = $request->input('type');
+        }
+
+        // Apply role-based scoping
         $user = $request->user();
-        
-        // Tenant: only personal metrics
-        if ($user->isTenant()) {
-            $filters['user_id'] = $user->id;
-        }
-        
-        // Landlord: scoped to their tenants (via contracts)
-        // For Phase 4.0a, landlords see their tenant notifications
-        // This requires joining through contracts - implementing basic version
-        if ($user->isLandlord()) {
-            // For now, landlords see all (can be scoped in 4.0b when we add contract analytics)
-            // In production, this would filter to notifications for tenants in landlord's properties
-        }
-        
-        // Admin: sees everything (no filter)
+        $role = $user->user_type->value;
+        $scopedTo = 'all';
 
-        // Get analytics
-        $analytics = $this->analyticsService->getAnalytics($filters);
+        if ($user->user_type->value === 'tenant') {
+            // Tenants see only their own notifications
+            $filters['user_id'] = $user->id;
+            $scopedTo = 'personal';
+        } elseif ($user->user_type->value === 'landlord') {
+            // Landlords see only their notifications
+            $filters['user_id'] = $user->id;
+            $scopedTo = 'personal';
+        }
+
+        // Generate cache key
+        $cacheKey = AnalyticsCacheKey::generate('notifications', $request);
+
+        // Get analytics with caching (TTL: 300 seconds)
+        $analytics = AnalyticsCache::remember(
+            $cacheKey,
+            300,
+            fn() => $this->analyticsService->getAnalytics($filters),
+            $role,
+            $filters
+        );
 
         return response()->json([
             'analytics' => $analytics,
-            'filters' => $filters,
-            'scoped_to' => $user->isTenant() ? 'personal' : ($user->isLandlord() ? 'properties' : 'platform'),
+            'scoped_to' => $scopedTo,
         ]);
     }
 }

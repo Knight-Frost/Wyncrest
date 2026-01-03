@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
  * 
  * Read-only analytics for notification system.
  * Phase 4.0: Maximum insight into notification behavior.
+ * Phase 5.1 Fix: Apply type filter to getNotificationsByType() helper
  */
 class NotificationAnalyticsService
 {
@@ -203,6 +204,7 @@ class NotificationAnalyticsService
 
     /**
      * Helper: Notifications by type
+     * Phase 5.1 Fix: Added type filter support
      */
     protected function getNotificationsByType(array $filters = []): array
     {
@@ -218,6 +220,11 @@ class NotificationAnalyticsService
         
         if (isset($filters['user_id'])) {
             $query->where('user_id', $filters['user_id']);
+        }
+        
+        // FIX: Apply type filter if present
+        if (isset($filters['type'])) {
+            $query->where('type', $filters['type']);
         }
 
         // Get results and manually convert enum to string for array keys

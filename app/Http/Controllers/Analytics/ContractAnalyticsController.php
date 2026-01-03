@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Analytics;
 
 use App\Http\Controllers\Controller;
 use App\Services\Analytics\ContractAnalyticsService;
+use App\Support\Cache\AnalyticsCacheKey;
+use App\Support\Cache\AnalyticsCache;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
@@ -13,6 +15,7 @@ use Carbon\Carbon;
  * ContractAnalyticsController
  * 
  * Phase 4.0c: API endpoint for contract lifecycle analytics
+ * Phase 5.1: Added Redis caching with 300s TTL
  */
 class ContractAnalyticsController extends Controller
 {
@@ -62,6 +65,7 @@ class ContractAnalyticsController extends Controller
 
         // Apply role-based scoping
         $user = $request->user();
+        $role = $user->user_type->value;
         $scopedTo = 'all';
 
         if ($user->user_type->value === 'tenant') {
@@ -70,8 +74,6 @@ class ContractAnalyticsController extends Controller
             $scopedTo = 'personal';
         } elseif ($user->user_type->value === 'landlord') {
             // Landlords see only their properties
-            // If property_id not specified, we'd need to filter by all their properties
-            // For now, require property_id or they get nothing
             if (!isset($filters['property_id'])) {
                 // Get first property owned by landlord
                 $property = $user->properties()->first();
@@ -82,8 +84,17 @@ class ContractAnalyticsController extends Controller
             $scopedTo = 'landlord';
         }
 
-        // Get analytics
-        $analytics = $this->analyticsService->getAnalytics($filters);
+        // Generate cache key
+        $cacheKey = AnalyticsCacheKey::generate('contracts', $request);
+
+        // Get analytics with caching (TTL: 300 seconds)
+        $analytics = AnalyticsCache::remember(
+            $cacheKey,
+            300,
+            fn() => $this->analyticsService->getAnalytics($filters),
+            $role,
+            $filters
+        );
 
         return response()->json([
             'analytics' => $analytics,
