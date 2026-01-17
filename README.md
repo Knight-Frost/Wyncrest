@@ -144,8 +144,6 @@ frontend/
 3. `main.jsx` mounts a minimal React component  
 4. Tailwind CSS is applied to confirm styling configuration  
 
-At this stage, the frontend does not implement application logic or user workflows.
-
 ---
 
 ### Running the Frontend
