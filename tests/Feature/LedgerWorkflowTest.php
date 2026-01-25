@@ -158,7 +158,7 @@ class LedgerWorkflowTest extends TestCase
         ]);
 
         // Generate late fee (admin action)
-        $response = $this->actingAs($this->admin)
+        $response = $this->actingAs($this->admin, 'sanctum')
             ->postJson("/api/admin/ledger/{$rentEntry->id}/late-fee", [
                 'amount_cents' => 10000, // $100 late fee
             ]);
@@ -193,7 +193,7 @@ class LedgerWorkflowTest extends TestCase
             'due_date' => now()->addDays(5), // Future due date
         ]);
 
-        $response = $this->actingAs($this->admin)
+        $response = $this->actingAs($this->admin, 'sanctum')
             ->postJson("/api/admin/ledger/{$rentEntry->id}/late-fee", [
                 'amount_cents' => 10000,
             ]);
@@ -219,7 +219,7 @@ class LedgerWorkflowTest extends TestCase
         $this->assertNotNull($lateFee);
 
         // Attempt second late fee
-        $response = $this->actingAs($this->admin)
+        $response = $this->actingAs($this->admin, 'sanctum')
             ->postJson("/api/admin/ledger/{$rentEntry->id}/late-fee", [
                 'amount_cents' => 10000,
             ]);
@@ -274,7 +274,7 @@ class LedgerWorkflowTest extends TestCase
         ]);
 
         // Filter by type
-        $response = $this->actingAs($this->admin)
+        $response = $this->actingAs($this->admin, 'sanctum')
             ->getJson('/api/admin/ledger?type=late_fee');
 
         $response->assertStatus(200)
@@ -282,7 +282,7 @@ class LedgerWorkflowTest extends TestCase
             ->assertJsonMissing(['id' => $rentEntry->id]);
 
         // Filter by status
-        $response = $this->actingAs($this->admin)
+        $response = $this->actingAs($this->admin, 'sanctum')
             ->getJson('/api/admin/ledger?status=pending');
 
         $response->assertStatus(200)

@@ -192,7 +192,7 @@ class ContractWorkflowTest extends TestCase
             'tenant_id' => $this->tenant->id,
         ]);
 
-        $response = $this->actingAs($this->admin)
+        $response = $this->actingAs($this->admin, 'sanctum')
             ->postJson("/api/admin/contracts/{$contract->id}/terminate", [
                 'reason' => 'Contract terminated due to violation of community guidelines and repeated complaints from neighbors'
             ]);

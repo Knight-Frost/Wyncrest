@@ -8,9 +8,10 @@ use App\Enums\UserType;
 
 /**
  * UnitPolicy
- * 
+ *
  * Authorization rules for unit management.
  * Landlords can only manage units in their properties.
+ * SECURITY: Uses strict type comparisons (===) throughout.
  */
 class UnitPolicy
 {
@@ -27,7 +28,10 @@ class UnitPolicy
      */
     public function view(User $user, Unit $unit): bool
     {
-        return $user->id === $unit->property->landlord_id;
+        $userId = (int) $user->id;
+        $landlordId = (int) $unit->property->landlord_id;
+
+        return $userId === $landlordId;
     }
 
     /**
@@ -43,7 +47,10 @@ class UnitPolicy
      */
     public function update(User $user, Unit $unit): bool
     {
-        return $user->id === $unit->property->landlord_id;
+        $userId = (int) $user->id;
+        $landlordId = (int) $unit->property->landlord_id;
+
+        return $userId === $landlordId;
     }
 
     /**
@@ -56,7 +63,10 @@ class UnitPolicy
             return false;
         }
 
-        return $user->id === $unit->property->landlord_id;
+        $userId = (int) $user->id;
+        $landlordId = (int) $unit->property->landlord_id;
+
+        return $userId === $landlordId;
     }
 
     /**
@@ -64,7 +74,10 @@ class UnitPolicy
      */
     public function restore(User $user, Unit $unit): bool
     {
-        return $user->id === $unit->property->landlord_id;
+        $userId = (int) $user->id;
+        $landlordId = (int) $unit->property->landlord_id;
+
+        return $userId === $landlordId;
     }
 
     /**

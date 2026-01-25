@@ -21,12 +21,41 @@ use Stripe\Exception\ApiErrorException;
  */
 class PaymentService
 {
-    protected StripeClient $stripe;
+    protected ?StripeClient $stripe = null;
 
     public function __construct(
         protected AuditService $auditService
     ) {
-        $this->stripe = new StripeClient(config('services.stripe.secret'));
+        // Only initialize Stripe client if API key is configured
+        // This allows the service to be instantiated in tests without real keys
+        $stripeKey = config('services.stripe.secret');
+        if (!empty($stripeKey)) {
+            $this->stripe = new StripeClient($stripeKey);
+        }
+    }
+
+    /**
+     * Check if Stripe is configured and available.
+     *
+     * @return bool
+     */
+    protected function isStripeConfigured(): bool
+    {
+        return $this->stripe !== null;
+    }
+
+    /**
+     * Get the Stripe client, throwing if not configured.
+     *
+     * @return StripeClient
+     * @throws \Exception If Stripe is not configured
+     */
+    protected function getStripeClient(): StripeClient
+    {
+        if (!$this->isStripeConfigured()) {
+            throw new \Exception('Stripe is not configured. Please set STRIPE_SECRET_KEY in your environment.');
+        }
+        return $this->stripe;
     }
 
     /**
@@ -57,7 +86,7 @@ class PaymentService
         if ($existingPayment) {
             // Return existing intent if still usable
             try {
-                $intent = $this->stripe->paymentIntents->retrieve($existingPayment->stripe_payment_intent_id);
+                $intent = $this->getStripeClient()->paymentIntents->retrieve($existingPayment->stripe_payment_intent_id);
                 if (in_array($intent->status, ['requires_payment_method', 'requires_confirmation', 'requires_action'])) {
                     return [
                         'client_secret' => $intent->client_secret,
@@ -71,7 +100,7 @@ class PaymentService
 
         // Create new PaymentIntent
         try {
-            $intent = $this->stripe->paymentIntents->create([
+            $intent = $this->getStripeClient()->paymentIntents->create([
                 'amount' => $entry->amount_cents,
                 'currency' => strtolower($entry->currency),
                 'metadata' => [
@@ -124,7 +153,7 @@ class PaymentService
     {
         // Retrieve payment intent from Stripe
         try {
-            $intent = $this->stripe->paymentIntents->retrieve($paymentIntentId);
+            $intent = $this->getStripeClient()->paymentIntents->retrieve($paymentIntentId);
         } catch (ApiErrorException $e) {
             throw new \Exception("Could not retrieve payment intent: {$e->getMessage()}");
         }
@@ -196,7 +225,7 @@ class PaymentService
     {
         // Retrieve payment intent from Stripe
         try {
-            $intent = $this->stripe->paymentIntents->retrieve($paymentIntentId);
+            $intent = $this->getStripeClient()->paymentIntents->retrieve($paymentIntentId);
         } catch (ApiErrorException $e) {
             throw new \Exception("Could not retrieve payment intent: {$e->getMessage()}");
         }

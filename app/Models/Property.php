@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * Property Model
- * 
+ *
  * Properties are owned by landlords.
  * Properties contain units.
  */
@@ -41,7 +41,7 @@ class Property extends Model
     ];
 
     /**
-     * Get full address
+     * Get full address.
      */
     public function getFullAddressAttribute(): string
     {
@@ -55,7 +55,7 @@ class Property extends Model
     }
 
     /**
-     * Scope: Only active properties
+     * Scope: Only active properties.
      */
     public function scopeActive($query)
     {
@@ -63,18 +63,25 @@ class Property extends Model
     }
 
     /**
-     * Scope: By location
+     * Scope: By city (case-insensitive, portable SQL).
      */
     public function scopeInCity($query, string $city)
     {
-        return $query->where('city', 'ILIKE', "%{$city}%");
+        // Use portable LOWER() instead of PostgreSQL-specific ILIKE
+        return $query->whereRaw('LOWER(city) LIKE ?', ['%' . strtolower($city) . '%']);
     }
 
+    /**
+     * Scope: By state.
+     */
     public function scopeInState($query, string $state)
     {
         return $query->where('state', strtoupper($state));
     }
 
+    /**
+     * Scope: By zip code.
+     */
     public function scopeInZipCode($query, string $zipCode)
     {
         return $query->where('zip_code', $zipCode);
@@ -83,7 +90,7 @@ class Property extends Model
     /**
      * Relationships
      */
-    
+
     public function landlord()
     {
         return $this->belongsTo(User::class, 'landlord_id');

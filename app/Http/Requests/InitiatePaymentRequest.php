@@ -7,9 +7,9 @@ use App\Models\LedgerEntry;
 
 /**
  * InitiatePaymentRequest
- * 
+ *
  * Validates payment initiation request.
- * Authorization handled by policy.
+ * SECURITY: Uses strict type comparison and delegates to policy.
  */
 class InitiatePaymentRequest extends FormRequest
 {
@@ -17,18 +17,13 @@ class InitiatePaymentRequest extends FormRequest
     {
         // Get the ledger entry from route
         $ledgerEntry = $this->route('ledgerEntry');
-        
-        if (!$ledgerEntry) {
+
+        if (!$ledgerEntry instanceof LedgerEntry) {
             return false;
         }
 
-        // Check if entry can be paid
-        if (!$ledgerEntry->canBePaid()) {
-            return false;
-        }
-
-        // Check if tenant owns this entry
-        return $this->user()->id == $ledgerEntry->tenant_id;
+        // Use the LedgerEntry policy for authorization
+        return $this->user()?->can('pay', $ledgerEntry) ?? false;
     }
 
     public function rules(): array
@@ -40,8 +35,6 @@ class InitiatePaymentRequest extends FormRequest
 
     public function messages(): array
     {
-        return [
-            //
-        ];
+        return [];
     }
 }

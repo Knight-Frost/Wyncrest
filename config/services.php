@@ -34,14 +34,36 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Stripe Payment Processing
+    |--------------------------------------------------------------------------
+    |
+    | SECURITY: Never commit real API keys to version control.
+    | Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET in your .env file.
+    |
+    */
+
     'stripe' => [
         'secret' => env('STRIPE_SECRET_KEY'),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Twilio SMS Service
+    |--------------------------------------------------------------------------
+    |
+    | SECURITY: Never commit real credentials to version control.
+    | Set TWILIO_SID, TWILIO_TOKEN, and TWILIO_FROM in your .env file.
+    |
+    */
+
     'twilio' => [
-    'sid' => env('TWILIO_SID'),
-    'token' => env('TWILIO_TOKEN'),
-    'from' => env('TWILIO_FROM'),
-],
+        'sid' => env('TWILIO_SID'),
+        'token' => env('TWILIO_TOKEN'),
+        'from' => env('TWILIO_FROM'),
+    ],
 
 ];

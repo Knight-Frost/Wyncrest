@@ -1,24 +1,70 @@
-*.log
-.DS_Store
-.env
-.env.backup
-.env.production
-.phpactor.json
-.phpunit.result.cache
-/.fleet
-/.idea
-/.nova
-/.phpunit.cache
-/.vscode
-/.zed
-/auth.json
+# Laravel Framework
+/vendor
 /node_modules
 /public/build
 /public/hot
 /public/storage
 /storage/*.key
 /storage/pail
-/vendor
 Homestead.json
 Homestead.yaml
+
+# Environment Files - NEVER COMMIT SECRETS
+.env
+.env.*
+!.env.example
+
+# Backup Files - Should not be in repo
+*.backup
+*.bak
+*.orig
+*~
+
+# Log Files
+*.log
+/storage/logs/*.log
+
+# Cache Files
+.phpunit.result.cache
+/.phpunit.cache
+/bootstrap/cache/*.php
+!bootstrap/cache/.gitignore
+
+# IDE Files
+/.fleet
+/.idea
+/.nova
+/.vscode
+/.zed
+.phpactor.json
+
+# OS Files
+.DS_Store
 Thumbs.db
+
+# Auth Files - Contains sensitive credentials
+/auth.json
+
+# Database Files - May contain sensitive data
+*.sqlite
+*.sqlite-journal
+/database/*.sqlite
+/database/*.sqlite-journal
+
+# Compiled Assets
+/public/build
+/public/mix-manifest.json
+
+# Testing
+.phpunit.result.cache
+/coverage
+
+# Temporary Files
+*.tmp
+*.temp
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+!storage/framework/cache/.gitignore
+!storage/framework/sessions/.gitignore
+!storage/framework/views/.gitignore

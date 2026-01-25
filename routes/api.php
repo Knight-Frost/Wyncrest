@@ -69,7 +69,7 @@ use App\Http\Controllers\Analytics\PlatformAnalyticsController;
 | - Public: No authentication
 | - Tenant: auth:sanctum + tenant middleware
 | - Landlord: auth:sanctum + landlord middleware
-| - Admin: auth:sanctum,admin guard
+| - Admin: auth:sanctum + admin middleware
 |
 | Phase 7.5: Rate limiting and metrics applied to all routes
 |
@@ -78,119 +78,132 @@ use App\Http\Controllers\Analytics\PlatformAnalyticsController;
 // Apply metrics middleware to all API routes
 Route::middleware(['metrics'])->group(function () {
 
-// ============================================================================
-// PUBLIC ROUTES (NO AUTH)
-// ============================================================================
-Route::middleware(['rate.limit.role'])->prefix('listings')->group(function () {
-    Route::get('/', [PublicListingController::class, 'index']);
-    Route::get('/featured', [PublicListingController::class, 'featured']);
-    Route::get('/{id}', [PublicListingController::class, 'show']);
-});
+    // ============================================================================
+    // PUBLIC ROUTES (NO AUTH)
+    // ============================================================================
+    Route::middleware(['rate.limit.role'])->prefix('listings')->group(function () {
+        Route::get('/', [PublicListingController::class, 'index']);
+        Route::get('/featured', [PublicListingController::class, 'featured']);
+        Route::get('/{id}', [PublicListingController::class, 'show']);
+    });
 
-// ============================================================================
-// TENANT ROUTES
-// ============================================================================
-Route::middleware(['auth:sanctum', 'tenant', 'rate.limit.role'])->prefix('tenant')->group(function () {
+    // ============================================================================
+    // TENANT ROUTES
+    // ============================================================================
+    Route::middleware(['auth:sanctum', 'tenant', 'rate.limit.role'])->prefix('tenant')->group(function () {
+        // Dashboard
+        Route::get('/dashboard', [TenantDashboardController::class, 'index']);
 
-    // Dashboard
-    Route::get('/dashboard', [TenantDashboardController::class, 'index']);
+        // Saved Listings
+        Route::get('/saved-listings', [SavedListingController::class, 'index']);
+        Route::post('/listings/{listing}/save', [SavedListingController::class, 'store']);
+        Route::delete('/listings/{listing}/save', [SavedListingController::class, 'destroy']);
 
-    // Saved Listings
-    Route::get('/saved-listings', [SavedListingController::class, 'index']);
-    Route::post('/listings/{listing}/save', [SavedListingController::class, 'store']);
-    Route::delete('/listings/{listing}/save', [SavedListingController::class, 'destroy']);
+        // Contracts (Phase 3.1)
+        Route::get('/contracts', [TenantContractController::class, 'index']);
+        Route::get('/contracts/{contract}', [TenantContractController::class, 'show']);
+        Route::post('/contracts/{contract}/accept', [TenantContractController::class, 'accept']);
+        Route::post('/contracts/{contract}/terminate', [TenantContractController::class, 'terminate']);
 
-    // Contracts (Phase 3.1)
-    Route::get('/contracts', [TenantContractController::class, 'index']);
-    Route::get('/contracts/{contract}', [TenantContractController::class, 'show']);
-    Route::post('/contracts/{contract}/accept', [TenantContractController::class, 'accept']);
-    Route::post('/contracts/{contract}/terminate', [TenantContractController::class, 'terminate']);
+        // Ledger (Phase 3.2)
+        Route::get('/ledger', [TenantLedgerController::class, 'index']);
+        Route::get('/ledger/{ledgerEntry}', [TenantLedgerController::class, 'show']);
 
-    // Ledger (Phase 3.2)
-    Route::get('/ledger', [TenantLedgerController::class, 'index']);
-    Route::get('/ledger/{ledgerEntry}', [TenantLedgerController::class, 'show']);
+        // Payments (Phase 3.3)
+        Route::post('/payments/initiate/{ledgerEntry}', [TenantPaymentController::class, 'initiate']);
+        Route::get('/payments/balance', [TenantPaymentController::class, 'balance']);
+    });
 
-    // Payments (Phase 3.3)
-    Route::post('/payments/initiate/{ledgerEntry}', [TenantPaymentController::class, 'initiate']);
-    Route::get('/payments/balance', [TenantPaymentController::class, 'balance']);
-});
+    // ============================================================================
+    // LANDLORD ROUTES
+    // ============================================================================
+    Route::middleware(['auth:sanctum', 'landlord', 'rate.limit.role'])->prefix('landlord')->group(function () {
+        // Onboarding
+        Route::get('/onboarding', [LandlordOnboardingController::class, 'index']);
 
-// ============================================================================
-// LANDLORD ROUTES
-// ============================================================================
-Route::middleware(['auth:sanctum', 'landlord', 'rate.limit.role'])->prefix('landlord')->group(function () {
+        // Properties
+        Route::get('/properties', [PropertyController::class, 'index']);
+        Route::post('/properties', [PropertyController::class, 'store']);
+        Route::get('/properties/{property}', [PropertyController::class, 'show']);
+        Route::put('/properties/{property}', [PropertyController::class, 'update']);
+        Route::delete('/properties/{property}', [PropertyController::class, 'destroy']);
 
-    // Onboarding
-    Route::get('/onboarding', [LandlordOnboardingController::class, 'index']);
+        // Units
+        Route::get('/units', [UnitController::class, 'index']);
+        Route::post('/properties/{property}/units', [UnitController::class, 'store']);
+        Route::get('/units/{unit}', [UnitController::class, 'show']);
+        Route::put('/units/{unit}', [UnitController::class, 'update']);
+        Route::delete('/units/{unit}', [UnitController::class, 'destroy']);
 
-    // Properties
-    Route::get('/properties', [PropertyController::class, 'index']);
-    Route::post('/properties', [PropertyController::class, 'store']);
-    Route::get('/properties/{property}', [PropertyController::class, 'show']);
-    Route::put('/properties/{property}', [PropertyController::class, 'update']);
-    Route::delete('/properties/{property}', [PropertyController::class, 'destroy']);
+        // Listings
+        Route::get('/listings', [LandlordListingController::class, 'index']);
+        Route::post('/units/{unit}/listings', [LandlordListingController::class, 'store']);
+        Route::get('/listings/{listing}', [LandlordListingController::class, 'show']);
+        Route::put('/listings/{listing}', [LandlordListingController::class, 'update']);
+        Route::post('/listings/{listing}/submit', [LandlordListingController::class, 'submit']);
+        Route::delete('/listings/{listing}', [LandlordListingController::class, 'destroy']);
 
-    // Units
-    Route::get('/units', [UnitController::class, 'index']);
-    Route::post('/properties/{property}/units', [UnitController::class, 'store']);
-    Route::get('/units/{unit}', [UnitController::class, 'show']);
-    Route::put('/units/{unit}', [UnitController::class, 'update']);
-    Route::delete('/units/{unit}', [UnitController::class, 'destroy']);
+        // Contracts (Phase 3.1)
+        Route::get('/contracts', [LandlordContractController::class, 'index']);
+        Route::post('/contracts', [LandlordContractController::class, 'store']);
+        Route::get('/contracts/{contract}', [LandlordContractController::class, 'show']);
+        Route::post('/contracts/{contract}/send', [LandlordContractController::class, 'send']);
+        Route::post('/contracts/{contract}/terminate', [LandlordContractController::class, 'terminate']);
 
-    // Listings
-    Route::get('/listings', [LandlordListingController::class, 'index']);
-    Route::post('/units/{unit}/listings', [LandlordListingController::class, 'store']);
-    Route::get('/listings/{listing}', [LandlordListingController::class, 'show']);
-    Route::put('/listings/{listing}', [LandlordListingController::class, 'update']);
-    Route::post('/listings/{listing}/submit', [LandlordListingController::class, 'submit']);
-    Route::delete('/listings/{listing}', [LandlordListingController::class, 'destroy']);
+        // Ledger (Phase 3.2)
+        Route::get('/ledger', [LandlordLedgerController::class, 'index']);
+        Route::get('/ledger/{ledgerEntry}', [LandlordLedgerController::class, 'show']);
 
-    // Contracts (Phase 3.1)
-    Route::get('/contracts', [LandlordContractController::class, 'index']);
-    Route::post('/contracts', [LandlordContractController::class, 'store']);
-    Route::get('/contracts/{contract}', [LandlordContractController::class, 'show']);
-    Route::post('/contracts/{contract}/send', [LandlordContractController::class, 'send']);
-    Route::post('/contracts/{contract}/terminate', [LandlordContractController::class, 'terminate']);
+        // Analytics (scoped to landlord's properties)
+        Route::get('/analytics/financial', [FinancialAnalyticsController::class, 'index']);
+        Route::get('/analytics/contracts', [ContractAnalyticsController::class, 'index']);
+    });
 
-    // Ledger (Phase 3.2)
-    Route::get('/ledger', [LandlordLedgerController::class, 'index']);
-    Route::get('/ledger/{ledgerEntry}', [LandlordLedgerController::class, 'show']);
-});
+    // ============================================================================
+    // ADMIN ROUTES - Protected with admin middleware
+    // ============================================================================
+    Route::middleware(['auth:sanctum', 'admin', 'rate.limit.role'])->prefix('admin')->group(function () {
+        // Dashboard
+        Route::get('/dashboard', [AdminDashboardController::class, 'index']);
 
-// ============================================================================
-// ADMIN ROUTES
-// ============================================================================
-Route::middleware(['auth:sanctum,admin', 'rate.limit.role'])->prefix('admin')->group(function () {
+        // Listing Moderation
+        Route::get('/listings/pending', [AdminListingModerationController::class, 'pending']);
+        Route::post('/listings/{listing}/approve', [AdminListingModerationController::class, 'approve']);
+        Route::post('/listings/{listing}/reject', [AdminListingModerationController::class, 'reject']);
 
-    // Dashboard
-    Route::get('/dashboard', [AdminDashboardController::class, 'index']);
+        // Feature Management
+        Route::get('/landlords/{landlord}/features', [AdminFeatureController::class, 'index']);
+        Route::post('/landlords/{landlord}/features/{feature}/enable', [AdminFeatureController::class, 'enable']);
+        Route::post('/landlords/{landlord}/features/{feature}/disable', [AdminFeatureController::class, 'disable']);
 
-    // Listing Moderation
-    Route::get('/listings/pending', [AdminListingModerationController::class, 'pending']);
-    Route::post('/listings/{listing}/approve', [AdminListingModerationController::class, 'approve']);
-    Route::post('/listings/{listing}/reject', [AdminListingModerationController::class, 'reject']);
+        // Audit Logs
+        Route::get('/audit-logs', [AdminAuditController::class, 'index']);
+        Route::get('/audit-logs/{auditLog}', [AdminAuditController::class, 'show']);
 
-    // Feature Management
-    Route::get('/landlords/{landlord}/features', [AdminFeatureController::class, 'index']);
-    Route::post('/landlords/{landlord}/features/{feature}/enable', [AdminFeatureController::class, 'enable']);
-    Route::post('/landlords/{landlord}/features/{feature}/disable', [AdminFeatureController::class, 'disable']);
+        // Contracts (Phase 3.1)
+        Route::get('/contracts', [AdminContractController::class, 'index']);
+        Route::get('/contracts/{contract}', [AdminContractController::class, 'show']);
+        Route::post('/contracts/{contract}/terminate', [AdminContractController::class, 'terminate']);
 
-    // Audit Logs
-    Route::get('/audit-logs', [AdminAuditController::class, 'index']);
-    Route::get('/audit-logs/{auditLog}', [AdminAuditController::class, 'show']);
+        // Ledger (Phase 3.2)
+        Route::get('/ledger', [AdminLedgerController::class, 'index']);
+        Route::get('/ledger/{ledgerEntry}', [AdminLedgerController::class, 'show']);
+        Route::post('/ledger/{ledgerEntry}/late-fee', [AdminLedgerController::class, 'generateLateFee']);
 
-    // Contracts (Phase 3.1)
-    Route::get('/contracts', [AdminContractController::class, 'index']);
-    Route::get('/contracts/{contract}', [AdminContractController::class, 'show']);
-    Route::post('/contracts/{contract}/terminate', [AdminContractController::class, 'terminate']);
+        // Admin Analytics (full platform view)
+        Route::prefix('analytics')->group(function () {
+            Route::get('/notifications', [NotificationAnalyticsController::class, 'index']);
+            Route::get('/financial', [FinancialAnalyticsController::class, 'index']);
+            Route::get('/contracts', [ContractAnalyticsController::class, 'index']);
+            Route::get('/platform', [PlatformAnalyticsController::class, 'index']);
+        });
+    });
 
-    // Ledger (Phase 3.2)
-    Route::get('/ledger', [AdminLedgerController::class, 'index']);
-    Route::get('/ledger/{ledgerEntry}', [AdminLedgerController::class, 'show']);
-    Route::post('/ledger/{ledgerEntry}/late-fee', [AdminLedgerController::class, 'generateLateFee']);
-    
-    // Metrics (Phase 7.5)
-    Route::prefix('metrics')->group(function () {
+    // ============================================================================
+    // METRICS ROUTES - Accessible to admins AND landlords
+    // Platform metrics for monitoring (read-only, non-sensitive data)
+    // ============================================================================
+    Route::middleware(['auth:sanctum', 'admin.or.landlord', 'rate.limit.role'])->prefix('admin/metrics')->group(function () {
         Route::get('/', [MetricsController::class, 'summary']);
         Route::get('/latency', [MetricsController::class, 'latency']);
         Route::get('/errors', [MetricsController::class, 'errors']);
@@ -198,45 +211,44 @@ Route::middleware(['auth:sanctum,admin', 'rate.limit.role'])->prefix('admin')->g
         Route::get('/queue', [MetricsController::class, 'queue']);
         Route::get('/recent', [MetricsController::class, 'recent']);
     });
-});
 
-// ============================================================================
-// STRIPE WEBHOOK - Phase 3.3 (NO AUTH - signature verified in controller)
-// ============================================================================
-Route::post('/webhooks/stripe', [StripeWebhookController::class, 'handle']);
+    // ============================================================================
+    // STRIPE WEBHOOK - Phase 3.3 (NO AUTH - signature verified in controller)
+    // ============================================================================
+    Route::post('/webhooks/stripe', [StripeWebhookController::class, 'handle'])
+        ->withoutMiddleware(['metrics']); // Don't track webhook metrics
 
-// ============================================================================
-// NOTIFICATION ROUTES - Phase 3.5
-// ============================================================================
-Route::middleware(['auth:sanctum', 'rate.limit.role'])->prefix('notifications')->group(function () {
-    Route::get('/', [NotificationController::class, 'index']);
-    Route::get('/unread', [NotificationController::class, 'unread']);
-    Route::get('/unread-count', [NotificationController::class, 'unreadCount']);
-    Route::patch('/{notification}/read', [NotificationController::class, 'markAsRead']);
-    Route::post('/mark-all-read', [NotificationController::class, 'markAllAsRead']);
-});
+    // ============================================================================
+    // NOTIFICATION ROUTES - Phase 3.5
+    // Accessible to both tenants and landlords
+    // ============================================================================
+    Route::middleware(['auth:sanctum', 'rate.limit.role'])->prefix('notifications')->group(function () {
+        Route::get('/', [NotificationController::class, 'index']);
+        Route::get('/unread', [NotificationController::class, 'unread']);
+        Route::get('/unread-count', [NotificationController::class, 'unreadCount']);
+        Route::patch('/{notification}/read', [NotificationController::class, 'markAsRead']);
+        Route::post('/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+    });
 
-// ============================================================================
-// NOTIFICATION PREFERENCE ROUTES - Phase 3.8
-// ============================================================================
-Route::middleware(['auth:sanctum', 'rate.limit.role'])->group(function () {
-    Route::get('/notification-preferences', [NotificationPreferenceController::class, 'index']);
-    Route::put('/notification-preferences', [NotificationPreferenceController::class, 'update']);
-});
+    // ============================================================================
+    // NOTIFICATION PREFERENCE ROUTES - Phase 3.8
+    // Accessible to both tenants and landlords
+    // ============================================================================
+    Route::middleware(['auth:sanctum', 'rate.limit.role'])->group(function () {
+        Route::get('/notification-preferences', [NotificationPreferenceController::class, 'index']);
+        Route::put('/notification-preferences', [NotificationPreferenceController::class, 'update']);
+    });
 
-// ============================================================================
-// ANALYTICS ROUTES - Phase 4.0
-// ============================================================================
-Route::middleware(['auth:sanctum', 'rate.limit.role'])->prefix('analytics')->group(function () {
-    // Phase 4.0a - Notification Analytics
-    Route::get('/notifications', [NotificationAnalyticsController::class, 'index']);
-    
-    // Phase 4.0b - Financial Analytics
-    Route::get('/financial', [FinancialAnalyticsController::class, 'index']);
-    
-    // Phase 4.0c - Contract & Platform Analytics
-    Route::get('/contracts', [ContractAnalyticsController::class, 'index']);
-    Route::get('/platform', [PlatformAnalyticsController::class, 'index']);
-});
+    // ============================================================================
+    // USER-SCOPED ANALYTICS ROUTES - Phase 4.0
+    // Tenants get their own data, landlords get their properties' data
+    // Platform analytics: landlord-scoped (tenants blocked at controller level)
+    // ============================================================================
+    Route::middleware(['auth:sanctum', 'rate.limit.role'])->prefix('analytics')->group(function () {
+        Route::get('/notifications', [NotificationAnalyticsController::class, 'index']);
+        Route::get('/financial', [FinancialAnalyticsController::class, 'index']);
+        Route::get('/contracts', [ContractAnalyticsController::class, 'index']);
+        Route::get('/platform', [PlatformAnalyticsController::class, 'index']);
+    });
 
 }); // End metrics middleware group

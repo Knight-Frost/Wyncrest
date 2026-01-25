@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * Listing Model
- * 
+ *
  * Public-facing representation of units.
  * Moderatable by admins.
  */
@@ -49,7 +49,7 @@ class Listing extends Model
     ];
 
     /**
-     * Increment view count
+     * Increment view count.
      */
     public function incrementViews(): void
     {
@@ -57,7 +57,7 @@ class Listing extends Model
     }
 
     /**
-     * Check if listing is publicly visible
+     * Check if listing is publicly visible.
      */
     public function isPublic(): bool
     {
@@ -65,7 +65,7 @@ class Listing extends Model
     }
 
     /**
-     * Check if listing can be edited
+     * Check if listing can be edited.
      */
     public function canBeEdited(): bool
     {
@@ -73,20 +73,20 @@ class Listing extends Model
     }
 
     /**
-     * Scope: Only public listings
+     * Scope: Only public listings.
      */
     public function scopePublic($query)
     {
         return $query->where('status', ListingStatus::ACTIVE)
             ->whereNotNull('published_at')
-            ->where(function($q) {
+            ->where(function ($q) {
                 $q->whereNull('expires_at')
                   ->orWhere('expires_at', '>', now());
             });
     }
 
     /**
-     * Scope: Pending review
+     * Scope: Pending review.
      */
     public function scopePendingReview($query)
     {
@@ -94,7 +94,7 @@ class Listing extends Model
     }
 
     /**
-     * Scope: Featured listings
+     * Scope: Featured listings.
      */
     public function scopeFeatured($query)
     {
@@ -102,7 +102,7 @@ class Listing extends Model
     }
 
     /**
-     * Scope: Search by keyword
+     * Scope: Search by keyword (case-insensitive, portable SQL).
      */
     public function scopeSearch($query, ?string $keyword)
     {
@@ -110,20 +110,22 @@ class Listing extends Model
             return $query;
         }
 
-        return $query->where(function($q) use ($keyword) {
-            $q->where('title', 'ILIKE', "%{$keyword}%")
-              ->orWhere('description', 'ILIKE', "%{$keyword}%");
+        $searchTerm = '%' . strtolower($keyword) . '%';
+
+        return $query->where(function ($q) use ($searchTerm) {
+            $q->whereRaw('LOWER(title) LIKE ?', [$searchTerm])
+              ->orWhereRaw('LOWER(description) LIKE ?', [$searchTerm]);
         });
     }
 
     /**
-     * Scope: Filter by location
+     * Scope: Filter by location (case-insensitive, portable SQL).
      */
     public function scopeInLocation($query, ?string $city = null, ?string $state = null, ?string $zipCode = null)
     {
-        return $query->whereHas('unit.property', function($q) use ($city, $state, $zipCode) {
+        return $query->whereHas('unit.property', function ($q) use ($city, $state, $zipCode) {
             if ($city) {
-                $q->where('city', 'ILIKE', "%{$city}%");
+                $q->whereRaw('LOWER(city) LIKE ?', ['%' . strtolower($city) . '%']);
             }
             if ($state) {
                 $q->where('state', strtoupper($state));
@@ -135,17 +137,17 @@ class Listing extends Model
     }
 
     /**
-     * Scope: Price range
+     * Scope: Price range.
      */
     public function scopePriceRange($query, ?float $minPrice = null, ?float $maxPrice = null)
     {
-        return $query->whereHas('unit', function($q) use ($minPrice, $maxPrice) {
+        return $query->whereHas('unit', function ($q) use ($minPrice, $maxPrice) {
             $q->priceBetween($minPrice, $maxPrice);
         });
     }
 
     /**
-     * Scope: Bedrooms
+     * Scope: Bedrooms.
      */
     public function scopeWithBedrooms($query, ?int $bedrooms = null)
     {
@@ -153,13 +155,13 @@ class Listing extends Model
             return $query;
         }
 
-        return $query->whereHas('unit', function($q) use ($bedrooms) {
+        return $query->whereHas('unit', function ($q) use ($bedrooms) {
             $q->where('bedrooms', $bedrooms);
         });
     }
 
     /**
-     * Scope: Property type
+     * Scope: Property type.
      */
     public function scopeOfPropertyType($query, ?string $propertyType = null)
     {
@@ -167,7 +169,7 @@ class Listing extends Model
             return $query;
         }
 
-        return $query->whereHas('unit.property', function($q) use ($propertyType) {
+        return $query->whereHas('unit.property', function ($q) use ($propertyType) {
             $q->where('property_type', $propertyType);
         });
     }
@@ -175,7 +177,7 @@ class Listing extends Model
     /**
      * Relationships
      */
-    
+
     public function unit()
     {
         return $this->belongsTo(Unit::class);

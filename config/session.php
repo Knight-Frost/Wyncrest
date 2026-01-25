@@ -45,9 +45,11 @@ return [
     | should be encrypted before it's stored. All encryption is performed
     | automatically by Laravel and you may use the session like normal.
     |
+    | SECURITY: Defaults to true for protection of session data.
+    |
     */
 
-    'encrypt' => env('SESSION_ENCRYPT', false),
+    'encrypt' => env('SESSION_ENCRYPT', true),
 
     /*
     |--------------------------------------------------------------------------
@@ -167,9 +169,11 @@ return [
     | to the server if the browser has a HTTPS connection. This will keep
     | the cookie from being sent to you when it can't be done securely.
     |
+    | SECURITY: In production, this should always be true.
+    |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    'secure' => env('SESSION_SECURE_COOKIE', env('APP_ENV') === 'production'),
 
     /*
     |--------------------------------------------------------------------------
@@ -179,6 +183,8 @@ return [
     | Setting this value to true will prevent JavaScript from accessing the
     | value of the cookie and the cookie will only be accessible through
     | the HTTP protocol. It's unlikely you should disable this option.
+    |
+    | SECURITY: Always keep this true to prevent XSS cookie theft.
     |
     */
 

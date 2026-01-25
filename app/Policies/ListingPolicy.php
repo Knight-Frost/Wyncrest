@@ -9,10 +9,11 @@ use App\Enums\ListingStatus;
 
 /**
  * ListingPolicy
- * 
+ *
  * Authorization rules for listing management.
  * Landlords can only manage their own listings.
  * Editing restrictions based on status.
+ * SECURITY: Uses strict type comparisons (===) throughout.
  */
 class ListingPolicy
 {
@@ -29,7 +30,10 @@ class ListingPolicy
      */
     public function view(User $user, Listing $listing): bool
     {
-        return $user->id === $listing->landlord_id;
+        $userId = (int) $user->id;
+        $landlordId = (int) $listing->landlord_id;
+
+        return $userId === $landlordId;
     }
 
     /**
@@ -45,7 +49,10 @@ class ListingPolicy
      */
     public function update(User $user, Listing $listing): bool
     {
-        if ($user->id !== $listing->landlord_id) {
+        $userId = (int) $user->id;
+        $landlordId = (int) $listing->landlord_id;
+
+        if ($userId !== $landlordId) {
             return false;
         }
 
@@ -58,7 +65,10 @@ class ListingPolicy
      */
     public function submit(User $user, Listing $listing): bool
     {
-        if ($user->id !== $listing->landlord_id) {
+        $userId = (int) $user->id;
+        $landlordId = (int) $listing->landlord_id;
+
+        if ($userId !== $landlordId) {
             return false;
         }
 
@@ -71,7 +81,10 @@ class ListingPolicy
      */
     public function delete(User $user, Listing $listing): bool
     {
-        if ($user->id !== $listing->landlord_id) {
+        $userId = (int) $user->id;
+        $landlordId = (int) $listing->landlord_id;
+
+        if ($userId !== $landlordId) {
             return false;
         }
 
@@ -79,7 +92,7 @@ class ListingPolicy
         return !in_array($listing->status, [
             ListingStatus::ACTIVE,
             ListingStatus::PENDING_REVIEW
-        ]);
+        ], true);
     }
 
     /**
@@ -87,7 +100,10 @@ class ListingPolicy
      */
     public function restore(User $user, Listing $listing): bool
     {
-        return $user->id === $listing->landlord_id;
+        $userId = (int) $user->id;
+        $landlordId = (int) $listing->landlord_id;
+
+        return $userId === $landlordId;
     }
 
     /**

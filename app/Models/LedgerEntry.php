@@ -11,22 +11,35 @@ use App\Enums\LedgerStatus;
 
 /**
  * LedgerEntry Model
- * 
+ *
  * IMMUTABLE FINANCIAL RECORD
- * - No updates allowed after creation
- * - No deletes allowed
+ * - General updates are NOT allowed after creation
+ * - Deletes are NOT allowed
+ * - Status transitions are ONLY allowed via transitionStatus()
  * - Corrections require compensating entries
- * 
+ *
  * This is the financial source of truth for Nexus.
+ * SECURITY: Strict immutability enforced at model level.
  */
 class LedgerEntry extends Model
 {
     use HasFactory, HasUuids;
 
     /**
-     * Disable updated_at timestamp (entries are immutable)
+     * Disable updated_at timestamp (entries are immutable).
      */
     const UPDATED_AT = null;
+
+    /**
+     * Valid status transitions.
+     * Key: current status, Value: array of allowed next statuses.
+     */
+    private const STATUS_TRANSITIONS = [
+        'pending' => ['paid', 'overdue', 'waived'],
+        'overdue' => ['paid', 'waived'],
+        'paid' => [], // Terminal state
+        'waived' => [], // Terminal state
+    ];
 
     protected $fillable = [
         'contract_id',
@@ -54,7 +67,7 @@ class LedgerEntry extends Model
     ];
 
     /**
-     * Get the contract this entry belongs to
+     * Get the contract this entry belongs to.
      */
     public function contract(): BelongsTo
     {
@@ -62,7 +75,7 @@ class LedgerEntry extends Model
     }
 
     /**
-     * Get the tenant
+     * Get the tenant.
      */
     public function tenant(): BelongsTo
     {
@@ -70,7 +83,7 @@ class LedgerEntry extends Model
     }
 
     /**
-     * Get the landlord
+     * Get the landlord.
      */
     public function landlord(): BelongsTo
     {
@@ -78,7 +91,7 @@ class LedgerEntry extends Model
     }
 
     /**
-     * Get the related rent entry (for late fees and payments)
+     * Get the related rent entry (for late fees and payments).
      */
     public function relatedRentEntry(): BelongsTo
     {
@@ -86,7 +99,7 @@ class LedgerEntry extends Model
     }
 
     /**
-     * Scope for tenant's entries
+     * Scope for tenant's entries.
      */
     public function scopeByTenant($query, $tenantId)
     {
@@ -94,7 +107,7 @@ class LedgerEntry extends Model
     }
 
     /**
-     * Scope for landlord's entries
+     * Scope for landlord's entries.
      */
     public function scopeByLandlord($query, $landlordId)
     {
@@ -102,7 +115,7 @@ class LedgerEntry extends Model
     }
 
     /**
-     * Scope for pending entries
+     * Scope for pending entries.
      */
     public function scopePending($query)
     {
@@ -110,7 +123,7 @@ class LedgerEntry extends Model
     }
 
     /**
-     * Scope for overdue entries
+     * Scope for overdue entries.
      */
     public function scopeOverdue($query)
     {
@@ -118,7 +131,7 @@ class LedgerEntry extends Model
     }
 
     /**
-     * Scope for rent entries only
+     * Scope for rent entries only.
      */
     public function scopeRent($query)
     {
@@ -126,7 +139,7 @@ class LedgerEntry extends Model
     }
 
     /**
-     * Scope for late fee entries only
+     * Scope for late fee entries only.
      */
     public function scopeLateFees($query)
     {
@@ -134,7 +147,7 @@ class LedgerEntry extends Model
     }
 
     /**
-     * Scope for payment entries only
+     * Scope for payment entries only.
      */
     public function scopePayments($query)
     {
@@ -142,7 +155,7 @@ class LedgerEntry extends Model
     }
 
     /**
-     * Scope for unpaid obligations
+     * Scope for unpaid obligations.
      */
     public function scopeUnpaid($query)
     {
@@ -151,19 +164,19 @@ class LedgerEntry extends Model
     }
 
     /**
-     * Check if entry is overdue
+     * Check if entry is overdue.
      */
     public function isOverdue(): bool
     {
         if ($this->status->isSettled()) {
             return false;
         }
-        
+
         return $this->due_date->isPast();
     }
 
     /**
-     * Check if this entry can be paid
+     * Check if this entry can be paid.
      */
     public function canBePaid(): bool
     {
@@ -171,7 +184,7 @@ class LedgerEntry extends Model
     }
 
     /**
-     * Get amount in dollars (from cents)
+     * Get amount in dollars (from cents).
      */
     public function getAmountInDollarsAttribute(): float
     {
@@ -179,15 +192,64 @@ class LedgerEntry extends Model
     }
 
     /**
-     * Prevent updates (immutability)
+     * Transition entry to a new status.
+     *
+     * This is the ONLY way to change status after creation.
+     * Validates that the transition is allowed.
+     *
+     * @param LedgerStatus $newStatus
+     * @param string|null $paymentIntentId Optional Stripe payment intent ID for paid status
+     * @return bool
+     * @throws \InvalidArgumentException If transition is not allowed
      */
-    public function update(array $attributes = [], array $options = [])
+    public function transitionStatus(LedgerStatus $newStatus, ?string $paymentIntentId = null): bool
     {
-        throw new \Exception('Ledger entries are immutable and cannot be updated. Create a compensating entry instead.');
+        $currentStatus = $this->status->value;
+        $allowedTransitions = self::STATUS_TRANSITIONS[$currentStatus] ?? [];
+
+        if (!in_array($newStatus->value, $allowedTransitions, true)) {
+            throw new \InvalidArgumentException(
+                "Invalid status transition: {$currentStatus} -> {$newStatus->value}. " .
+                "Allowed transitions: " . implode(', ', $allowedTransitions)
+            );
+        }
+
+        // Use query builder to bypass model immutability
+        $updateData = ['status' => $newStatus->value];
+
+        if ($paymentIntentId !== null && $newStatus === LedgerStatus::PAID) {
+            $updateData['stripe_payment_intent_id'] = $paymentIntentId;
+        }
+
+        $updated = static::where('id', $this->id)->update($updateData);
+
+        if ($updated) {
+            $this->status = $newStatus;
+            if ($paymentIntentId !== null) {
+                $this->stripe_payment_intent_id = $paymentIntentId;
+            }
+        }
+
+        return (bool) $updated;
     }
 
     /**
-     * Prevent deletes (immutability)
+     * Prevent updates (immutability).
+     *
+     * @throws \Exception Always - use transitionStatus() for status changes
+     */
+    public function update(array $attributes = [], array $options = [])
+    {
+        throw new \Exception(
+            'Ledger entries are immutable and cannot be updated directly. ' .
+            'Use transitionStatus() for status changes or create a compensating entry.'
+        );
+    }
+
+    /**
+     * Prevent deletes (immutability).
+     *
+     * @throws \Exception Always
      */
     public function delete()
     {
@@ -195,7 +257,9 @@ class LedgerEntry extends Model
     }
 
     /**
-     * Prevent force deletes (immutability)
+     * Prevent force deletes (immutability).
+     *
+     * @throws \Exception Always
      */
     public function forceDelete()
     {

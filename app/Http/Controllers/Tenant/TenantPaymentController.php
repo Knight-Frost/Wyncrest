@@ -8,11 +8,14 @@ use App\Models\LedgerEntry;
 use App\Services\PaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
+use Stripe\Exception\ApiErrorException;
 
 /**
  * TenantPaymentController
- * 
+ *
  * Handles tenant payment initiation.
+ * SECURITY: Sanitizes error messages to prevent information disclosure.
  */
 class TenantPaymentController extends Controller
 {
@@ -21,8 +24,8 @@ class TenantPaymentController extends Controller
     ) {}
 
     /**
-     * Initiate payment for a ledger entry
-     * Returns Stripe client_secret for frontend
+     * Initiate payment for a ledger entry.
+     * Returns Stripe client_secret for frontend.
      */
     public function initiate(InitiatePaymentRequest $request, LedgerEntry $ledgerEntry): JsonResponse
     {
@@ -37,24 +40,60 @@ class TenantPaymentController extends Controller
                 'client_secret' => $result['client_secret'],
                 'payment_intent_id' => $result['payment_intent_id'],
             ]);
-        } catch (\Exception $e) {
+        } catch (ApiErrorException $e) {
+            // Stripe API error - log full details, return sanitized message
+            Log::error('Stripe API error during payment initiation', [
+                'ledger_entry_id' => $ledgerEntry->id,
+                'user_id' => $request->user()->id,
+                'stripe_error' => $e->getMessage(),
+                'stripe_code' => $e->getStripeCode(),
+            ]);
+
+            return response()->json([
+                'message' => 'Unable to process payment. Please try again or contact support.'
+            ], 422);
+        } catch (\InvalidArgumentException $e) {
+            // Business logic error (e.g., already paid, invalid state)
             return response()->json([
                 'message' => $e->getMessage()
             ], 422);
+        } catch (\Exception $e) {
+            // Unexpected error - log full details, return generic message
+            Log::error('Unexpected error during payment initiation', [
+                'ledger_entry_id' => $ledgerEntry->id,
+                'user_id' => $request->user()->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'message' => 'An unexpected error occurred. Please try again later.'
+            ], 500);
         }
     }
 
     /**
-     * Get tenant's payment balance
+     * Get tenant's payment balance.
      */
     public function balance(Request $request): JsonResponse
     {
-        $balance = $this->paymentService->getTenantBalance($request->user());
+        try {
+            $balance = $this->paymentService->getTenantBalance($request->user());
 
-        return response()->json([
-            'balance_cents' => $balance,
-            'balance_dollars' => $balance / 100,
-            'owes_money' => $balance > 0,
-        ]);
+            return response()->json([
+                'balance_cents' => $balance,
+                'balance_dollars' => $balance / 100,
+                'owes_money' => $balance > 0,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error retrieving tenant balance', [
+                'user_id' => $request->user()->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Unable to retrieve balance. Please try again.'
+            ], 500);
+        }
     }
 }

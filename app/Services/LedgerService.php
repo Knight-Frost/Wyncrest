@@ -6,13 +6,16 @@ use App\Models\Contract;
 use App\Models\LedgerEntry;
 use App\Enums\LedgerType;
 use App\Enums\LedgerStatus;
+use App\Events\LedgerEntryMarkedOverdue;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 /**
  * LedgerService
- * 
+ *
  * Handles ledger entry creation and financial calculations.
  * All money amounts in cents.
+ * SECURITY: Respects LedgerEntry immutability - uses transitionStatus() for status changes.
  */
 class LedgerService
 {
@@ -21,8 +24,8 @@ class LedgerService
     ) {}
 
     /**
-     * Generate first rent ledger entry when contract becomes active
-     * 
+     * Generate first rent ledger entry when contract becomes active.
+     *
      * @param Contract $contract
      * @return LedgerEntry
      */
@@ -31,10 +34,10 @@ class LedgerService
         // Calculate billing period (monthly)
         $billingStart = Carbon::parse($contract->start_date);
         $billingEnd = $billingStart->copy()->addMonth()->subDay();
-        
+
         // Due date is based on payment_day of the month
         $dueDate = $billingStart->copy()->day($contract->payment_day);
-        
+
         // If due date is before billing start, push to next month
         if ($dueDate->lt($billingStart)) {
             $dueDate->addMonth();
@@ -66,8 +69,8 @@ class LedgerService
     }
 
     /**
-     * Generate next rent entry for a contract
-     * 
+     * Generate next rent entry for a contract.
+     *
      * @param Contract $contract
      * @return LedgerEntry
      */
@@ -86,7 +89,7 @@ class LedgerService
         // Next billing period starts the day after the last one ended
         $billingStart = $lastEntry->billing_period_end->copy()->addDay();
         $billingEnd = $billingStart->copy()->addMonth()->subDay();
-        
+
         // Due date
         $dueDate = $billingStart->copy()->day($contract->payment_day);
         if ($dueDate->lt($billingStart)) {
@@ -108,7 +111,7 @@ class LedgerService
 
         // Audit log
         $this->auditService->log(
-            actor:null,
+            actor: null,
             action: 'rent_entry_created',
             subject: $entry,
             description: "Rent entry created for contract {$contract->id}: {$billingStart->format('M Y')}",
@@ -119,20 +122,21 @@ class LedgerService
     }
 
     /**
-     * Generate late fee for an overdue rent entry
-     * 
+     * Generate late fee for an overdue rent entry.
+     *
      * @param LedgerEntry $rentEntry
      * @param int $lateFeeAmountCents
      * @return LedgerEntry
+     * @throws \InvalidArgumentException If entry cannot have late fee applied
      */
     public function generateLateFee(LedgerEntry $rentEntry, int $lateFeeAmountCents): LedgerEntry
     {
         if (!$rentEntry->type->isRent()) {
-            throw new \Exception('Late fees can only be applied to rent entries');
+            throw new \InvalidArgumentException('Late fees can only be applied to rent entries');
         }
 
         if (!$rentEntry->isOverdue()) {
-            throw new \Exception('Late fees can only be applied to overdue entries');
+            throw new \InvalidArgumentException('Late fees can only be applied to overdue entries');
         }
 
         // Check if late fee already exists for this rent entry
@@ -141,7 +145,7 @@ class LedgerService
             ->first();
 
         if ($existingLateFee) {
-            throw new \Exception('Late fee already exists for this rent entry');
+            throw new \InvalidArgumentException('Late fee already exists for this rent entry');
         }
 
         $lateFeeEntry = LedgerEntry::create([
@@ -164,7 +168,7 @@ class LedgerService
             actor: null,
             action: 'late_fee_applied',
             subject: $lateFeeEntry,
-            description: "Late fee applied to rent entry {$rentEntry->id}: $" . $amountDollars,
+            description: "Late fee applied to rent entry {$rentEntry->id}: \${$amountDollars}",
             severity: 'warning'
         );
 
@@ -172,9 +176,9 @@ class LedgerService
     }
 
     /**
-     * Mark entries as overdue
-     * (Future: this will be called by cron job)
-     * 
+     * Mark entries as overdue.
+     * Uses the proper transitionStatus() method to respect immutability.
+     *
      * @return int Number of entries marked overdue
      */
     public function markOverdueEntries(): int
@@ -185,12 +189,78 @@ class LedgerService
 
         $count = 0;
         foreach ($entries as $entry) {
-            // Override immutability for status updates only
-            $entry->status = LedgerStatus::OVERDUE;
-            $entry->saveQuietly(); // Bypass immutability check
-            $count++;
+            try {
+                // Use proper status transition method
+                $entry->transitionStatus(LedgerStatus::OVERDUE);
+                $count++;
+
+                // Fire event for notification system
+                event(new LedgerEntryMarkedOverdue($entry));
+
+                // Audit log
+                $this->auditService->log(
+                    actor: null,
+                    action: 'entry_marked_overdue',
+                    subject: $entry,
+                    description: "Ledger entry {$entry->id} marked overdue",
+                    severity: 'warning'
+                );
+            } catch (\Exception $e) {
+                Log::error("Failed to mark entry {$entry->id} as overdue", [
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         return $count;
+    }
+
+    /**
+     * Mark entry as paid.
+     *
+     * @param LedgerEntry $entry
+     * @param string $paymentIntentId Stripe payment intent ID
+     * @return bool
+     */
+    public function markEntryPaid(LedgerEntry $entry, string $paymentIntentId): bool
+    {
+        $result = $entry->transitionStatus(LedgerStatus::PAID, $paymentIntentId);
+
+        if ($result) {
+            $this->auditService->log(
+                actor: null,
+                action: 'entry_paid',
+                subject: $entry,
+                description: "Ledger entry {$entry->id} marked paid via {$paymentIntentId}",
+                severity: 'info'
+            );
+        }
+
+        return $result;
+    }
+
+    /**
+     * Waive an entry (admin action).
+     *
+     * @param LedgerEntry $entry
+     * @param string $reason
+     * @return bool
+     */
+    public function waiveEntry(LedgerEntry $entry, string $reason): bool
+    {
+        $result = $entry->transitionStatus(LedgerStatus::WAIVED);
+
+        if ($result) {
+            $this->auditService->log(
+                actor: null,
+                action: 'entry_waived',
+                subject: $entry,
+                description: "Ledger entry {$entry->id} waived. Reason: {$reason}",
+                severity: 'warning',
+                metadata: ['reason' => $reason]
+            );
+        }
+
+        return $result;
     }
 }
