@@ -8,7 +8,7 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
-     * 
+     *
      * Email logs track all emails sent by the system.
      * Required for audit trail and debugging.
      * All emails are triggered by events, never manually in controllers.
@@ -17,11 +17,11 @@ return new class extends Migration
     {
         Schema::create('email_logs', function (Blueprint $table) {
             $table->id();
-            
-            // Recipient
-            $table->morphs('recipient'); // user or admin
+
+            // Recipient (nullable: system-originated emails have no concrete recipient model)
+            $table->nullableMorphs('recipient'); // user, admin, or system (null)
             $table->string('recipient_email');
-            
+
             // Email details
             $table->string('subject');
             $table->string('mailable_class'); // Laravel mailable class name
@@ -31,29 +31,29 @@ return new class extends Migration
                 'notification',
                 'transaction',
                 'security',
-                'system'
+                'system',
             ]);
-            
+
             // Related entity (what triggered this email)
             $table->morphs('related'); // listing, application, lease, etc.
-            
+
             // Delivery status
             $table->enum('status', [
                 'queued',
                 'sent',
                 'failed',
-                'bounced'
+                'bounced',
             ])->default('queued');
-            
+
             $table->timestamp('sent_at')->nullable();
             $table->text('error_message')->nullable();
-            
+
             // Tracking (for future)
             $table->timestamp('opened_at')->nullable();
             $table->timestamp('clicked_at')->nullable();
-            
+
             $table->timestamps();
-            
+
             // Indexes (morphs() already creates indexes for recipient and related)
             $table->index(['email_type', 'status']);
             $table->index('sent_at');

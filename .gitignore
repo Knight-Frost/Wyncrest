@@ -68,3 +68,6 @@ Thumbs.db
 !storage/framework/cache/.gitignore
 !storage/framework/sessions/.gitignore
 !storage/framework/views/.gitignore
+
+# Stale backup snapshots - never commit
+/backups

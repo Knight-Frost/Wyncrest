@@ -27,15 +27,7 @@
     "App\\": "app/",
     "Database\\Factories\\": "database/factories/",
     "Database\\Seeders\\": "database/seeders/"
-  },
-  "files": [
-    "app/Legacy/SharedModels.php",
-    "app/Legacy/UserEvents.php",
-    "app/Legacy/ListingEvents.php",
-    "app/Legacy/EmailListeners.php",
-    "app/Legacy/AuditListeners.php"
-  ]
-
+  }
     },
     "autoload-dev": {
         "psr-4": {
