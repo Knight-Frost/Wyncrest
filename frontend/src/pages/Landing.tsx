@@ -338,7 +338,7 @@ export function Landing() {
           </div>
           <div className="nx-roles">
             {roles.map((r) => (
-              <Link className={'nx-role' + (r.feature ? ' feature' : '')} to={exploreTo} key={r.t} data-reveal>
+              <Link className="nx-role" to={exploreTo} key={r.t} data-reveal>
                 <div className="nx-role-img">
                   <img src={r.img} alt={r.t} />
                 </div>
