@@ -55,6 +55,11 @@ structural protections:
   duplicate delivery; the trade-off is that a *transient* processing failure is
   not retried by Stripe. If stricter delivery guarantees are needed, return 5xx
   on transient errors so Stripe retries (idempotency makes that safe too).
+- **Login distinguishes unknown-email from wrong-password** (a product/UX choice
+  for clearer feedback). This is a minor user-enumeration trade-off (OWASP A07);
+  it is accepted and mitigated by the per-email+IP login throttle (5/min) and
+  audit logging. Reverting to a single generic "credentials are incorrect"
+  message in `AuthController::login` closes it if enumeration becomes a concern.
 - **All admins are super-admins** in the current phase. Granular admin RBAC is
   future work; until then, admin accounts must be tightly controlled.
 - **PII is not field-encrypted at rest.** Acceptable for the current data set;

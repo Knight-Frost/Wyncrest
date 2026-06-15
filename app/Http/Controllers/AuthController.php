@@ -98,21 +98,40 @@ class AuthController extends Controller
             ]);
         }
 
-        // Check if this is an admin login
+        // Resolve the account by email (admins take precedence over users).
+        // Note: differentiating "unknown email" from "wrong password" is a product
+        // choice for clearer UX. It trades a small user-enumeration risk, which is
+        // mitigated by the per-email+IP login throttle above and audit logging.
         $admin = Admin::where('email', $validated['email'])->first();
-        if ($admin && Hash::check($validated['password'], $admin->password)) {
+        $user = $admin ? null : User::where('email', $validated['email'])->first();
+
+        // No account exists with this email at all.
+        if (! $admin && ! $user) {
+            RateLimiter::hit($throttleKey, 60);
+            throw ValidationException::withMessages([
+                'email' => ['No account was found with this email address.'],
+            ]);
+        }
+
+        // Admin login path.
+        if ($admin) {
+            if (! Hash::check($validated['password'], $admin->password)) {
+                RateLimiter::hit($throttleKey, 60);
+                throw ValidationException::withMessages([
+                    'password' => ['The password you entered is incorrect.'],
+                ]);
+            }
+
             RateLimiter::clear($throttleKey);
 
             return $this->handleAdminLogin($admin);
         }
 
-        // Check regular user
-        $user = User::where('email', $validated['email'])->first();
-
-        if (! $user || ! Hash::check($validated['password'], $user->password)) {
+        // Regular user: email exists, so a failure here is specifically the password.
+        if (! Hash::check($validated['password'], $user->password)) {
             RateLimiter::hit($throttleKey, 60);
             throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
+                'password' => ['The password you entered is incorrect.'],
             ]);
         }
 
