@@ -2,67 +2,70 @@
 
 /* ==========================================================================
    Nexus Design System (Tailwind v4, CSS-first tokens)
-   A restrained, premium palette: warm neutral canvas, deep "evergreen" brand
-   accent (trust / real estate / money), and clear semantic states.
+   Dark, editorial "evergreen-gold" theme — unified with the landing page.
+   Tokens are SEMANTIC: the `ink` scale runs dark→light so higher numbers are
+   lighter text on the dark canvas; `brand` is gold; `surface`/`canvas` are the
+   dark elevations. Components reference these, so the whole app themes together.
    ========================================================================== */
 @theme {
-  /* Brand — evergreen */
-  --color-brand-50: #ecfdf6;
-  --color-brand-100: #d1faec;
-  --color-brand-200: #a7f3da;
-  --color-brand-300: #6ee7bf;
-  --color-brand-400: #34d3a2;
-  --color-brand-500: #10b886;
-  --color-brand-600: #069169;
-  --color-brand-700: #047357;
-  --color-brand-800: #065c47;
-  --color-brand-900: #064b3b;
-  --color-brand-950: #022c22;
+  /* Brand — gold */
+  --color-brand-50: #211d13; /* faint gold-tinted dark (chips, active bg) */
+  --color-brand-100: #2c2716;
+  --color-brand-200: #463c22; /* rings / hairlines */
+  --color-brand-300: #6f5d33;
+  --color-brand-400: #e3cb8c; /* gold-soft (text/hover on dark) */
+  --color-brand-500: #d8b46a; /* focus ring */
+  --color-brand-600: #c9a45b; /* gold */
+  --color-brand-700: #c9a45b; /* primary accent / button bg */
+  --color-brand-800: #e3cb8c; /* gold text on dark (links, badges, hovers) */
+  --color-brand-900: #9a7842; /* gold-deep */
+  --color-brand-950: #18130b;
 
-  /* Ink — warm slate neutrals for text, borders, surfaces */
-  --color-ink-50: #f7f7f6;
-  --color-ink-100: #efeeec;
-  --color-ink-200: #e2e1dd;
-  --color-ink-300: #cbc9c3;
-  --color-ink-400: #a3a099;
-  --color-ink-500: #7a766e;
-  --color-ink-600: #5c5851;
-  --color-ink-700: #44413c;
-  --color-ink-800: #2b2926;
-  --color-ink-900: #1a1917;
-  --color-ink-950: #0f0e0d;
+  /* Ink — dark→light. Low = dark elevations/borders, high = light text. */
+  --color-ink-50: #1b2026; /* subtle elevated surface / row hover */
+  --color-ink-100: #20262d; /* hover bg / skeleton */
+  --color-ink-200: #262d34; /* default borders */
+  --color-ink-300: #353d45; /* stronger borders / dividers */
+  --color-ink-400: #6b726f; /* faint text / placeholders */
+  --color-ink-500: #909896; /* muted / secondary text */
+  --color-ink-600: #aab0ab; /* readable secondary text */
+  --color-ink-700: #c2bdb2; /* body text */
+  --color-ink-800: #cdc8bc; /* labels / strong-ish text */
+  --color-ink-900: #ebe7de; /* primary text */
+  --color-ink-950: #f4f1ea; /* headings (ivory) */
 
-  /* Semantic */
-  --color-success-50: #ecfdf3;
-  --color-success-500: #16a34a;
-  --color-success-600: #15803d;
-  --color-warning-50: #fffbeb;
-  --color-warning-500: #d97706;
-  --color-warning-600: #b45309;
-  --color-danger-50: #fef2f2;
-  --color-danger-500: #dc2626;
-  --color-danger-600: #b91c1c;
-  --color-info-50: #eff6ff;
-  --color-info-500: #2563eb;
-  --color-info-600: #1d4ed8;
+  /* Semantic — accents readable on dark, with dark-tinted backgrounds */
+  --color-success-50: #13211a;
+  --color-success-500: #7fb394;
+  --color-success-600: #7fb394;
+  --color-warning-50: #241c11;
+  --color-warning-500: #d9a24b;
+  --color-warning-600: #d9a24b;
+  --color-danger-50: #261515;
+  --color-danger-500: #e08585;
+  --color-danger-600: #d65f5f;
+  --color-info-50: #141d24;
+  --color-info-500: #8fb3cc;
+  --color-info-600: #8fb3cc;
 
   /* Canvas */
-  --color-canvas: #fafaf8;
-  --color-surface: #ffffff;
+  --color-canvas: #0e1113;
+  --color-surface: #161b20;
 
-  /* Typography */
+  /* Typography — editorial serif display + clean sans + mono accents */
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
     Roboto, Helvetica, Arial, sans-serif;
-  --font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 
   /* Radii */
   --radius-xl: 0.875rem;
   --radius-2xl: 1.125rem;
 
-  /* Shadows — soft, layered, never harsh */
-  --shadow-sm: 0 1px 2px 0 rgb(15 14 13 / 0.04), 0 1px 3px 0 rgb(15 14 13 / 0.06);
-  --shadow-md: 0 2px 4px -1px rgb(15 14 13 / 0.05), 0 8px 16px -4px rgb(15 14 13 / 0.08);
-  --shadow-lg: 0 12px 32px -8px rgb(15 14 13 / 0.12), 0 2px 6px -2px rgb(15 14 13 / 0.06);
+  /* Shadows — deep, for elevation on the dark canvas */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 1px 3px 0 rgb(0 0 0 / 0.4);
+  --shadow-md: 0 2px 6px -1px rgb(0 0 0 / 0.4), 0 12px 26px -6px rgb(0 0 0 / 0.55);
+  --shadow-lg: 0 26px 60px -20px rgb(0 0 0 / 0.7), 0 4px 14px -4px rgb(0 0 0 / 0.5);
 
   /* Motion */
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
@@ -77,6 +80,7 @@
   html {
     -webkit-text-size-adjust: 100%;
     scroll-behavior: smooth;
+    color-scheme: dark;
   }
 
   body {
@@ -92,7 +96,8 @@
 
   h1, h2, h3, h4 {
     font-family: var(--font-display);
-    letter-spacing: -0.02em;
+    font-weight: 500;
+    letter-spacing: -0.015em;
     color: var(--color-ink-950);
   }
 
@@ -105,16 +110,16 @@
 
   /* Refined scrollbar */
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 11px;
+    height: 11px;
   }
   ::-webkit-scrollbar-thumb {
-    background: var(--color-ink-200);
+    background: var(--color-ink-300);
     border-radius: 9999px;
-    border: 2px solid var(--color-canvas);
+    border: 3px solid var(--color-canvas);
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--color-ink-300);
+    background: var(--color-ink-400);
   }
 }
 
@@ -146,7 +151,7 @@
     animation: nx-scale-in 0.2s var(--ease-out-soft) both;
   }
 
-  /* Skeleton shimmer */
+  /* Skeleton shimmer (subtle on dark) */
   .skeleton {
     position: relative;
     overflow: hidden;
@@ -160,7 +165,7 @@
     background: linear-gradient(
       90deg,
       transparent,
-      rgb(255 255 255 / 0.6),
+      rgb(255 255 255 / 0.06),
       transparent
     );
     animation: nx-shimmer 1.5s infinite;

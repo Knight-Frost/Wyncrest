@@ -21,8 +21,8 @@ export function AuthLayout({
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
       {/* Brand panel */}
-      <div className="relative hidden overflow-hidden bg-ink-950 lg:block">
-        <div className="absolute inset-0 bg-gradient-to-br from-brand-900 via-ink-950 to-ink-950" />
+      <div className="relative hidden overflow-hidden bg-canvas lg:block">
+        <div className="absolute inset-0 bg-gradient-to-br from-brand-900/35 via-canvas to-canvas" />
         <div
           className="absolute inset-0 opacity-[0.07]"
           style={{
@@ -34,7 +34,7 @@ export function AuthLayout({
         <div className="relative flex h-full flex-col justify-between p-12">
           <Link to="/" className="inline-flex">
             <span className="inline-flex items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500/20 text-brand-200">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500/20 text-brand-400">
                 <svg width="20" height="20" viewBox="0 0 32 32">
                   <path d="M9 23V9h2.6l9.8 10.2V9H24v14h-2.6L11.6 12.8V23H9z" fill="currentColor" />
                 </svg>
@@ -49,8 +49,8 @@ export function AuthLayout({
             </h2>
             <ul className="mt-8 space-y-4">
               {HIGHLIGHTS.map((h) => (
-                <li key={h} className="flex items-start gap-3 text-brand-50/90">
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-500/25 text-brand-200">
+                <li key={h} className="flex items-start gap-3 text-ink-800">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-500/15 text-brand-400">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                       <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
@@ -61,7 +61,7 @@ export function AuthLayout({
             </ul>
           </div>
 
-          <p className="text-xs text-brand-50/40">
+          <p className="text-xs text-ink-500">
             © {new Date().getFullYear()} Nexus. Secure property management.
           </p>
         </div>
