@@ -9,6 +9,9 @@
 }
 *{box-sizing:border-box}
 .nx{background:var(--ink);color:var(--ivory);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.5;overflow-x:hidden}
+/* Headings inherit ivory on the dark canvas. This overrides the app's global
+   (light-theme) heading color, which would otherwise render them near-black. */
+.nx h1,.nx h2,.nx h3,.nx h4{color:var(--ivory)}
 .nx ::selection{background:var(--gold);color:var(--ink)}
 .nx a{color:inherit;text-decoration:none}
 .nx-wrap{max-width:1280px;margin:0 auto;padding:0 32px}
