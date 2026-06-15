@@ -68,11 +68,11 @@ interface Slide {
 
 function Hero({ ctaTo, ctaLabel }: { ctaTo: string; ctaLabel: string }) {
   const slides: Slide[] = [
-    { img: IMG.villa, nm: 'Casa del Mar', lo: 'Malibu, California' },
-    { img: IMG.cabin, nm: 'Aspen Ridge Lodge', lo: 'Aspen, Colorado' },
-    { img: IMG.suburban, nm: 'Maplewood House', lo: 'Austin, Texas' },
-    { img: IMG.rolls, nm: 'Phantom Court', lo: 'Beverly Hills, California' },
-    { img: IMG.indigo, nm: 'The Indigo Loft', lo: 'Brooklyn, New York' },
+    { img: IMG.villa, nm: 'Casa del Mar', lo: 'Labadi, Accra' },
+    { img: IMG.cabin, nm: 'Aburi Ridge Lodge', lo: 'Aburi, Eastern Region' },
+    { img: IMG.suburban, nm: 'Maplewood House', lo: 'East Legon, Accra' },
+    { img: IMG.rolls, nm: 'Phantom Court', lo: 'Cantonments, Accra' },
+    { img: IMG.indigo, nm: 'The Indigo Loft', lo: 'Osu, Accra' },
   ];
   const [i, setI] = useState(0);
   useEffect(() => {
@@ -157,12 +157,12 @@ export function Landing() {
   const exploreTo = user ? '/app' : '/register';
 
   const listings = [
-    { img: IMG.villa, nm: 'Casa del Mar', lo: 'Malibu, California', price: '$12,500', meta: '4 Beds · 5 Baths · Ocean view', status: 'Available', tag: 'ok' },
-    { img: IMG.cabin, nm: 'Aspen Ridge Lodge', lo: 'Aspen, Colorado', price: '$8,900', meta: '5 Beds · 4 Baths · Mountain view', status: 'Available', tag: 'ok' },
-    { img: IMG.indigo, nm: 'The Indigo Loft', lo: 'Brooklyn, New York', price: '$4,200', meta: '2 Beds · 2 Baths · City loft', status: 'Occupied', tag: 'muted' },
-    { img: IMG.suburban, nm: 'Maplewood House', lo: 'Austin, Texas', price: '$5,600', meta: '4 Beds · 3 Baths · Family home', status: 'Available', tag: 'ok' },
-    { img: IMG.entry, nm: 'Nordlys Townhouse', lo: 'Oslo, Norway', price: '$3,800', meta: '3 Beds · 2 Baths · Townhouse', status: 'Available', tag: 'ok' },
-    { img: IMG.spa, nm: 'Dune Spa Residence', lo: 'Santa Barbara, CA', price: '$9,400', meta: '3 Beds · 4 Baths · Beachfront', status: 'Reserved', tag: 'warn' },
+    { img: IMG.villa, nm: 'Casa del Mar', lo: 'Labadi, Accra', price: '$12,500', meta: '4 Beds · 5 Baths · Ocean view', status: 'Available', tag: 'ok' },
+    { img: IMG.cabin, nm: 'Aburi Ridge Lodge', lo: 'Aburi, Eastern Region', price: '$8,900', meta: '5 Beds · 4 Baths · Mountain view', status: 'Available', tag: 'ok' },
+    { img: IMG.indigo, nm: 'The Indigo Loft', lo: 'Osu, Accra', price: '$4,200', meta: '2 Beds · 2 Baths · City loft', status: 'Occupied', tag: 'muted' },
+    { img: IMG.suburban, nm: 'Maplewood House', lo: 'East Legon, Accra', price: '$5,600', meta: '4 Beds · 3 Baths · Family home', status: 'Available', tag: 'ok' },
+    { img: IMG.entry, nm: 'Airport City Townhouse', lo: 'Airport Residential, Accra', price: '$3,800', meta: '3 Beds · 2 Baths · Townhouse', status: 'Available', tag: 'ok' },
+    { img: IMG.spa, nm: 'Dune Spa Residence', lo: 'Ada Foah, Greater Accra', price: '$9,400', meta: '3 Beds · 4 Baths · Beachfront', status: 'Reserved', tag: 'warn' },
   ];
   const steps = [
     { n: '01', t: 'Find a home', p: 'Browse verified listings, save your favorites, and request a viewing in a few taps.' },
@@ -420,12 +420,8 @@ export function Landing() {
             </div>
           </div>
           <div className="nx-foot-bot">
-            <div className="nx-foot-stats">
-              <div><div className="v">SOC 2</div><div className="l">Type II Compliant</div></div>
-              <div><div className="v">256-bit</div><div className="l">Encryption</div></div>
-              <div><div className="v">99.9%</div><div className="l">Uptime</div></div>
-            </div>
             <div className="nx-foot-copy">© {new Date().getFullYear()} Nexus. Secure rental infrastructure.</div>
+            <div className="nx-foot-copy">Accra, Ghana</div>
           </div>
         </div>
       </footer>
