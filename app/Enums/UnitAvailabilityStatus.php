@@ -4,7 +4,7 @@ namespace App\Enums;
 
 /**
  * UnitAvailabilityStatus Enum
- * 
+ *
  * Defines the availability states of a unit.
  */
 enum UnitAvailabilityStatus: string
@@ -14,13 +14,13 @@ enum UnitAvailabilityStatus: string
     case PENDING = 'pending';
     case MAINTENANCE = 'maintenance';
     case UNLISTED = 'unlisted';
-    
+
     /**
      * Get human-readable label
      */
     public function label(): string
     {
-        return match($this) {
+        return match ($this) {
             self::AVAILABLE => 'Available',
             self::OCCUPIED => 'Occupied',
             self::PENDING => 'Pending',
@@ -28,7 +28,7 @@ enum UnitAvailabilityStatus: string
             self::UNLISTED => 'Unlisted',
         };
     }
-    
+
     /**
      * Check if unit can have active listing
      */
@@ -36,7 +36,7 @@ enum UnitAvailabilityStatus: string
     {
         return in_array($this, [self::AVAILABLE, self::PENDING]);
     }
-    
+
     /**
      * Check if unit is rentable
      */

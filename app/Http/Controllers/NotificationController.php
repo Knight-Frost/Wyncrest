@@ -4,12 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Notification;
 use App\Services\NotificationService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * NotificationController
- * 
+ *
  * Handles user notification retrieval and management.
  * Read-only for Phase 3.5 (no delivery logic).
  */

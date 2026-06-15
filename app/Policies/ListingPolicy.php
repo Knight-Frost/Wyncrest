@@ -2,10 +2,10 @@
 
 namespace App\Policies;
 
+use App\Enums\ListingStatus;
+use App\Enums\UserType;
 use App\Models\Listing;
 use App\Models\User;
-use App\Enums\UserType;
-use App\Enums\ListingStatus;
 
 /**
  * ListingPolicy
@@ -89,9 +89,9 @@ class ListingPolicy
         }
 
         // Cannot delete active or pending listings
-        return !in_array($listing->status, [
+        return ! in_array($listing->status, [
             ListingStatus::ACTIVE,
-            ListingStatus::PENDING_REVIEW
+            ListingStatus::PENDING_REVIEW,
         ], true);
     }
 

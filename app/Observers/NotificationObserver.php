@@ -7,7 +7,7 @@ use App\Support\Cache\AnalyticsCacheInvalidator;
 
 /**
  * NotificationObserver
- * 
+ *
  * Phase 5.2: Invalidates notification analytics cache when notifications change.
  * Affects: Notification analytics only
  */
@@ -40,12 +40,9 @@ class NotificationObserver
     {
         $this->invalidateNotificationAnalytics($notification);
     }
-    
+
     /**
      * Check if the update is delivery-related
-     * 
-     * @param Notification $notification
-     * @return bool
      */
     protected function isDeliveryStatusChange(Notification $notification): bool
     {
@@ -55,21 +52,18 @@ class NotificationObserver
             'sms_delivered_at',
             'sms_failed_at',
         ];
-        
+
         foreach ($deliveryFields as $field) {
             if ($notification->isDirty($field)) {
                 return true;
             }
         }
-        
+
         return false;
     }
-    
+
     /**
      * Invalidate notification analytics cache
-     * 
-     * @param Notification $notification
-     * @return void
      */
     protected function invalidateNotificationAnalytics(Notification $notification): void
     {

@@ -2,9 +2,9 @@
 
 namespace Database\Factories;
 
+use App\Enums\NotificationType;
 use App\Models\Notification;
 use App\Models\User;
-use App\Enums\NotificationType;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -27,7 +27,7 @@ class NotificationFactory extends Factory
             'title' => fake()->sentence(),
             'message' => fake()->paragraph(),
             'data' => [
-                'event_id' => 'test-' . fake()->uuid(),
+                'event_id' => 'test-'.fake()->uuid(),
             ],
             'read_at' => null,
             'delivered_at' => null,

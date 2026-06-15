@@ -11,7 +11,7 @@ use Illuminate\Queue\SerializesModels;
 
 /**
  * NotificationEmail
- * 
+ *
  * Generic mailable for all notification types.
  * Phase 3.6: Simple, clean email delivery.
  */

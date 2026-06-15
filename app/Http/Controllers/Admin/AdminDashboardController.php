@@ -3,22 +3,20 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
-use App\Models\Property;
 use App\Models\Listing;
+use App\Models\Property;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 
 /**
  * AdminDashboardController
- * 
+ *
  * Provides admin dashboard statistics and overview.
  */
 class AdminDashboardController extends Controller
 {
     /**
      * Get admin dashboard data.
-     * 
-     * @return JsonResponse
      */
     public function index(): JsonResponse
     {

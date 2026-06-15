@@ -2,9 +2,9 @@
 
 namespace App\Policies;
 
+use App\Enums\UserType;
 use App\Models\LedgerEntry;
 use App\Models\User;
-use App\Enums\UserType;
 
 /**
  * LedgerEntryPolicy

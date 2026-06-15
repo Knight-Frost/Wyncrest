@@ -2,13 +2,13 @@
 
 namespace App\Http\Requests;
 
-use Illuminate\Foundation\Http\FormRequest;
 use App\Enums\UnitAvailabilityStatus;
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
  * StoreUnitRequest
- * 
+ *
  * Validates unit creation data.
  */
 class StoreUnitRequest extends FormRequest
@@ -19,6 +19,7 @@ class StoreUnitRequest extends FormRequest
     public function authorize(): bool
     {
         $property = $this->route('property');
+
         return $this->user()?->can('view', $property) ?? false;
     }
 

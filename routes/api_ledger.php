@@ -1,8 +1,8 @@
 <?php
 
-use App\Http\Controllers\Tenant\TenantLedgerController;
-use App\Http\Controllers\Landlord\LandlordLedgerController;
 use App\Http\Controllers\Admin\AdminLedgerController;
+use App\Http\Controllers\Landlord\LandlordLedgerController;
+use App\Http\Controllers\Tenant\TenantLedgerController;
 
 /*
 |--------------------------------------------------------------------------

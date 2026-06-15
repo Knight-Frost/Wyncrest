@@ -2,10 +2,10 @@
 
 namespace App\Policies;
 
+use App\Enums\ContractStatus;
+use App\Enums\UserType;
 use App\Models\Contract;
 use App\Models\User;
-use App\Enums\UserType;
-use App\Enums\ContractStatus;
 
 /**
  * ContractPolicy
@@ -73,7 +73,7 @@ class ContractPolicy
      */
     public function terminate(User $user, Contract $contract): bool
     {
-        if (!$contract->canBeTerminated()) {
+        if (! $contract->canBeTerminated()) {
             return false;
         }
 

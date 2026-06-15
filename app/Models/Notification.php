@@ -10,10 +10,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Notification
- * 
+ *
  * Represents a user notification triggered by system events.
  * Immutable except for read_at and delivery tracking fields.
- * 
+ *
  * Phase 3.5: Event-driven notifications
  * Phase 3.6: Email delivery tracking
  * Phase 3.7: SMS delivery tracking
@@ -72,7 +72,7 @@ class Notification extends Model
 
     /**
      * Check if notification has been delivered via email
-     * 
+     *
      * Phase 3.6
      */
     public function isDelivered(): bool
@@ -82,7 +82,7 @@ class Notification extends Model
 
     /**
      * Check if notification email delivery failed
-     * 
+     *
      * Phase 3.6
      */
     public function hasDeliveryFailed(): bool
@@ -92,7 +92,7 @@ class Notification extends Model
 
     /**
      * Check if notification is pending email delivery
-     * 
+     *
      * Phase 3.6
      */
     public function isPendingDelivery(): bool
@@ -102,7 +102,7 @@ class Notification extends Model
 
     /**
      * Check if notification has been delivered via SMS
-     * 
+     *
      * Phase 3.7
      */
     public function isSmsDelivered(): bool
@@ -112,7 +112,7 @@ class Notification extends Model
 
     /**
      * Check if notification SMS delivery failed
-     * 
+     *
      * Phase 3.7
      */
     public function hasSmsDeliveryFailed(): bool
@@ -122,7 +122,7 @@ class Notification extends Model
 
     /**
      * Check if notification is pending SMS delivery
-     * 
+     *
      * Phase 3.7
      */
     public function isPendingSmsDelivery(): bool
@@ -156,7 +156,7 @@ class Notification extends Model
 
     /**
      * Scope: Email delivered notifications
-     * 
+     *
      * Phase 3.6
      */
     public function scopeDelivered($query)
@@ -166,7 +166,7 @@ class Notification extends Model
 
     /**
      * Scope: Pending email delivery
-     * 
+     *
      * Phase 3.6
      */
     public function scopePendingDelivery($query)
@@ -177,7 +177,7 @@ class Notification extends Model
 
     /**
      * Scope: Failed email delivery
-     * 
+     *
      * Phase 3.6
      */
     public function scopeFailedDelivery($query)
@@ -187,7 +187,7 @@ class Notification extends Model
 
     /**
      * Scope: SMS delivered notifications
-     * 
+     *
      * Phase 3.7
      */
     public function scopeSmsDelivered($query)
@@ -197,7 +197,7 @@ class Notification extends Model
 
     /**
      * Scope: Pending SMS delivery
-     * 
+     *
      * Phase 3.7
      */
     public function scopePendingSmsDelivery($query)
@@ -208,7 +208,7 @@ class Notification extends Model
 
     /**
      * Scope: Failed SMS delivery
-     * 
+     *
      * Phase 3.7
      */
     public function scopeFailedSmsDelivery($query)

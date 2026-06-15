@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests;
 
-use Illuminate\Foundation\Http\FormRequest;
 use App\Models\LedgerEntry;
+use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * InitiatePaymentRequest
@@ -18,7 +18,7 @@ class InitiatePaymentRequest extends FormRequest
         // Get the ledger entry from route
         $ledgerEntry = $this->route('ledgerEntry');
 
-        if (!$ledgerEntry instanceof LedgerEntry) {
+        if (! $ledgerEntry instanceof LedgerEntry) {
             return false;
         }
 

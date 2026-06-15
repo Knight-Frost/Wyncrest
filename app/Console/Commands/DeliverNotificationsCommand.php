@@ -7,7 +7,7 @@ use Illuminate\Console\Command;
 
 /**
  * DeliverNotificationsCommand
- * 
+ *
  * Delivers pending notifications via email.
  * Phase 3.6: Idempotent, safe to run multiple times.
  */
@@ -44,20 +44,21 @@ class DeliverNotificationsCommand extends Command
         if ($retry) {
             $this->info('🔄 Retrying failed deliveries...');
             $result = $deliveryService->retryFailed($limit);
-            
+
             $this->newLine();
             $this->info('📊 Retry Summary:');
             $this->line("   ✅ Delivered: {$result['delivered']}");
             $this->line("   ❌ Failed: {$result['failed']}");
-            
+
             return Command::SUCCESS;
         }
 
         // Get pending count before delivery
         $pendingCount = $deliveryService->getPendingCount();
-        
+
         if ($pendingCount === 0) {
             $this->info('✨ No pending notifications to deliver');
+
             return Command::SUCCESS;
         }
 
@@ -72,7 +73,7 @@ class DeliverNotificationsCommand extends Command
         $this->line("   ✅ Delivered: {$result['delivered']}");
         $this->line("   ❌ Failed: {$result['failed']}");
         $this->line("   ⏭️  Skipped: {$result['skipped']}");
-        
+
         $this->newLine();
 
         // Show remaining count

@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
-use Tests\TestCase;
-use App\Models\User;
 use App\Enums\UserType;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\RateLimiter;
+use Tests\TestCase;
 
 class RateLimitingTest extends TestCase
 {
@@ -15,7 +15,7 @@ class RateLimitingTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        
+
         // Clear all rate limiters
         RateLimiter::clear('api:rate-limit:tenant:*');
         RateLimiter::clear('api:rate-limit:landlord:*');
@@ -31,7 +31,7 @@ class RateLimitingTest extends TestCase
             $response = $this->withHeaders([
                 'Authorization' => "Bearer {$token}",
             ])->getJson('/api/tenant/dashboard');
-            
+
             $response->assertStatus(200);
             $response->assertHeader('X-RateLimit-Limit', '60');
         }
@@ -52,7 +52,7 @@ class RateLimitingTest extends TestCase
             $response = $this->withHeaders([
                 'Authorization' => "Bearer {$token}",
             ])->getJson('/api/landlord/onboarding');
-            
+
             $response->assertStatus(200);
             $response->assertHeader('X-RateLimit-Limit', '120');
         }
@@ -68,7 +68,7 @@ class RateLimitingTest extends TestCase
     {
         for ($i = 0; $i < 30; $i++) {
             $response = $this->getJson('/api/listings');
-            
+
             $response->assertStatus(200);
             $response->assertHeader('X-RateLimit-Limit', '30');
         }
@@ -89,10 +89,10 @@ class RateLimitingTest extends TestCase
         $response->assertStatus(200);
         $response->assertHeader('X-RateLimit-Limit');
         $response->assertHeader('X-RateLimit-Remaining');
-        
+
         $limit = $response->headers->get('X-RateLimit-Limit');
         $remaining = $response->headers->get('X-RateLimit-Remaining');
-        
+
         $this->assertEquals('60', $limit);
         $this->assertEquals('59', $remaining);
     }
@@ -109,7 +109,7 @@ class RateLimitingTest extends TestCase
         // Test tenant limit - this should always work
         $tenantResponse = $this->withHeaders(['Authorization' => "Bearer {$tenantToken}"])
             ->getJson('/api/tenant/dashboard');
-        
+
         $tenantResponse->assertStatus(200);
         $this->assertEquals('60', $tenantResponse->headers->get('X-RateLimit-Limit'));
 
@@ -117,7 +117,7 @@ class RateLimitingTest extends TestCase
         // So we'll test with a different endpoint that's more stable
         $landlordResponse = $this->withHeaders(['Authorization' => "Bearer {$landlordToken}"])
             ->getJson('/api/landlord/properties');
-        
+
         // If successful, check the header
         if ($landlordResponse->isSuccessful()) {
             $limit = $landlordResponse->headers->get('X-RateLimit-Limit');
@@ -154,7 +154,7 @@ class RateLimitingTest extends TestCase
             $response = $this->postJson('/api/webhooks/stripe', [
                 'type' => 'test.event',
             ]);
-            
+
             $this->assertNotEquals(429, $response->status());
         }
     }

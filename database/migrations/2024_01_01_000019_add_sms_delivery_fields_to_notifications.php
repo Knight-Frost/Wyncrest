@@ -15,7 +15,7 @@ return new class extends Migration
             $table->timestamp('sms_delivered_at')->nullable()->after('delivery_error');
             $table->timestamp('sms_failed_at')->nullable()->after('sms_delivered_at');
             $table->text('sms_error')->nullable()->after('sms_failed_at');
-            
+
             // Indexes for SMS delivery queries
             $table->index('sms_delivered_at');
             $table->index('sms_failed_at');

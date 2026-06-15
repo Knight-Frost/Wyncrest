@@ -2,18 +2,18 @@
 
 namespace App\Http\Controllers\Tenant;
 
+use App\Enums\ContractStatus;
+use App\Enums\TerminatedBy;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\TerminateContractRequest;
 use App\Models\Contract;
-use App\Enums\ContractStatus;
-use App\Enums\TerminatedBy;
 use App\Services\AuditService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * TenantContractController
- * 
+ *
  * Handles tenant contract operations.
  */
 class TenantContractController extends Controller
@@ -55,7 +55,7 @@ class TenantContractController extends Controller
         $this->authorize('accept', $contract);
 
         $contract->update([
-            'status' => ContractStatus::ACTIVE
+            'status' => ContractStatus::ACTIVE,
         ]);
 
         // Audit log
@@ -63,13 +63,13 @@ class TenantContractController extends Controller
             actor: $request->user(),
             action: 'contract_accepted',
             subject: $contract,
-            description: "Tenant accepted contract",
+            description: 'Tenant accepted contract',
             severity: 'info'
         );
 
         return response()->json([
             'message' => 'Contract accepted and activated',
-            'contract' => $contract->fresh()
+            'contract' => $contract->fresh(),
         ]);
     }
 
@@ -89,13 +89,13 @@ class TenantContractController extends Controller
             actor: $request->user(),
             action: 'contract_terminated',
             subject: $contract,
-            description: "Tenant terminated contract",
+            description: 'Tenant terminated contract',
             severity: 'warning'
         );
 
         return response()->json([
             'message' => 'Contract terminated',
-            'contract' => $contract->fresh()
+            'contract' => $contract->fresh(),
         ]);
     }
 }

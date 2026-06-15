@@ -2,12 +2,11 @@
 
 namespace Database\Factories;
 
-use App\Models\Contract;
-use App\Models\User;
-use App\Enums\LedgerType;
 use App\Enums\LedgerStatus;
-use Illuminate\Database\Eloquent\Factories\Factory;
+use App\Enums\LedgerType;
+use App\Models\Contract;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\LedgerEntry>

@@ -7,7 +7,7 @@ use Illuminate\Console\Command;
 
 /**
  * WeeklyDigestNotificationsCommand
- * 
+ *
  * Sends weekly notification digests to users.
  * Phase 3.9: Batches notifications from the last 7 days.
  */

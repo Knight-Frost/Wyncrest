@@ -2,12 +2,12 @@
 
 namespace App\Models;
 
+use App\Enums\LedgerStatus;
+use App\Enums\LedgerType;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Enums\LedgerType;
-use App\Enums\LedgerStatus;
 
 /**
  * LedgerEntry Model
@@ -197,9 +197,8 @@ class LedgerEntry extends Model
      * This is the ONLY way to change status after creation.
      * Validates that the transition is allowed.
      *
-     * @param LedgerStatus $newStatus
-     * @param string|null $paymentIntentId Optional Stripe payment intent ID for paid status
-     * @return bool
+     * @param  string|null  $paymentIntentId  Optional Stripe payment intent ID for paid status
+     *
      * @throws \InvalidArgumentException If transition is not allowed
      */
     public function transitionStatus(LedgerStatus $newStatus, ?string $paymentIntentId = null): bool
@@ -207,10 +206,10 @@ class LedgerEntry extends Model
         $currentStatus = $this->status->value;
         $allowedTransitions = self::STATUS_TRANSITIONS[$currentStatus] ?? [];
 
-        if (!in_array($newStatus->value, $allowedTransitions, true)) {
+        if (! in_array($newStatus->value, $allowedTransitions, true)) {
             throw new \InvalidArgumentException(
-                "Invalid status transition: {$currentStatus} -> {$newStatus->value}. " .
-                "Allowed transitions: " . implode(', ', $allowedTransitions)
+                "Invalid status transition: {$currentStatus} -> {$newStatus->value}. ".
+                'Allowed transitions: '.implode(', ', $allowedTransitions)
             );
         }
 
@@ -241,7 +240,7 @@ class LedgerEntry extends Model
     public function update(array $attributes = [], array $options = [])
     {
         throw new \Exception(
-            'Ledger entries are immutable and cannot be updated directly. ' .
+            'Ledger entries are immutable and cannot be updated directly. '.
             'Use transitionStatus() for status changes or create a compensating entry.'
         );
     }

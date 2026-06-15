@@ -1,69 +1,60 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-
+use App\Http\Controllers\Admin\AdminAuditController;
 // ============================================================================
 // AUTHENTICATION CONTROLLER
 // ============================================================================
-use App\Http\Controllers\AuthController;
-
+use App\Http\Controllers\Admin\AdminContractController;
 // ============================================================================
 // PUBLIC CONTROLLERS
 // ============================================================================
-use App\Http\Controllers\Public\PublicListingController;
-
+use App\Http\Controllers\Admin\AdminDashboardController;
 // ============================================================================
 // TENANT CONTROLLERS
 // ============================================================================
-use App\Http\Controllers\Tenant\TenantDashboardController;
-use App\Http\Controllers\Tenant\SavedListingController;
-use App\Http\Controllers\Tenant\TenantContractController;
-use App\Http\Controllers\Tenant\TenantLedgerController;
-use App\Http\Controllers\Tenant\TenantPaymentController;
-
+use App\Http\Controllers\Admin\AdminFeatureController;
+use App\Http\Controllers\Admin\AdminLedgerController;
+use App\Http\Controllers\Admin\AdminListingModerationController;
+use App\Http\Controllers\Analytics\ContractAnalyticsController;
+use App\Http\Controllers\Analytics\FinancialAnalyticsController;
 // ============================================================================
 // LANDLORD CONTROLLERS
+// ============================================================================
+use App\Http\Controllers\Analytics\NotificationAnalyticsController;
+use App\Http\Controllers\Analytics\PlatformAnalyticsController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Landlord\LandlordContractController;
+use App\Http\Controllers\Landlord\LandlordLedgerController;
+use App\Http\Controllers\Landlord\LandlordListingController;
+// ============================================================================
+// ADMIN CONTROLLERS
 // ============================================================================
 use App\Http\Controllers\Landlord\LandlordOnboardingController;
 use App\Http\Controllers\Landlord\PropertyController;
 use App\Http\Controllers\Landlord\UnitController;
-use App\Http\Controllers\Landlord\LandlordListingController;
-use App\Http\Controllers\Landlord\LandlordContractController;
-use App\Http\Controllers\Landlord\LandlordLedgerController;
-
-// ============================================================================
-// ADMIN CONTROLLERS
-// ============================================================================
-use App\Http\Controllers\Admin\AdminDashboardController;
-use App\Http\Controllers\Admin\AdminListingModerationController;
-use App\Http\Controllers\Admin\AdminFeatureController;
-use App\Http\Controllers\Admin\AdminAuditController;
-use App\Http\Controllers\Admin\AdminContractController;
-use App\Http\Controllers\Admin\AdminLedgerController;
 use App\Http\Controllers\MetricsController;
-
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\NotificationPreferenceController;
+use App\Http\Controllers\Public\PublicListingController;
 // ============================================================================
 // WEBHOOK CONTROLLERS
 // ============================================================================
 use App\Http\Controllers\StripeWebhookController;
-
 // ============================================================================
 // NOTIFICATION CONTROLLER - Phase 3.5
 // ============================================================================
-use App\Http\Controllers\NotificationController;
-
+use App\Http\Controllers\Tenant\SavedListingController;
 // ============================================================================
 // NOTIFICATION PREFERENCE CONTROLLER - Phase 3.8
 // ============================================================================
-use App\Http\Controllers\NotificationPreferenceController;
-
+use App\Http\Controllers\Tenant\TenantContractController;
 // ============================================================================
 // ANALYTICS CONTROLLERS - Phase 4.0
 // ============================================================================
-use App\Http\Controllers\Analytics\NotificationAnalyticsController;
-use App\Http\Controllers\Analytics\FinancialAnalyticsController;
-use App\Http\Controllers\Analytics\ContractAnalyticsController;
-use App\Http\Controllers\Analytics\PlatformAnalyticsController;
+use App\Http\Controllers\Tenant\TenantDashboardController;
+use App\Http\Controllers\Tenant\TenantLedgerController;
+use App\Http\Controllers\Tenant\TenantPaymentController;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------

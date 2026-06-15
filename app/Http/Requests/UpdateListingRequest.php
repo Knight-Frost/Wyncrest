@@ -6,7 +6,7 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * UpdateListingRequest
- * 
+ *
  * Validates listing update data.
  * Can only update if listing status allows editing.
  */

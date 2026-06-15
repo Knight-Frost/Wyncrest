@@ -8,10 +8,10 @@ use Illuminate\Console\Command;
 
 /**
  * GenerateRentCommand
- * 
+ *
  * Automatically generates rent entries for active contracts.
  * Safe to run multiple times (idempotent).
- * 
+ *
  * Usage:
  *   php artisan ledger:generate-rent
  *   php artisan ledger:generate-rent --contract=uuid
@@ -37,9 +37,9 @@ class GenerateRentCommand extends Command
         $this->info('🏠 Nexus - Automated Rent Generation');
         $this->info('=====================================');
         $this->newLine();
-        
+
         $contractId = $this->option('contract');
-        
+
         if ($contractId) {
             // Generate for specific contract
             return $this->generateForContract($contractId, $automationService);
@@ -56,27 +56,29 @@ class GenerateRentCommand extends Command
     {
         $this->info("🔍 Generating rent for contract: {$contractId}");
         $this->newLine();
-        
+
         $contract = Contract::find($contractId);
-        
-        if (!$contract) {
+
+        if (! $contract) {
             $this->error("❌ Contract not found: {$contractId}");
+
             return self::FAILURE;
         }
-        
+
         $entry = $automationService->generateRentForContract($contract);
-        
+
         if ($entry) {
-            $this->info("✅ Rent entry created:");
+            $this->info('✅ Rent entry created:');
             $this->line("   ID: {$entry->id}");
             $this->line("   Period: {$entry->billing_period_start->format('Y-m-d')} to {$entry->billing_period_end->format('Y-m-d')}");
             $this->line("   Amount: \${$entry->amount_in_dollars}");
             $this->line("   Due: {$entry->due_date->format('Y-m-d')}");
         } else {
-            $this->warn("⏭️  Rent already exists or contract not eligible");
+            $this->warn('⏭️  Rent already exists or contract not eligible');
         }
-        
+
         $this->newLine();
+
         return self::SUCCESS;
     }
 
@@ -87,21 +89,21 @@ class GenerateRentCommand extends Command
     {
         $this->info('🔄 Processing all active contracts...');
         $this->newLine();
-        
+
         $result = $automationService->generateRentForAllContracts();
-        
-        $this->info("📊 Summary:");
+
+        $this->info('📊 Summary:');
         $this->line("   ✅ Created: {$result['created']} rent entries");
         $this->line("   ⏭️  Skipped: {$result['skipped']} contracts (already exists or not eligible)");
-        
+
         $this->newLine();
-        
+
         if ($result['created'] > 0) {
-            $this->info("✨ Rent generation complete!");
+            $this->info('✨ Rent generation complete!');
         } else {
-            $this->comment("ℹ️  No new rent entries needed at this time.");
+            $this->comment('ℹ️  No new rent entries needed at this time.');
         }
-        
+
         return self::SUCCESS;
     }
 }

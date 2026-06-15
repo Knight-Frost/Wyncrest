@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\NotificationPreference;
 use App\Enums\NotificationType;
+use App\Models\NotificationPreference;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 /**
  * NotificationPreferenceController
- * 
+ *
  * API for managing user notification preferences.
  * Phase 3.8: Control email/SMS delivery per notification type.
  */
@@ -17,10 +17,9 @@ class NotificationPreferenceController extends Controller
 {
     /**
      * Get user's notification preferences
-     * 
+     *
      * GET /api/notification-preferences
-     * 
-     * @param Request $request
+     *
      * @return \Illuminate\Http\JsonResponse
      */
     public function index(Request $request)
@@ -34,7 +33,7 @@ class NotificationPreferenceController extends Controller
         $formatted = [];
         foreach (NotificationType::cases() as $type) {
             $preference = $preferences->firstWhere('notification_type', $type->value);
-            
+
             if ($preference) {
                 $formatted[$type->value] = [
                     'email' => $preference->email_enabled,
@@ -54,16 +53,15 @@ class NotificationPreferenceController extends Controller
 
     /**
      * Update user's notification preferences
-     * 
+     *
      * PUT /api/notification-preferences
-     * 
+     *
      * Body example:
      * {
      *   "rent_generated": { "email": true, "sms": false },
      *   "payment_failed": { "email": true, "sms": true }
      * }
-     * 
-     * @param Request $request
+     *
      * @return \Illuminate\Http\JsonResponse
      */
     public function update(Request $request)

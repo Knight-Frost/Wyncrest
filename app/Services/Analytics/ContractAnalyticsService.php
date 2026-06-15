@@ -2,16 +2,16 @@
 
 namespace App\Services\Analytics;
 
-use App\Models\Contract;
 use App\Enums\ContractStatus;
-use Illuminate\Support\Facades\DB;
+use App\Models\Contract;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * ContractAnalyticsService
- * 
+ *
  * Phase 4.0c: Read-only contract lifecycle analytics
- * 
+ *
  * Provides insights into:
  * - Contract health and status distribution
  * - Contract duration and lifecycle metrics
@@ -21,9 +21,8 @@ class ContractAnalyticsService
 {
     /**
      * Get comprehensive contract analytics
-     * 
-     * @param array $filters ['start_date' => Carbon, 'end_date' => Carbon, 'property_id' => int, 'user_id' => int]
-     * @return array
+     *
+     * @param  array  $filters  ['start_date' => Carbon, 'end_date' => Carbon, 'property_id' => int, 'user_id' => int]
      */
     public function getAnalytics(array $filters = []): array
     {
@@ -46,7 +45,7 @@ class ContractAnalyticsService
     {
         $query = Contract::query();
         $this->applyFilters($query, $filters);
-        
+
         return $query->count();
     }
 
@@ -57,9 +56,9 @@ class ContractAnalyticsService
     {
         $query = Contract::query()
             ->where('status', ContractStatus::ACTIVE);
-        
+
         $this->applyFilters($query, $filters);
-        
+
         return $query->count();
     }
 
@@ -70,9 +69,9 @@ class ContractAnalyticsService
     {
         $query = Contract::query()
             ->where('status', ContractStatus::TERMINATED);
-        
+
         $this->applyFilters($query, $filters);
-        
+
         return $query->count();
     }
 
@@ -83,9 +82,9 @@ class ContractAnalyticsService
     {
         $query = Contract::query()
             ->where('status', ContractStatus::EXPIRED);
-        
+
         $this->applyFilters($query, $filters);
-        
+
         return $query->count();
     }
 
@@ -96,19 +95,19 @@ class ContractAnalyticsService
     {
         $query = Contract::query();
         $this->applyFilters($query, $filters);
-        
+
         $results = $query->select('status', DB::raw('COUNT(*) as count'))
             ->groupBy('status')
             ->get();
-        
+
         $output = [];
         foreach ($results as $result) {
-            $statusValue = $result->status instanceof ContractStatus 
-                ? $result->status->value 
+            $statusValue = $result->status instanceof ContractStatus
+                ? $result->status->value
                 : $result->status;
             $output[$statusValue] = $result->count;
         }
-        
+
         return $output;
     }
 
@@ -120,50 +119,50 @@ class ContractAnalyticsService
         $query = Contract::query()
             ->whereNotNull('start_date')
             ->whereNotNull('end_date');
-        
+
         $this->applyFilters($query, $filters);
-        
+
         $contracts = $query->get();
-        
+
         if ($contracts->isEmpty()) {
             return 0.0;
         }
-        
+
         $totalDays = 0;
         foreach ($contracts as $contract) {
             $totalDays += $contract->start_date->diffInDays($contract->end_date);
         }
-        
+
         return round($totalDays / $contracts->count(), 2);
     }
 
     /**
      * Get early termination rate
-     * 
+     *
      * Early termination = contract ended before expected end date
      */
     protected function getEarlyTerminationRate(array $filters = []): float
     {
         $query = Contract::query();
         $this->applyFilters($query, $filters);
-        
+
         $totalContracts = (clone $query)->count();
-        
+
         if ($totalContracts === 0) {
             return 0.0;
         }
-        
+
         // Terminated contracts are those that ended early
         $earlyTerminated = (clone $query)
             ->where('status', ContractStatus::TERMINATED)
             ->count();
-        
+
         return round(($earlyTerminated / $totalContracts) * 100, 2);
     }
 
     /**
      * Get renewal rate
-     * 
+     *
      * Renewal = tenant signs new contract after prior contract expired
      * We detect this by finding tenants with multiple contracts where:
      * - First contract is expired/terminated
@@ -173,16 +172,16 @@ class ContractAnalyticsService
     {
         $query = Contract::query();
         $this->applyFilters($query, $filters);
-        
+
         // Get all completed contracts (expired or terminated)
         $completedContracts = (clone $query)
             ->whereIn('status', [ContractStatus::EXPIRED, ContractStatus::TERMINATED])
             ->count();
-        
+
         if ($completedContracts === 0) {
             return 0.0;
         }
-        
+
         // Find tenants who have multiple contracts
         $renewals = (clone $query)
             ->select('tenant_id', DB::raw('COUNT(*) as contract_count'))
@@ -193,7 +192,7 @@ class ContractAnalyticsService
                 // Each tenant with N contracts has N-1 renewals
                 return $item->contract_count - 1;
             });
-        
+
         return round(($renewals / $completedContracts) * 100, 2);
     }
 
@@ -205,16 +204,16 @@ class ContractAnalyticsService
         if (isset($filters['start_date'])) {
             $query->where('created_at', '>=', $filters['start_date']);
         }
-        
+
         if (isset($filters['end_date'])) {
             $query->where('created_at', '<=', $filters['end_date']);
         }
-        
+
         if (isset($filters['user_id'])) {
             // User filter applies to tenant
             $query->where('tenant_id', $filters['user_id']);
         }
-        
+
         if (isset($filters['property_id'])) {
             // Property filter via listing → unit → property
             $query->whereHas('listing.unit', function ($q) use ($filters) {

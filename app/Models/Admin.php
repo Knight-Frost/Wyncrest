@@ -9,7 +9,7 @@ use Laravel\Sanctum\HasApiTokens;
 
 /**
  * Admin Model
- * 
+ *
  * Completely separate from User model.
  * Phase 1: All admins are Super Admins.
  * Phase 4: RBAC expansion.
@@ -65,7 +65,7 @@ class Admin extends Authenticatable
     /**
      * Relationships
      */
-    
+
     // Listings reviewed by this admin
     public function reviewedListings()
     {

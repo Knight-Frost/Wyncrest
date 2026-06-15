@@ -3,12 +3,12 @@
 namespace App\Http\Controllers\Landlord;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * LandlordOnboardingController
- * 
+ *
  * Provides guided onboarding checklist for landlords.
  * Helps new landlords understand setup steps.
  */
@@ -16,18 +16,15 @@ class LandlordOnboardingController extends Controller
 {
     /**
      * Get onboarding checklist status.
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
 
         // Profile completed
-        $profileCompleted = !empty($user->first_name) 
-            && !empty($user->last_name) 
-            && !empty($user->phone);
+        $profileCompleted = ! empty($user->first_name)
+            && ! empty($user->last_name)
+            && ! empty($user->phone);
 
         // Identity verified
         $identityVerified = $user->hasVerifiedIdentity();
@@ -85,7 +82,7 @@ class LandlordOnboardingController extends Controller
                     'description' => 'Add rentable units to your property',
                     'completed' => $unitCreated,
                     'action' => $propertyCreated ? '/landlord/units/create' : null,
-                    'disabled' => !$propertyCreated,
+                    'disabled' => ! $propertyCreated,
                 ],
                 [
                     'key' => 'listing',
@@ -93,7 +90,7 @@ class LandlordOnboardingController extends Controller
                     'description' => 'Publish your first listing for tenants to find',
                     'completed' => $listingCreated,
                     'action' => $unitCreated ? '/landlord/listings/create' : null,
-                    'disabled' => !$unitCreated,
+                    'disabled' => ! $unitCreated,
                 ],
             ],
         ]);

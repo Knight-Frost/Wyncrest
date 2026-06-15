@@ -2,30 +2,29 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
-use App\Models\Property;
-use App\Models\Unit;
-use App\Models\Listing;
+use App\Enums\ContractStatus;
+use App\Enums\LedgerStatus;
+use App\Enums\LedgerType;
+use App\Enums\NotificationType;
+use App\Events\LedgerEntryMarkedOverdue;
+use App\Events\PaymentFailed;
+use App\Events\PaymentSucceeded;
+use App\Events\RentGenerated;
 use App\Models\Contract;
 use App\Models\LedgerEntry;
+use App\Models\Listing;
 use App\Models\Notification;
-use App\Enums\ContractStatus;
-use App\Enums\LedgerType;
-use App\Enums\LedgerStatus;
-use App\Enums\NotificationType;
-use App\Events\RentGenerated;
-use App\Events\LedgerEntryMarkedOverdue;
-use App\Events\PaymentSucceeded;
-use App\Events\PaymentFailed;
-use App\Services\LedgerAutomationService;
+use App\Models\Property;
+use App\Models\Unit;
+use App\Models\User;
 use App\Services\NotificationService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
-use Carbon\Carbon;
 
 /**
  * NotificationWorkflowTest
- * 
+ *
  * Tests notification system triggered by domain events.
  * Phase 3.5: Event-driven notifications (no delivery).
  */
@@ -34,9 +33,13 @@ class NotificationWorkflowTest extends TestCase
     use RefreshDatabase;
 
     protected User $landlord;
+
     protected User $tenant;
+
     protected Contract $contract;
+
     protected LedgerEntry $rentEntry;
+
     protected NotificationService $notificationService;
 
     protected function setUp(): void

@@ -8,7 +8,7 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
-     * 
+     *
      * Tenants can save listings for later viewing.
      * Simple many-to-many relationship.
      */
@@ -18,15 +18,15 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('listing_id')->constrained()->cascadeOnDelete();
-            
+
             // Optional notes
             $table->text('notes')->nullable();
-            
+
             $table->timestamps();
-            
+
             // Unique constraint - can't save same listing twice
             $table->unique(['user_id', 'listing_id']);
-            
+
             // Indexes
             $table->index(['user_id', 'created_at']);
         });

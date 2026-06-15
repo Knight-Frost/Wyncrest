@@ -18,7 +18,7 @@ return new class extends Migration
             $table->boolean('email_enabled')->default(true);
             $table->boolean('sms_enabled')->default(false);
             $table->timestamps();
-            
+
             // One preference record per (user_id, notification_type)
             $table->unique(['user_id', 'notification_type']);
         });

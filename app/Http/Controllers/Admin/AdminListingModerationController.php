@@ -2,19 +2,19 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\ListingStatus;
+use App\Events\ListingRejected;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RejectListingRequest;
 use App\Models\Listing;
-use App\Services\ListingService;
 use App\Services\AuditService;
-use App\Events\ListingRejected;
-use App\Enums\ListingStatus;
-use Illuminate\Http\Request;
+use App\Services\ListingService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * AdminListingModerationController
- * 
+ *
  * Handles admin listing moderation (approve/reject).
  * All actions are audited.
  */
@@ -27,8 +27,6 @@ class AdminListingModerationController extends Controller
 
     /**
      * Get all listings pending review.
-     * 
-     * @return JsonResponse
      */
     public function pending(): JsonResponse
     {
@@ -39,16 +37,12 @@ class AdminListingModerationController extends Controller
 
     /**
      * Approve a listing (publish it).
-     * 
-     * @param Request $request
-     * @param Listing $listing
-     * @return JsonResponse
      */
     public function approve(Request $request, Listing $listing): JsonResponse
     {
         if ($listing->status !== ListingStatus::PENDING_REVIEW) {
             return response()->json([
-                'message' => 'Only listings pending review can be approved'
+                'message' => 'Only listings pending review can be approved',
             ], 422);
         }
 
@@ -60,22 +54,18 @@ class AdminListingModerationController extends Controller
 
         return response()->json([
             'message' => 'Listing approved and published',
-            'listing' => $listing
+            'listing' => $listing,
         ]);
     }
 
     /**
      * Reject a listing.
-     * 
-     * @param RejectListingRequest $request
-     * @param Listing $listing
-     * @return JsonResponse
      */
     public function reject(RejectListingRequest $request, Listing $listing): JsonResponse
     {
         if ($listing->status !== ListingStatus::PENDING_REVIEW) {
             return response()->json([
-                'message' => 'Only listings pending review can be rejected'
+                'message' => 'Only listings pending review can be rejected',
             ], 422);
         }
 
@@ -101,7 +91,7 @@ class AdminListingModerationController extends Controller
 
         return response()->json([
             'message' => 'Listing rejected',
-            'listing' => $listing->fresh()
+            'listing' => $listing->fresh(),
         ]);
     }
 }

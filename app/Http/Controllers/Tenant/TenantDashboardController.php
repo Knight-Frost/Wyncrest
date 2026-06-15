@@ -3,21 +3,18 @@
 namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * TenantDashboardController
- * 
+ *
  * Provides tenant dashboard data and statistics.
  */
 class TenantDashboardController extends Controller
 {
     /**
      * Get tenant dashboard data.
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function index(Request $request): JsonResponse
     {

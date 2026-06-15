@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
-use Tests\TestCase;
-use App\Models\User;
 use App\Enums\UserType;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Tests\TestCase;
 
 /**
  * SecurityAuditTest - Phase 7.5 Task 4
@@ -25,7 +25,7 @@ class SecurityAuditTest extends TestCase
 
         foreach ($protectedRoutes as $route) {
             $response = $this->getJson($route);
-            $this->assertContains($response->status(), [401, 403], 
+            $this->assertContains($response->status(), [401, 403],
                 "Route {$route} did not require authentication");
         }
     }

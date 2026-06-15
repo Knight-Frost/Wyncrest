@@ -2,18 +2,17 @@
 
 namespace App\Services\Analytics;
 
-use App\Models\LedgerEntry;
-use App\Models\Contract;
-use App\Enums\LedgerType;
 use App\Enums\LedgerStatus;
+use App\Enums\LedgerType;
+use App\Models\Contract;
+use App\Models\LedgerEntry;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 /**
  * FinancialAnalyticsService
- * 
+ *
  * Phase 4.0b: Audit-grade, read-only financial analytics.
- * 
+ *
  * ACTUAL SCHEMA:
  * - Ledger-only system (no separate payments table)
  * - Status-based: pending, paid, overdue, waived
@@ -198,9 +197,9 @@ class FinancialAnalyticsService
 
         // SQLite-compatible date formatting
         $results = $query->select(
-                DB::raw("strftime('%Y-%m', created_at) as month"),
-                DB::raw('SUM(amount_cents) as total_cents')
-            )
+            DB::raw("strftime('%Y-%m', created_at) as month"),
+            DB::raw('SUM(amount_cents) as total_cents')
+        )
             ->groupBy('month')
             ->orderBy('month')
             ->get();
@@ -235,10 +234,10 @@ class FinancialAnalyticsService
         }
 
         $results = $query->select(
-                'properties.id',
-                'properties.name',
-                DB::raw('SUM(ledger_entries.amount_cents) as total_cents')
-            )
+            'properties.id',
+            'properties.name',
+            DB::raw('SUM(ledger_entries.amount_cents) as total_cents')
+        )
             ->groupBy('properties.id', 'properties.name')
             ->get();
 

@@ -2,23 +2,20 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
-use App\Models\Admin;
-use App\Models\Property;
-use App\Models\Unit;
-use App\Models\Listing;
+use App\Enums\LedgerStatus;
+use App\Enums\LedgerType;
 use App\Models\Contract;
 use App\Models\LedgerEntry;
-use App\Enums\ContractStatus;
-use App\Enums\LedgerType;
-use App\Enums\LedgerStatus;
-use App\Services\PaymentService;
+use App\Models\Listing;
+use App\Models\Property;
+use App\Models\Unit;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
  * PaymentWorkflowTest
- * 
+ *
  * Tests payment processing (basic tests - full Stripe tests require test keys)
  */
 class PaymentWorkflowTest extends TestCase
@@ -26,8 +23,11 @@ class PaymentWorkflowTest extends TestCase
     use RefreshDatabase;
 
     protected User $landlord;
+
     protected User $tenant;
+
     protected Contract $contract;
+
     protected LedgerEntry $rentEntry;
 
     protected function setUp(): void

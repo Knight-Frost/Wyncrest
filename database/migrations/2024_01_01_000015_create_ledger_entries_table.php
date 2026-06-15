@@ -8,7 +8,7 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
-     * 
+     *
      * CRITICAL: Ledger entries are IMMUTABLE.
      * No updates or deletes allowed.
      * Corrections require compensating entries.
@@ -22,26 +22,26 @@ return new class extends Migration
             $table->foreignUuid('contract_id')->constrained('contracts')->onDelete('cascade');
             $table->foreignId('tenant_id')->constrained('users')->onDelete('cascade');
             $table->foreignId('landlord_id')->constrained('users')->onDelete('cascade');
-            
+
             // Entry details - includes payment type for recording payments
             $table->enum('type', ['rent', 'late_fee', 'payment', 'refund']);
             $table->bigInteger('amount_cents'); // Always positive, stored in cents
             $table->char('currency', 3)->default('USD');
-            
+
             // Billing period (for rent entries)
             $table->date('billing_period_start');
             $table->date('billing_period_end');
             $table->date('due_date');
-            
+
             // Payment status
             $table->enum('status', ['pending', 'paid', 'overdue', 'waived'])->default('pending');
-            
+
             // Late fee reference (nullable - only for late_fee entries)
             $table->foreignUuid('related_rent_entry_id')->nullable()->constrained('ledger_entries')->onDelete('set null');
-            
+
             // Audit trail
             $table->timestamp('created_at')->useCurrent();
-            
+
             // Indexes for queries
             $table->index('contract_id');
             $table->index('tenant_id');

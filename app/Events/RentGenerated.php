@@ -9,7 +9,7 @@ use Illuminate\Queue\SerializesModels;
 
 /**
  * RentGenerated
- * 
+ *
  * Fired when automated rent is generated for a contract.
  * Triggered by: LedgerAutomationService::generateRentForContract()
  */

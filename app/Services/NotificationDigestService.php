@@ -2,15 +2,15 @@
 
 namespace App\Services;
 
-use App\Models\User;
-use App\Models\Notification;
 use App\Mail\NotificationDigestEmail;
+use App\Models\Notification;
+use App\Models\User;
 use App\Services\Sms\SmsClientInterface;
 use Illuminate\Support\Facades\Mail;
 
 /**
  * NotificationDigestService
- * 
+ *
  * Handles batched delivery of notifications via email and SMS digests.
  * Phase 3.9: Groups notifications and sends digest messages.
  */
@@ -22,9 +22,9 @@ class NotificationDigestService
 
     /**
      * Send daily email digests
-     * 
+     *
      * Groups notifications from the last 24 hours and sends one email per user
-     * 
+     *
      * @return array ['users' => int, 'email_digests' => int, 'sms_digests' => int, 'notifications' => int]
      */
     public function sendDailyDigests(): array
@@ -34,9 +34,9 @@ class NotificationDigestService
 
     /**
      * Send weekly email digests
-     * 
+     *
      * Groups notifications from the last 7 days and sends one email per user
-     * 
+     *
      * @return array ['users' => int, 'email_digests' => int, 'sms_digests' => int, 'notifications' => int]
      */
     public function sendWeeklyDigests(): array
@@ -46,17 +46,15 @@ class NotificationDigestService
 
     /**
      * Send digests for a specific delivery mode
-     * 
-     * @param string $deliveryMode
-     * @param \Carbon\Carbon $since
-     * @return array
+     *
+     * @param  \Carbon\Carbon  $since
      */
     protected function sendDigests(string $deliveryMode, $since): array
     {
         $emailDigestsSent = 0;
         $smsDigestsSent = 0;
         $totalNotifications = 0;
-        
+
         // Get users who have digest preferences
         $users = User::whereHas('notificationPreferences', function ($query) use ($deliveryMode) {
             $query->where('delivery_mode', $deliveryMode);
@@ -88,10 +86,8 @@ class NotificationDigestService
 
     /**
      * Send email digest for a user
-     * 
-     * @param User $user
-     * @param string $deliveryMode
-     * @param \Carbon\Carbon $since
+     *
+     * @param  \Carbon\Carbon  $since
      * @return array ['sent' => bool, 'count' => int]
      */
     protected function sendEmailDigest(User $user, string $deliveryMode, $since): array
@@ -133,16 +129,14 @@ class NotificationDigestService
 
     /**
      * Send SMS digest for a user
-     * 
-     * @param User $user
-     * @param string $deliveryMode
-     * @param \Carbon\Carbon $since
+     *
+     * @param  \Carbon\Carbon  $since
      * @return array ['sent' => bool, 'count' => int]
      */
     protected function sendSmsDigest(User $user, string $deliveryMode, $since): array
     {
         // Skip if user has no phone
-        if (!$user->phone) {
+        if (! $user->phone) {
             return ['sent' => false, 'count' => 0];
         }
 
@@ -186,7 +180,7 @@ class NotificationDigestService
 
     /**
      * Get notifications eligible for digest delivery
-     * 
+     *
      * A notification is eligible if:
      * - Belongs to the user
      * - Has preference with matching delivery_mode
@@ -194,11 +188,9 @@ class NotificationDigestService
      * - NOT already delivered on that channel
      * - NOT marked as failed on that channel
      * - Created within the digest window
-     * 
-     * @param User $user
-     * @param string $deliveryMode
-     * @param \Carbon\Carbon $since
-     * @param string $channel 'email' or 'sms'
+     *
+     * @param  \Carbon\Carbon  $since
+     * @param  string  $channel  'email' or 'sms'
      * @return \Illuminate\Database\Eloquent\Collection
      */
     protected function getEligibleNotifications(User $user, string $deliveryMode, $since, string $channel)
@@ -206,7 +198,7 @@ class NotificationDigestService
         // Get preference types with matching delivery mode and enabled channel
         $eligibleTypes = $user->notificationPreferences()
             ->where('delivery_mode', $deliveryMode)
-            ->where($channel . '_enabled', true)
+            ->where($channel.'_enabled', true)
             ->pluck('notification_type')
             ->toArray();
 
@@ -233,13 +225,13 @@ class NotificationDigestService
 
     /**
      * Format SMS digest message
-     * 
-     * @param \Illuminate\Database\Eloquent\Collection $notifications
-     * @return string
+     *
+     * @param  \Illuminate\Database\Eloquent\Collection  $notifications
      */
     protected function formatSmsDigest($notifications): string
     {
         $count = $notifications->count();
-        return "Nexus Digest: {$count} new notification" . ($count === 1 ? '' : 's') . ". Log in to view details.";
+
+        return "Nexus Digest: {$count} new notification".($count === 1 ? '' : 's').'. Log in to view details.';
     }
 }

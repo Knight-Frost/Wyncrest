@@ -2,18 +2,18 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
-use App\Models\Notification;
 use App\Enums\NotificationType;
-use App\Services\NotificationDeliveryService;
 use App\Mail\NotificationEmail;
+use App\Models\Notification;
+use App\Models\User;
+use App\Services\NotificationDeliveryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
  * NotificationDeliveryTest
- * 
+ *
  * Tests email delivery of notifications.
  * Phase 3.6: Email delivery only, idempotent, safe.
  */
@@ -22,6 +22,7 @@ class NotificationDeliveryTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected NotificationDeliveryService $deliveryService;
 
     protected function setUp(): void
@@ -209,11 +210,11 @@ class NotificationDeliveryTest extends TestCase
         // Verify only one delivered_at value
         $notification->refresh();
         $firstDeliveredAt = $notification->delivered_at;
-        
+
         // Wait and try again
         sleep(1);
         $this->deliveryService->deliver($notification);
-        
+
         $notification->refresh();
         $this->assertEquals($firstDeliveredAt, $notification->delivered_at);
     }
@@ -250,7 +251,7 @@ class NotificationDeliveryTest extends TestCase
         $notification = Notification::factory()->create([
             'user_id' => $tempUser->id,
         ]);
-        
+
         // Delete the user
         $tempUser->delete();
 

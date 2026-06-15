@@ -6,7 +6,7 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * GenerateLateFeeRequest
- * 
+ *
  * Validates late fee generation (admin only).
  */
 class GenerateLateFeeRequest extends FormRequest

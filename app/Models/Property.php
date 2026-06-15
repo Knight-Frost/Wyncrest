@@ -68,7 +68,7 @@ class Property extends Model
     public function scopeInCity($query, string $city)
     {
         // Use portable LOWER() instead of PostgreSQL-specific ILIKE
-        return $query->whereRaw('LOWER(city) LIKE ?', ['%' . strtolower($city) . '%']);
+        return $query->whereRaw('LOWER(city) LIKE ?', ['%'.strtolower($city).'%']);
     }
 
     /**
@@ -90,7 +90,6 @@ class Property extends Model
     /**
      * Relationships
      */
-
     public function landlord()
     {
         return $this->belongsTo(User::class, 'landlord_id');

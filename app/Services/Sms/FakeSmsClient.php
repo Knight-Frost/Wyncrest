@@ -4,22 +4,21 @@ namespace App\Services\Sms;
 
 /**
  * FakeSmsClient
- * 
+ *
  * Fake SMS client for testing.
  * Phase 3.7: Does not send real SMS, tracks calls for assertions.
  */
 class FakeSmsClient implements SmsClientInterface
 {
     protected array $sent = [];
+
     protected bool $shouldFail = false;
+
     protected string $failureMessage = 'SMS delivery failed';
 
     /**
      * Fake send - stores message instead of sending
-     * 
-     * @param string $to
-     * @param string $message
-     * @return bool
+     *
      * @throws \Exception if configured to fail
      */
     public function send(string $to, string $message): bool
@@ -39,8 +38,6 @@ class FakeSmsClient implements SmsClientInterface
 
     /**
      * Always configured for testing
-     * 
-     * @return bool
      */
     public function isConfigured(): bool
     {
@@ -49,9 +46,6 @@ class FakeSmsClient implements SmsClientInterface
 
     /**
      * Configure client to fail on next send
-     * 
-     * @param string $message
-     * @return void
      */
     public function shouldFail(string $message = 'SMS delivery failed'): void
     {
@@ -61,8 +55,6 @@ class FakeSmsClient implements SmsClientInterface
 
     /**
      * Get sent messages
-     * 
-     * @return array
      */
     public function getSent(): array
     {
@@ -71,8 +63,6 @@ class FakeSmsClient implements SmsClientInterface
 
     /**
      * Get count of sent messages
-     * 
-     * @return int
      */
     public function getSentCount(): int
     {
@@ -81,9 +71,6 @@ class FakeSmsClient implements SmsClientInterface
 
     /**
      * Assert SMS was sent to specific number
-     * 
-     * @param string $to
-     * @return bool
      */
     public function assertSentTo(string $to): bool
     {
@@ -92,14 +79,12 @@ class FakeSmsClient implements SmsClientInterface
                 return true;
             }
         }
+
         return false;
     }
 
     /**
      * Assert specific message was sent
-     * 
-     * @param string $message
-     * @return bool
      */
     public function assertMessageSent(string $message): bool
     {
@@ -108,13 +93,12 @@ class FakeSmsClient implements SmsClientInterface
                 return true;
             }
         }
+
         return false;
     }
 
     /**
      * Reset sent messages
-     * 
-     * @return void
      */
     public function reset(): void
     {

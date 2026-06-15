@@ -2,17 +2,17 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
+use App\Enums\NotificationType;
 use App\Models\Notification;
 use App\Models\NotificationPreference;
-use App\Enums\NotificationType;
+use App\Models\User;
 use App\Services\Analytics\NotificationAnalyticsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
  * NotificationAnalyticsTest
- * 
+ *
  * Tests notification analytics layer.
  * Phase 4.0a: Read-only metrics, aggregation, role scoping.
  */
@@ -21,8 +21,11 @@ class NotificationAnalyticsTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $tenant;
+
     protected User $landlord;
+
     protected NotificationAnalyticsService $analyticsService;
 
     protected function setUp(): void
@@ -32,7 +35,7 @@ class NotificationAnalyticsTest extends TestCase
         // Create users for testing
         $this->tenant = User::factory()->tenant()->create();
         $this->landlord = User::factory()->landlord()->create();
-        
+
         // For admin testing, we'll use landlord (admins are in separate table/guard)
         // Analytics access control will be tested with tenant/landlord
         $this->admin = $this->landlord; // Use landlord as "admin" for analytics testing
@@ -59,12 +62,12 @@ class NotificationAnalyticsTest extends TestCase
             'user_id' => $this->tenant->id,
             'type' => NotificationType::RENT_GENERATED,
         ]);
-        
+
         Notification::factory()->create([
             'user_id' => $this->tenant->id,
             'type' => NotificationType::RENT_GENERATED,
         ]);
-        
+
         Notification::factory()->create([
             'user_id' => $this->tenant->id,
             'type' => NotificationType::PAYMENT_FAILED,
@@ -131,7 +134,7 @@ class NotificationAnalyticsTest extends TestCase
             'user_id' => $this->tenant->id,
             'delivered_at' => now(),
         ]);
-        
+
         Notification::factory()->count(2)->create([
             'user_id' => $this->tenant->id,
             'delivery_failed_at' => now(),
@@ -166,7 +169,7 @@ class NotificationAnalyticsTest extends TestCase
             'email_enabled' => true,
             'sms_enabled' => false,
         ]);
-        
+
         NotificationPreference::create([
             'user_id' => $this->tenant->id,
             'notification_type' => 'payment_failed',
@@ -191,7 +194,7 @@ class NotificationAnalyticsTest extends TestCase
             'sms_enabled' => false,
             'delivery_mode' => 'daily_digest',
         ]);
-        
+
         NotificationPreference::create([
             'user_id' => $this->landlord->id,
             'notification_type' => 'rent_generated',
@@ -269,7 +272,7 @@ class NotificationAnalyticsTest extends TestCase
             'user_id' => $this->admin->id,
             'type' => NotificationType::RENT_GENERATED,
         ]);
-        
+
         Notification::factory()->create([
             'user_id' => $this->admin->id,
             'type' => NotificationType::PAYMENT_FAILED,
@@ -296,7 +299,7 @@ class NotificationAnalyticsTest extends TestCase
         $this->analyticsService->getAnalytics();
 
         $notification->refresh();
-        
+
         $this->assertEquals($originalCreatedAt, $notification->created_at);
         $this->assertEquals($originalUpdatedAt, $notification->updated_at);
     }

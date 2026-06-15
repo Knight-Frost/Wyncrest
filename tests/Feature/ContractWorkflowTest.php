@@ -2,21 +2,20 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
-use App\Models\Admin;
-use App\Models\Property;
-use App\Models\Unit;
-use App\Models\Listing;
-use App\Models\Contract;
-use App\Enums\UserType;
 use App\Enums\ContractStatus;
 use App\Enums\TerminatedBy;
+use App\Models\Admin;
+use App\Models\Contract;
+use App\Models\Listing;
+use App\Models\Property;
+use App\Models\Unit;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
  * ContractWorkflowTest
- * 
+ *
  * Tests complete contract workflows:
  * - Happy path (create → send → accept → terminate)
  * - Unauthorized access
@@ -28,8 +27,11 @@ class ContractWorkflowTest extends TestCase
     use RefreshDatabase;
 
     protected User $landlord;
+
     protected User $tenant;
+
     protected Admin $admin;
+
     protected Listing $listing;
 
     protected function setUp(): void
@@ -64,7 +66,7 @@ class ContractWorkflowTest extends TestCase
 
         $response->assertStatus(201)
             ->assertJson([
-                'message' => 'Contract created as draft'
+                'message' => 'Contract created as draft',
             ]);
 
         $contractId = $response->json('contract.id');
@@ -81,7 +83,7 @@ class ContractWorkflowTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJson([
-                'message' => 'Contract sent to tenant'
+                'message' => 'Contract sent to tenant',
             ]);
 
         $this->assertDatabaseHas('contracts', [
@@ -95,7 +97,7 @@ class ContractWorkflowTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJson([
-                'message' => 'Contract accepted and activated'
+                'message' => 'Contract accepted and activated',
             ]);
 
         $this->assertDatabaseHas('contracts', [
@@ -106,7 +108,7 @@ class ContractWorkflowTest extends TestCase
         // Step 4: Tenant terminates contract
         $response = $this->actingAs($this->tenant, 'sanctum')
             ->postJson("/api/tenant/contracts/{$contractId}/terminate", [
-                'reason' => 'Moving to another city for work relocation'
+                'reason' => 'Moving to another city for work relocation',
             ]);
 
         $response->assertStatus(200);
@@ -139,7 +141,7 @@ class ContractWorkflowTest extends TestCase
 
         $response->assertStatus(422)
             ->assertJson([
-                'message' => 'This listing already has a contract'
+                'message' => 'This listing already has a contract',
             ]);
     }
 
@@ -194,12 +196,12 @@ class ContractWorkflowTest extends TestCase
 
         $response = $this->actingAs($this->admin, 'sanctum')
             ->postJson("/api/admin/contracts/{$contract->id}/terminate", [
-                'reason' => 'Contract terminated due to violation of community guidelines and repeated complaints from neighbors'
+                'reason' => 'Contract terminated due to violation of community guidelines and repeated complaints from neighbors',
             ]);
 
         $response->assertStatus(200)
             ->assertJson([
-                'message' => 'Contract terminated by admin'
+                'message' => 'Contract terminated by admin',
             ]);
 
         $this->assertDatabaseHas('contracts', [
@@ -227,7 +229,7 @@ class ContractWorkflowTest extends TestCase
 
         $response = $this->actingAs($this->landlord, 'sanctum')
             ->postJson("/api/landlord/contracts/{$contract->id}/terminate", [
-                'reason' => 'Test termination'
+                'reason' => 'Test termination',
             ]);
 
         $response->assertStatus(403);

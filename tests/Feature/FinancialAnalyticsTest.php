@@ -2,23 +2,23 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
-use App\Models\Property;
-use App\Models\Unit;
-use App\Models\Listing;
+use App\Enums\ContractStatus;
+use App\Enums\LedgerStatus;
+use App\Enums\LedgerType;
 use App\Models\Contract;
 use App\Models\LedgerEntry;
-use App\Enums\LedgerType;
-use App\Enums\LedgerStatus;
-use App\Enums\ContractStatus;
+use App\Models\Listing;
+use App\Models\Property;
+use App\Models\Unit;
+use App\Models\User;
 use App\Services\Analytics\FinancialAnalyticsService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
-use Carbon\Carbon;
 
 /**
  * FinancialAnalyticsTest
- * 
+ *
  * Phase 4.0b: Tests for ledger-only financial analytics
  */
 class FinancialAnalyticsTest extends TestCase
@@ -26,12 +26,19 @@ class FinancialAnalyticsTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $tenant;
+
     protected User $landlord;
+
     protected Property $property;
+
     protected Unit $unit;
+
     protected Listing $listing;
+
     protected Contract $contract;
+
     protected FinancialAnalyticsService $analyticsService;
 
     protected function setUp(): void

@@ -2,10 +2,10 @@
 
 namespace App\Providers;
 
-use App\Events\RentGenerated;
 use App\Events\LedgerEntryMarkedOverdue;
-use App\Events\PaymentSucceeded;
 use App\Events\PaymentFailed;
+use App\Events\PaymentSucceeded;
+use App\Events\RentGenerated;
 use App\Listeners\CreateNotificationListener;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
 

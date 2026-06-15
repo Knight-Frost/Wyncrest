@@ -7,7 +7,7 @@ use Illuminate\Console\Command;
 
 /**
  * DeliverSmsNotificationsCommand
- * 
+ *
  * Delivers pending notifications via SMS.
  * Phase 3.7: Idempotent, safe to run multiple times.
  * Mirrors DeliverNotificationsCommand architecture exactly.
@@ -45,20 +45,21 @@ class DeliverSmsNotificationsCommand extends Command
         if ($retry) {
             $this->info('🔄 Retrying failed SMS deliveries...');
             $result = $deliveryService->retryFailed($limit);
-            
+
             $this->newLine();
             $this->info('📊 Retry Summary:');
             $this->line("   ✅ Delivered: {$result['delivered']}");
             $this->line("   ❌ Failed: {$result['failed']}");
-            
+
             return Command::SUCCESS;
         }
 
         // Get pending count before delivery
         $pendingCount = $deliveryService->getPendingCount();
-        
+
         if ($pendingCount === 0) {
             $this->info('✨ No pending SMS notifications to deliver');
+
             return Command::SUCCESS;
         }
 
@@ -73,7 +74,7 @@ class DeliverSmsNotificationsCommand extends Command
         $this->line("   ✅ Delivered: {$result['delivered']}");
         $this->line("   ❌ Failed: {$result['failed']}");
         $this->line("   ⏭️  Skipped: {$result['skipped']}");
-        
+
         $this->newLine();
 
         // Show remaining count

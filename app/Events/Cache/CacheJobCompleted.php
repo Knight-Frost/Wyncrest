@@ -7,7 +7,7 @@ use Illuminate\Queue\SerializesModels;
 
 /**
  * Phase 5.5: Cache Job Completed Event
- * 
+ *
  * Emitted when async invalidation job finishes successfully
  */
 class CacheJobCompleted
@@ -15,7 +15,9 @@ class CacheJobCompleted
     use Dispatchable, SerializesModels;
 
     public string $domain;
+
     public float $durationMs;
+
     public int $retryAttempt;
 
     public function __construct(

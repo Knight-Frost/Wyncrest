@@ -3,12 +3,12 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 /**
  * ValidateQueueHealth Command - Phase 7.5 Task 3
- * 
+ *
  * Validates queue and cache health:
  * - Checks for stuck jobs
  * - Monitors failed jobs
@@ -40,7 +40,7 @@ class ValidateQueueHealth extends Command
 
         // Check queue health
         $queueHealth = $this->checkQueueHealth();
-        if (!$queueHealth) {
+        if (! $queueHealth) {
             $healthy = false;
         }
 
@@ -48,7 +48,7 @@ class ValidateQueueHealth extends Command
 
         // Check cache health
         $cacheHealth = $this->checkCacheHealth();
-        if (!$cacheHealth) {
+        if (! $cacheHealth) {
             $healthy = false;
         }
 
@@ -57,9 +57,11 @@ class ValidateQueueHealth extends Command
         // Overall status
         if ($healthy) {
             $this->info('✅ Overall Status: HEALTHY');
+
             return self::SUCCESS;
         } else {
             $this->error('❌ Overall Status: ISSUES DETECTED');
+
             return self::FAILURE;
         }
     }
@@ -74,10 +76,10 @@ class ValidateQueueHealth extends Command
         try {
             // Get pending jobs
             $pendingJobs = DB::table('jobs')->count();
-            
+
             // Get failed jobs
             $failedJobs = DB::table('failed_jobs')->count();
-            
+
             // Get stuck jobs (jobs older than 1 hour)
             $stuckJobs = DB::table('jobs')
                 ->where('created_at', '<', now()->subHour())
@@ -95,10 +97,10 @@ class ValidateQueueHealth extends Command
                     ->where('created_at', '<', now()->subHour())
                     ->select('id', 'queue', 'payload', 'created_at')
                     ->get();
-                
+
                 foreach ($stuck as $job) {
-                    $this->line("    - Job {$job->id} (queue: {$job->queue}, age: " . 
-                        now()->diffForHumans($job->created_at) . ")");
+                    $this->line("    - Job {$job->id} (queue: {$job->queue}, age: ".
+                        now()->diffForHumans($job->created_at).')');
                 }
             }
 
@@ -127,7 +129,8 @@ class ValidateQueueHealth extends Command
             return $healthy;
 
         } catch (\Exception $e) {
-            $this->error('  ❌ Error checking queue: ' . $e->getMessage());
+            $this->error('  ❌ Error checking queue: '.$e->getMessage());
+
             return false;
         }
     }
@@ -141,23 +144,25 @@ class ValidateQueueHealth extends Command
 
         try {
             // Test write
-            $testKey = 'health_check_' . time();
+            $testKey = 'health_check_'.time();
             Cache::put($testKey, 'test_value', 60);
-            
+
             // Test read
             $value = Cache::get($testKey);
-            
+
             if ($value !== 'test_value') {
                 $this->error('  ❌ Cache read/write failed');
+
                 return false;
             }
 
             // Test delete (invalidation)
             Cache::forget($testKey);
             $value = Cache::get($testKey);
-            
+
             if ($value !== null) {
                 $this->error('  ❌ Cache invalidation failed');
+
                 return false;
             }
 
@@ -173,7 +178,8 @@ class ValidateQueueHealth extends Command
             return true;
 
         } catch (\Exception $e) {
-            $this->error('  ❌ Error checking cache: ' . $e->getMessage());
+            $this->error('  ❌ Error checking cache: '.$e->getMessage());
+
             return false;
         }
     }

@@ -8,12 +8,12 @@ use App\Http\Requests\UpdateUnitRequest;
 use App\Models\Property;
 use App\Models\Unit;
 use App\Services\AuditService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * UnitController
- * 
+ *
  * Handles landlord unit management.
  * Units must belong to landlord's properties.
  */
@@ -25,17 +25,14 @@ class UnitController extends Controller
 
     /**
      * Display a listing of the landlord's units.
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function index(Request $request): JsonResponse
     {
         $this->authorize('viewAny', Unit::class);
 
-        $units = Unit::whereHas('property', function($query) use ($request) {
-                $query->where('landlord_id', $request->user()->id);
-            })
+        $units = Unit::whereHas('property', function ($query) use ($request) {
+            $query->where('landlord_id', $request->user()->id);
+        })
             ->with(['property', 'activeListing'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -45,10 +42,6 @@ class UnitController extends Controller
 
     /**
      * Store a newly created unit.
-     * 
-     * @param StoreUnitRequest $request
-     * @param Property $property
-     * @return JsonResponse
      */
     public function store(StoreUnitRequest $request, Property $property): JsonResponse
     {
@@ -68,15 +61,12 @@ class UnitController extends Controller
 
         return response()->json([
             'message' => 'Unit created successfully',
-            'unit' => $unit->load('property')
+            'unit' => $unit->load('property'),
         ], 201);
     }
 
     /**
      * Display the specified unit.
-     * 
-     * @param Unit $unit
-     * @return JsonResponse
      */
     public function show(Unit $unit): JsonResponse
     {
@@ -87,10 +77,6 @@ class UnitController extends Controller
 
     /**
      * Update the specified unit.
-     * 
-     * @param UpdateUnitRequest $request
-     * @param Unit $unit
-     * @return JsonResponse
      */
     public function update(UpdateUnitRequest $request, Unit $unit): JsonResponse
     {
@@ -110,16 +96,12 @@ class UnitController extends Controller
 
         return response()->json([
             'message' => 'Unit updated successfully',
-            'unit' => $unit->fresh(['property', 'listings'])
+            'unit' => $unit->fresh(['property', 'listings']),
         ]);
     }
 
     /**
      * Remove the specified unit (soft delete).
-     * 
-     * @param Request $request
-     * @param Unit $unit
-     * @return JsonResponse
      */
     public function destroy(Request $request, Unit $unit): JsonResponse
     {
@@ -128,7 +110,7 @@ class UnitController extends Controller
         // Check if unit has active listings
         if ($unit->listings()->where('status', 'active')->count() > 0) {
             return response()->json([
-                'message' => 'Cannot delete unit with active listings. Please deactivate all listings first.'
+                'message' => 'Cannot delete unit with active listings. Please deactivate all listings first.',
             ], 422);
         }
 
@@ -143,7 +125,7 @@ class UnitController extends Controller
         );
 
         return response()->json([
-            'message' => 'Unit deleted successfully'
+            'message' => 'Unit deleted successfully',
         ]);
     }
 }

@@ -2,18 +2,18 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
+use App\Enums\NotificationType;
 use App\Models\Notification;
 use App\Models\NotificationPreference;
-use App\Enums\NotificationType;
-use App\Services\SmsDeliveryService;
+use App\Models\User;
 use App\Services\Sms\FakeSmsClient;
+use App\Services\SmsDeliveryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
  * NotificationSmsDeliveryTest
- * 
+ *
  * Tests SMS delivery of notifications.
  * Phase 3.7: SMS delivery only, idempotent, safe.
  * Phase 3.8: UPDATED - Now respects user preferences
@@ -23,7 +23,9 @@ class NotificationSmsDeliveryTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected SmsDeliveryService $smsDeliveryService;
+
     protected FakeSmsClient $fakeSmsClient;
 
     protected function setUp(): void
@@ -36,7 +38,7 @@ class NotificationSmsDeliveryTest extends TestCase
         ]);
 
         // Bind fake SMS client
-        $this->fakeSmsClient = new FakeSmsClient();
+        $this->fakeSmsClient = new FakeSmsClient;
         $this->app->instance(\App\Services\Sms\SmsClientInterface::class, $this->fakeSmsClient);
 
         $this->smsDeliveryService = app(SmsDeliveryService::class);
@@ -49,21 +51,21 @@ class NotificationSmsDeliveryTest extends TestCase
             'email_enabled' => true,
             'sms_enabled' => true, // Enable SMS for tests
         ]);
-        
+
         NotificationPreference::create([
             'user_id' => $this->user->id,
             'notification_type' => 'payment_succeeded',
             'email_enabled' => true,
             'sms_enabled' => true,
         ]);
-        
+
         NotificationPreference::create([
             'user_id' => $this->user->id,
             'notification_type' => 'payment_failed',
             'email_enabled' => true,
             'sms_enabled' => true,
         ]);
-        
+
         NotificationPreference::create([
             'user_id' => $this->user->id,
             'notification_type' => 'rent_overdue',
@@ -237,11 +239,11 @@ class NotificationSmsDeliveryTest extends TestCase
         // Verify only one sms_delivered_at value
         $notification->refresh();
         $firstDeliveredAt = $notification->sms_delivered_at;
-        
+
         // Wait and try again
         sleep(1);
         $this->smsDeliveryService->deliver($notification);
-        
+
         $notification->refresh();
         $this->assertEquals($firstDeliveredAt, $notification->sms_delivered_at);
     }

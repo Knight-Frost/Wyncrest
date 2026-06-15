@@ -2,23 +2,23 @@
 
 namespace Database\Seeders;
 
-use App\Enums\UserType;
+use App\Enums\ListingStatus;
 use App\Enums\PropertyType;
 use App\Enums\UnitAvailabilityStatus;
-use App\Enums\ListingStatus;
-use App\Models\User;
+use App\Enums\UserType;
 use App\Models\Admin;
-use App\Models\Property;
-use App\Models\Unit;
-use App\Models\Listing;
 use App\Models\Feature;
 use App\Models\LandlordFeature;
+use App\Models\Listing;
+use App\Models\Property;
+use App\Models\Unit;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
 /**
  * Phase1Seeder
- * 
+ *
  * Seeds data for Phase 1 testing:
  * - 1 Super Admin
  * - 2 Landlords (1 verified, 1 unverified)

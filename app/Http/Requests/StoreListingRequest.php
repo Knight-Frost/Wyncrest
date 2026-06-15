@@ -6,7 +6,7 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * StoreListingRequest
- * 
+ *
  * Validates listing creation data.
  * Creates listing in DRAFT status.
  */
@@ -18,6 +18,7 @@ class StoreListingRequest extends FormRequest
     public function authorize(): bool
     {
         $unit = $this->route('unit');
+
         return $this->user()?->can('view', $unit) ?? false;
     }
 

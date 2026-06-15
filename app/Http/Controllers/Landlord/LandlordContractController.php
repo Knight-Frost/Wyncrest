@@ -2,20 +2,20 @@
 
 namespace App\Http\Controllers\Landlord;
 
+use App\Enums\ContractStatus;
+use App\Enums\TerminatedBy;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreContractRequest;
 use App\Http\Requests\TerminateContractRequest;
 use App\Models\Contract;
 use App\Models\Listing;
-use App\Enums\ContractStatus;
-use App\Enums\TerminatedBy;
 use App\Services\AuditService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * LandlordContractController
- * 
+ *
  * Handles landlord contract operations.
  */
 class LandlordContractController extends Controller
@@ -48,7 +48,7 @@ class LandlordContractController extends Controller
         $existingContract = Contract::where('listing_id', $request->listing_id)->first();
         if ($existingContract) {
             return response()->json([
-                'message' => 'This listing already has a contract'
+                'message' => 'This listing already has a contract',
             ], 422);
         }
 
@@ -56,7 +56,7 @@ class LandlordContractController extends Controller
         $listing = Listing::findOrFail($request->listing_id);
         if ($listing->landlord_id !== $request->user()->id) {
             return response()->json([
-                'message' => 'You do not own this listing'
+                'message' => 'You do not own this listing',
             ], 403);
         }
 
@@ -83,7 +83,7 @@ class LandlordContractController extends Controller
 
         return response()->json([
             'message' => 'Contract created as draft',
-            'contract' => $contract->load(['listing', 'tenant'])
+            'contract' => $contract->load(['listing', 'tenant']),
         ], 201);
     }
 
@@ -105,7 +105,7 @@ class LandlordContractController extends Controller
         $this->authorize('send', $contract);
 
         $contract->update([
-            'status' => ContractStatus::PENDING_TENANT
+            'status' => ContractStatus::PENDING_TENANT,
         ]);
 
         // Audit log
@@ -113,12 +113,12 @@ class LandlordContractController extends Controller
             actor: $request->user(),
             action: 'contract_sent',
             subject: $contract,
-            description: "Sent contract to tenant for acceptance"
+            description: 'Sent contract to tenant for acceptance'
         );
 
         return response()->json([
             'message' => 'Contract sent to tenant',
-            'contract' => $contract->fresh()
+            'contract' => $contract->fresh(),
         ]);
     }
 
@@ -138,13 +138,13 @@ class LandlordContractController extends Controller
             actor: $request->user(),
             action: 'contract_terminated',
             subject: $contract,
-            description: "Landlord terminated contract",
+            description: 'Landlord terminated contract',
             severity: 'warning'
         );
 
         return response()->json([
             'message' => 'Contract terminated',
-            'contract' => $contract->fresh()
+            'contract' => $contract->fresh(),
         ]);
     }
 }

@@ -2,21 +2,21 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
+use App\Enums\NotificationType;
 use App\Models\Notification;
 use App\Models\NotificationPreference;
-use App\Enums\NotificationType;
+use App\Models\User;
 use App\Services\NotificationDeliveryService;
-use App\Services\SmsDeliveryService;
 use App\Services\NotificationDigestService;
 use App\Services\Sms\FakeSmsClient;
+use App\Services\SmsDeliveryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
  * NotificationDigestTest
- * 
+ *
  * Tests notification digest delivery.
  * Phase 3.9: Batched notification delivery based on delivery_mode.
  */
@@ -25,9 +25,13 @@ class NotificationDigestTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected NotificationDeliveryService $emailDeliveryService;
+
     protected SmsDeliveryService $smsDeliveryService;
+
     protected NotificationDigestService $digestService;
+
     protected FakeSmsClient $fakeSmsClient;
 
     protected function setUp(): void
@@ -40,7 +44,7 @@ class NotificationDigestTest extends TestCase
         ]);
 
         // Bind fake SMS client
-        $this->fakeSmsClient = new FakeSmsClient();
+        $this->fakeSmsClient = new FakeSmsClient;
         $this->app->instance(\App\Services\Sms\SmsClientInterface::class, $this->fakeSmsClient);
 
         $this->emailDeliveryService = app(NotificationDeliveryService::class);
@@ -73,7 +77,7 @@ class NotificationDigestTest extends TestCase
         // Verify delivered
         $this->assertTrue($result);
         Mail::assertSentCount(1);
-        
+
         $notification->refresh();
         $this->assertNotNull($notification->delivered_at);
     }
@@ -103,7 +107,7 @@ class NotificationDigestTest extends TestCase
         // Verify skipped (not delivered immediately)
         $this->assertFalse($result);
         Mail::assertNothingSent();
-        
+
         $notification->refresh();
         $this->assertNull($notification->delivered_at);
         $this->assertNull($notification->delivery_failed_at); // NOT a failure
@@ -135,7 +139,7 @@ class NotificationDigestTest extends TestCase
         $this->assertEquals(1, $result['users']);
         $this->assertEquals(1, $result['email_digests']);
         $this->assertEquals(3, $result['notifications']);
-        
+
         Mail::assertSentCount(1);
     }
 
@@ -157,7 +161,7 @@ class NotificationDigestTest extends TestCase
             'user_id' => $this->user->id,
             'type' => NotificationType::RENT_GENERATED,
         ]);
-        
+
         $n2 = Notification::factory()->create([
             'user_id' => $this->user->id,
             'type' => NotificationType::RENT_GENERATED,
@@ -169,7 +173,7 @@ class NotificationDigestTest extends TestCase
         // Verify both marked as delivered
         $n1->refresh();
         $n2->refresh();
-        
+
         $this->assertNotNull($n1->delivered_at);
         $this->assertNotNull($n2->delivered_at);
     }
@@ -373,7 +377,7 @@ class NotificationDigestTest extends TestCase
 
         // Verify SMS sent
         $this->assertEquals(1, $this->fakeSmsClient->getSentCount());
-        
+
         // Verify message format
         $sent = $this->fakeSmsClient->getSent()[0];
         $this->assertStringContainsString('Nexus Digest:', $sent['message']);

@@ -2,21 +2,21 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
-use App\Models\Property;
-use App\Models\Unit;
-use App\Models\Listing;
-use App\Models\Contract;
 use App\Enums\ContractStatus;
 use App\Enums\ListingStatus;
+use App\Models\Contract;
+use App\Models\Listing;
+use App\Models\Property;
+use App\Models\Unit;
+use App\Models\User;
 use App\Services\Analytics\PlatformAnalyticsService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
-use Carbon\Carbon;
 
 /**
  * PlatformAnalyticsTest
- * 
+ *
  * Phase 4.0c: Tests for platform health analytics
  */
 class PlatformAnalyticsTest extends TestCase
@@ -24,11 +24,17 @@ class PlatformAnalyticsTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $tenant;
+
     protected User $landlord;
+
     protected Property $property;
+
     protected Unit $unit;
+
     protected Listing $listing;
+
     protected PlatformAnalyticsService $analyticsService;
 
     protected function setUp(): void
@@ -174,7 +180,7 @@ class PlatformAnalyticsTest extends TestCase
     {
         // Create inactive listing
         $unit2 = Unit::factory()->create(['property_id' => $this->property->id]);
-        
+
         Listing::factory()->create([
             'unit_id' => $unit2->id,
             'landlord_id' => $this->landlord->id,
@@ -236,7 +242,7 @@ class PlatformAnalyticsTest extends TestCase
     public function test_platform_analytics_does_not_mutate_data()
     {
         $unit = Unit::factory()->create(['property_id' => $this->property->id]);
-        
+
         $originalCreatedAt = $unit->created_at;
         $originalUpdatedAt = $unit->updated_at;
 

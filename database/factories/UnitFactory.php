@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Models\Property;
 use App\Enums\UnitAvailabilityStatus;
+use App\Models\Property;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -16,7 +16,7 @@ class UnitFactory extends Factory
         $bedrooms = fake()->numberBetween(0, 4);
         $bathrooms = fake()->randomFloat(1, 1, 3);
         $sqft = fake()->numberBetween(500, 2500);
-        
+
         return [
             'property_id' => Property::factory(),
             'unit_number' => fake()->optional()->bothify('##?'),

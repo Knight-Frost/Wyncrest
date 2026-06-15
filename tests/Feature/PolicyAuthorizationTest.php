@@ -2,18 +2,18 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
+use App\Enums\ListingStatus;
+use App\Enums\UserType;
+use App\Models\Listing;
 use App\Models\Property;
 use App\Models\Unit;
-use App\Models\Listing;
-use App\Enums\UserType;
-use App\Enums\ListingStatus;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
  * PolicyAuthorizationTest
- * 
+ *
  * Tests that policies correctly enforce ownership rules.
  */
 class PolicyAuthorizationTest extends TestCase
@@ -42,14 +42,14 @@ class PolicyAuthorizationTest extends TestCase
 
         $unit1 = Unit::factory()->create([
             'property_id' => Property::factory()->create([
-                'landlord_id' => $landlord1->id
-            ])->id
+                'landlord_id' => $landlord1->id,
+            ])->id,
         ]);
 
         $unit2 = Unit::factory()->create([
             'property_id' => Property::factory()->create([
-                'landlord_id' => $landlord2->id
-            ])->id
+                'landlord_id' => $landlord2->id,
+            ])->id,
         ]);
 
         // Landlord 1 can update own unit

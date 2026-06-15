@@ -2,10 +2,10 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\UserType;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
-use App\Enums\UserType;
 
 /**
  * EnsureTenant Middleware
@@ -24,29 +24,29 @@ class EnsureTenant
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json([
-                'message' => 'Unauthenticated.'
+                'message' => 'Unauthenticated.',
             ], 401);
         }
 
         if ($user->user_type !== UserType::TENANT) {
             return response()->json([
-                'message' => 'This action is only available to tenants.'
+                'message' => 'This action is only available to tenants.',
             ], 403);
         }
 
         // Security: Check if account is active
-        if (!$user->is_active) {
+        if (! $user->is_active) {
             return response()->json([
-                'message' => 'Your account has been deactivated.'
+                'message' => 'Your account has been deactivated.',
             ], 403);
         }
 
         // Security: Check if account is suspended
         if ($user->suspended_at !== null) {
             return response()->json([
-                'message' => 'Your account has been suspended.'
+                'message' => 'Your account has been suspended.',
             ], 403);
         }
 

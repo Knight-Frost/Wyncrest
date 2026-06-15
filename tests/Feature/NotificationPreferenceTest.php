@@ -2,21 +2,21 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
+use App\Enums\NotificationType;
 use App\Models\Notification;
 use App\Models\NotificationPreference;
-use App\Enums\NotificationType;
+use App\Models\User;
 use App\Services\NotificationDeliveryService;
-use App\Services\SmsDeliveryService;
 use App\Services\PreferenceResolver;
 use App\Services\Sms\FakeSmsClient;
+use App\Services\SmsDeliveryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
  * NotificationPreferenceTest
- * 
+ *
  * Tests user notification preferences.
  * Phase 3.8: Email/SMS preferences per notification type.
  */
@@ -25,8 +25,11 @@ class NotificationPreferenceTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected NotificationDeliveryService $emailDeliveryService;
+
     protected SmsDeliveryService $smsDeliveryService;
+
     protected FakeSmsClient $fakeSmsClient;
 
     protected function setUp(): void
@@ -39,7 +42,7 @@ class NotificationPreferenceTest extends TestCase
         ]);
 
         // Bind fake SMS client
-        $this->fakeSmsClient = new FakeSmsClient();
+        $this->fakeSmsClient = new FakeSmsClient;
         $this->app->instance(\App\Services\Sms\SmsClientInterface::class, $this->fakeSmsClient);
 
         $this->emailDeliveryService = app(NotificationDeliveryService::class);

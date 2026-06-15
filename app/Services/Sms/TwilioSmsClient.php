@@ -2,18 +2,19 @@
 
 namespace App\Services\Sms;
 
-use Twilio\Rest\Client as TwilioClient;
 use Twilio\Exceptions\TwilioException;
+use Twilio\Rest\Client as TwilioClient;
 
 /**
  * TwilioSmsClient
- * 
+ *
  * Twilio implementation of SMS client.
  * Phase 3.7: Concrete adapter for Twilio SMS service.
  */
 class TwilioSmsClient implements SmsClientInterface
 {
     protected ?TwilioClient $client = null;
+
     protected ?string $fromNumber = null;
 
     public function __construct()
@@ -29,15 +30,15 @@ class TwilioSmsClient implements SmsClientInterface
 
     /**
      * Send SMS via Twilio
-     * 
-     * @param string $to Phone number in E.164 format
-     * @param string $message SMS content (max 160 chars recommended)
-     * @return bool
+     *
+     * @param  string  $to  Phone number in E.164 format
+     * @param  string  $message  SMS content (max 160 chars recommended)
+     *
      * @throws \Exception
      */
     public function send(string $to, string $message): bool
     {
-        if (!$this->isConfigured()) {
+        if (! $this->isConfigured()) {
             throw new \Exception('Twilio is not configured. Check TWILIO_SID, TWILIO_TOKEN, and TWILIO_FROM in .env');
         }
 
@@ -58,8 +59,6 @@ class TwilioSmsClient implements SmsClientInterface
 
     /**
      * Check if Twilio is configured
-     * 
-     * @return bool
      */
     public function isConfigured(): bool
     {

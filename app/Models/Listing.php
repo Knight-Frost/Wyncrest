@@ -81,7 +81,7 @@ class Listing extends Model
             ->whereNotNull('published_at')
             ->where(function ($q) {
                 $q->whereNull('expires_at')
-                  ->orWhere('expires_at', '>', now());
+                    ->orWhere('expires_at', '>', now());
             });
     }
 
@@ -110,11 +110,11 @@ class Listing extends Model
             return $query;
         }
 
-        $searchTerm = '%' . strtolower($keyword) . '%';
+        $searchTerm = '%'.strtolower($keyword).'%';
 
         return $query->where(function ($q) use ($searchTerm) {
             $q->whereRaw('LOWER(title) LIKE ?', [$searchTerm])
-              ->orWhereRaw('LOWER(description) LIKE ?', [$searchTerm]);
+                ->orWhereRaw('LOWER(description) LIKE ?', [$searchTerm]);
         });
     }
 
@@ -125,7 +125,7 @@ class Listing extends Model
     {
         return $query->whereHas('unit.property', function ($q) use ($city, $state, $zipCode) {
             if ($city) {
-                $q->whereRaw('LOWER(city) LIKE ?', ['%' . strtolower($city) . '%']);
+                $q->whereRaw('LOWER(city) LIKE ?', ['%'.strtolower($city).'%']);
             }
             if ($state) {
                 $q->where('state', strtoupper($state));
@@ -177,7 +177,6 @@ class Listing extends Model
     /**
      * Relationships
      */
-
     public function unit()
     {
         return $this->belongsTo(Unit::class);

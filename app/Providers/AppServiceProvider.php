@@ -2,13 +2,13 @@
 
 namespace App\Providers;
 
-use Illuminate\Support\ServiceProvider;
 use App\Models\Contract;
 use App\Models\LedgerEntry;
 use App\Models\Notification;
 use App\Observers\ContractObserver;
 use App\Observers\LedgerEntryObserver;
 use App\Observers\NotificationObserver;
+use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {

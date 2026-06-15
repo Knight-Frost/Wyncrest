@@ -2,24 +2,23 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
+use App\Enums\ContractStatus;
+use App\Enums\LedgerStatus;
+use App\Enums\LedgerType;
 use App\Models\Admin;
-use App\Models\Property;
-use App\Models\Unit;
-use App\Models\Listing;
 use App\Models\Contract;
 use App\Models\LedgerEntry;
-use App\Enums\UserType;
-use App\Enums\ContractStatus;
-use App\Enums\LedgerType;
-use App\Enums\LedgerStatus;
+use App\Models\Listing;
+use App\Models\Property;
+use App\Models\Unit;
+use App\Models\User;
 use App\Services\LedgerService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
  * LedgerWorkflowTest
- * 
+ *
  * Tests ledger functionality:
  * - Auto-generation when contract becomes active
  * - Tenant/landlord viewing
@@ -32,9 +31,13 @@ class LedgerWorkflowTest extends TestCase
     use RefreshDatabase;
 
     protected User $landlord;
+
     protected User $tenant;
+
     protected Admin $admin;
+
     protected Contract $contract;
+
     protected LedgerService $ledgerService;
 
     protected function setUp(): void
@@ -165,7 +168,7 @@ class LedgerWorkflowTest extends TestCase
 
         $response->assertStatus(201)
             ->assertJson([
-                'message' => 'Late fee generated successfully'
+                'message' => 'Late fee generated successfully',
             ]);
 
         // Verify late fee entry created
@@ -200,7 +203,7 @@ class LedgerWorkflowTest extends TestCase
 
         $response->assertStatus(422)
             ->assertJson([
-                'message' => 'Late fees can only be applied to overdue entries'
+                'message' => 'Late fees can only be applied to overdue entries',
             ]);
     }
 
@@ -226,7 +229,7 @@ class LedgerWorkflowTest extends TestCase
 
         $response->assertStatus(422)
             ->assertJson([
-                'message' => 'Late fee already exists for this rent entry'
+                'message' => 'Late fee already exists for this rent entry',
             ]);
     }
 

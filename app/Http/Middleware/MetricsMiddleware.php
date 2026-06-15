@@ -2,20 +2,20 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\MetricsService;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
-use App\Services\MetricsService;
 
 /**
  * MetricsMiddleware - Phase 7.5 Task 2
- * 
+ *
  * Automatically records metrics for all API requests:
  * - Request method and path
  * - Response status code
  * - Request duration (latency)
  * - User ID and role (if authenticated)
- * 
+ *
  * Metrics are stored in cache and accessible via /api/metrics endpoint.
  */
 class MetricsMiddleware
@@ -30,18 +30,18 @@ class MetricsMiddleware
     public function handle(Request $request, Closure $next): Response
     {
         $startTime = microtime(true);
-        
+
         // Process request
         $response = $next($request);
-        
+
         // Calculate duration in milliseconds
         $duration = (microtime(true) - $startTime) * 1000;
-        
+
         // Extract user info if authenticated
         $user = $request->user();
         $userId = $user?->id;
         $userType = $user?->user_type?->value;
-        
+
         // Record metrics
         $this->metricsService->recordRequest(
             method: $request->method(),
@@ -51,10 +51,10 @@ class MetricsMiddleware
             userId: $userId,
             userType: $userType
         );
-        
+
         return $response;
     }
-    
+
     /**
      * Normalize path to group similar routes
      * Example: /api/tenant/contracts/123 -> /api/tenant/contracts/{id}
@@ -67,10 +67,10 @@ class MetricsMiddleware
             '{id}',
             $path
         );
-        
+
         // Replace numeric IDs with {id}
         $path = preg_replace('/\/\d+/', '/{id}', $path);
-        
+
         return $path;
     }
 }

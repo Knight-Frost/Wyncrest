@@ -6,7 +6,7 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * TerminateContractRequest
- * 
+ *
  * Validates contract termination.
  */
 class TerminateContractRequest extends FormRequest
@@ -14,6 +14,7 @@ class TerminateContractRequest extends FormRequest
     public function authorize(): bool
     {
         $contract = $this->route('contract');
+
         return $this->user()?->can('terminate', $contract) ?? false;
     }
 

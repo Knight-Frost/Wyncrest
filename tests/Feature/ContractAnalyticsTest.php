@@ -2,26 +2,30 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
-use App\Models\Property;
-use App\Models\Unit;
-use App\Models\Listing;
-use App\Models\Contract;
 use App\Enums\ContractStatus;
 use App\Enums\ListingStatus;
+use App\Models\Contract;
+use App\Models\Listing;
+use App\Models\Property;
+use App\Models\Unit;
+use App\Models\User;
 use App\Services\Analytics\ContractAnalyticsService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
-use Carbon\Carbon;
 
 class ContractAnalyticsTest extends TestCase
 {
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $tenant;
+
     protected User $landlord;
+
     protected Property $property;
+
     protected ContractAnalyticsService $analyticsService;
 
     protected function setUp(): void
@@ -55,8 +59,8 @@ class ContractAnalyticsTest extends TestCase
             'listing_id' => $listing->id,
             'landlord_id' => $this->landlord->id,
         ];
-        
-        if (!isset($contractAttributes['tenant_id'])) {
+
+        if (! isset($contractAttributes['tenant_id'])) {
             $defaults['tenant_id'] = $this->tenant->id;
         }
 
@@ -125,7 +129,7 @@ class ContractAnalyticsTest extends TestCase
     public function test_renewal_rate_calculation()
     {
         $tenant1 = User::factory()->tenant()->create();
-        
+
         $this->createContractWithListing([
             'tenant_id' => $tenant1->id,
             'status' => ContractStatus::EXPIRED,
@@ -137,7 +141,7 @@ class ContractAnalyticsTest extends TestCase
         ]);
 
         $tenant2 = User::factory()->tenant()->create();
-        
+
         $this->createContractWithListing([
             'tenant_id' => $tenant2->id,
             'status' => ContractStatus::EXPIRED,
@@ -243,7 +247,7 @@ class ContractAnalyticsTest extends TestCase
     {
         // Use a BRAND NEW tenant for this test only
         $myTenant = User::factory()->tenant()->create();
-        
+
         // Create myTenant's contract
         $unit1 = Unit::factory()->create(['property_id' => $this->property->id]);
         $listing1 = Listing::factory()->create([
@@ -251,7 +255,7 @@ class ContractAnalyticsTest extends TestCase
             'landlord_id' => $this->landlord->id,
             'status' => ListingStatus::ACTIVE,
         ]);
-        
+
         Contract::factory()->create([
             'listing_id' => $listing1->id,
             'tenant_id' => $myTenant->id,
@@ -267,7 +271,7 @@ class ContractAnalyticsTest extends TestCase
             'landlord_id' => $this->landlord->id,
             'status' => ListingStatus::ACTIVE,
         ]);
-        
+
         Contract::factory()->create([
             'listing_id' => $listing2->id,
             'tenant_id' => $otherTenant->id,

@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * Unit Model
- * 
+ *
  * Units belong to properties.
  * Units are the actual rentable space.
  */
@@ -52,7 +52,7 @@ class Unit extends Model
         if ($this->unit_number) {
             return "Unit {$this->unit_number}";
         }
-        
+
         return $this->property->name;
     }
 
@@ -88,11 +88,11 @@ class Unit extends Model
         if ($min !== null) {
             $query->where('rent_amount', '>=', $min);
         }
-        
+
         if ($max !== null) {
             $query->where('rent_amount', '<=', $max);
         }
-        
+
         return $query;
     }
 
@@ -115,7 +115,6 @@ class Unit extends Model
     /**
      * Relationships
      */
-    
     public function property()
     {
         return $this->belongsTo(Property::class);

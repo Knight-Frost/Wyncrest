@@ -2,11 +2,11 @@
 
 namespace App\Services;
 
+use App\Enums\LedgerStatus;
+use App\Enums\LedgerType;
+use App\Events\LedgerEntryMarkedOverdue;
 use App\Models\Contract;
 use App\Models\LedgerEntry;
-use App\Enums\LedgerType;
-use App\Enums\LedgerStatus;
-use App\Events\LedgerEntryMarkedOverdue;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -25,9 +25,6 @@ class LedgerService
 
     /**
      * Generate first rent ledger entry when contract becomes active.
-     *
-     * @param Contract $contract
-     * @return LedgerEntry
      */
     public function generateFirstRentEntry(Contract $contract): LedgerEntry
     {
@@ -70,9 +67,6 @@ class LedgerService
 
     /**
      * Generate next rent entry for a contract.
-     *
-     * @param Contract $contract
-     * @return LedgerEntry
      */
     public function generateNextRentEntry(Contract $contract): LedgerEntry
     {
@@ -82,7 +76,7 @@ class LedgerService
             ->orderBy('billing_period_end', 'desc')
             ->first();
 
-        if (!$lastEntry) {
+        if (! $lastEntry) {
             return $this->generateFirstRentEntry($contract);
         }
 
@@ -124,18 +118,15 @@ class LedgerService
     /**
      * Generate late fee for an overdue rent entry.
      *
-     * @param LedgerEntry $rentEntry
-     * @param int $lateFeeAmountCents
-     * @return LedgerEntry
      * @throws \InvalidArgumentException If entry cannot have late fee applied
      */
     public function generateLateFee(LedgerEntry $rentEntry, int $lateFeeAmountCents): LedgerEntry
     {
-        if (!$rentEntry->type->isRent()) {
+        if (! $rentEntry->type->isRent()) {
             throw new \InvalidArgumentException('Late fees can only be applied to rent entries');
         }
 
-        if (!$rentEntry->isOverdue()) {
+        if (! $rentEntry->isOverdue()) {
             throw new \InvalidArgumentException('Late fees can only be applied to overdue entries');
         }
 
@@ -221,9 +212,7 @@ class LedgerService
     /**
      * Mark entry as paid.
      *
-     * @param LedgerEntry $entry
-     * @param string $paymentIntentId Stripe payment intent ID
-     * @return bool
+     * @param  string  $paymentIntentId  Stripe payment intent ID
      */
     public function markEntryPaid(LedgerEntry $entry, string $paymentIntentId): bool
     {
@@ -244,10 +233,6 @@ class LedgerService
 
     /**
      * Waive an entry (admin action).
-     *
-     * @param LedgerEntry $entry
-     * @param string $reason
-     * @return bool
      */
     public function waiveEntry(LedgerEntry $entry, string $reason): bool
     {

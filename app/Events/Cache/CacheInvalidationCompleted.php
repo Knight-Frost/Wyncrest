@@ -7,7 +7,7 @@ use Illuminate\Queue\SerializesModels;
 
 /**
  * Phase 5.5: Cache Invalidation Completed Event
- * 
+ *
  * Emitted when cache invalidation finishes successfully
  */
 class CacheInvalidationCompleted
@@ -15,8 +15,11 @@ class CacheInvalidationCompleted
     use Dispatchable, SerializesModels;
 
     public string $domain;
+
     public string $mode; // 'sync' or 'async'
+
     public int $invalidatedCount;
+
     public ?float $durationMs;
 
     public function __construct(

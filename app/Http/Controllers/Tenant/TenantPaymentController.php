@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\InitiatePaymentRequest;
 use App\Models\LedgerEntry;
 use App\Services\PaymentService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Stripe\Exception\ApiErrorException;
 
@@ -50,12 +50,12 @@ class TenantPaymentController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Unable to process payment. Please try again or contact support.'
+                'message' => 'Unable to process payment. Please try again or contact support.',
             ], 422);
         } catch (\InvalidArgumentException $e) {
             // Business logic error (e.g., already paid, invalid state)
             return response()->json([
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 422);
         } catch (\Exception $e) {
             // Unexpected error - log full details, return generic message
@@ -67,7 +67,7 @@ class TenantPaymentController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'An unexpected error occurred. Please try again later.'
+                'message' => 'An unexpected error occurred. Please try again later.',
             ], 500);
         }
     }
@@ -92,7 +92,7 @@ class TenantPaymentController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Unable to retrieve balance. Please try again.'
+                'message' => 'Unable to retrieve balance. Please try again.',
             ], 500);
         }
     }

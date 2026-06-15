@@ -6,7 +6,7 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * RejectListingRequest
- * 
+ *
  * Validates listing rejection by admin.
  * Requires detailed rejection reason.
  */

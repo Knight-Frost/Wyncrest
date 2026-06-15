@@ -4,7 +4,7 @@ namespace App\Enums;
 
 /**
  * ListingStatus Enum
- * 
+ *
  * Defines the lifecycle states of a listing.
  * Enforces moderation workflow.
  */
@@ -16,13 +16,13 @@ enum ListingStatus: string
     case INACTIVE = 'inactive';
     case REJECTED = 'rejected';
     case ARCHIVED = 'archived';
-    
+
     /**
      * Get human-readable label
      */
     public function label(): string
     {
-        return match($this) {
+        return match ($this) {
             self::DRAFT => 'Draft',
             self::PENDING_REVIEW => 'Pending Review',
             self::ACTIVE => 'Active',
@@ -31,7 +31,7 @@ enum ListingStatus: string
             self::ARCHIVED => 'Archived',
         };
     }
-    
+
     /**
      * Check if listing is publicly visible
      */
@@ -39,7 +39,7 @@ enum ListingStatus: string
     {
         return $this === self::ACTIVE;
     }
-    
+
     /**
      * Check if listing can be edited
      */
@@ -47,7 +47,7 @@ enum ListingStatus: string
     {
         return in_array($this, [self::DRAFT, self::REJECTED, self::INACTIVE]);
     }
-    
+
     /**
      * Check if listing requires admin review
      */

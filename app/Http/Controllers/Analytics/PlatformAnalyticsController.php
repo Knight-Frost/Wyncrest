@@ -4,15 +4,15 @@ namespace App\Http\Controllers\Analytics;
 
 use App\Http\Controllers\Controller;
 use App\Services\Analytics\PlatformAnalyticsService;
-use App\Support\Cache\AnalyticsCacheKey;
 use App\Support\Cache\AnalyticsCache;
-use Illuminate\Http\Request;
+use App\Support\Cache\AnalyticsCacheKey;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 /**
  * PlatformAnalyticsController
- * 
+ *
  * Phase 4.0c: API endpoint for platform health analytics
  * Phase 5.1: Added Redis caching with 300s TTL
  */
@@ -27,9 +27,6 @@ class PlatformAnalyticsController extends Controller
 
     /**
      * Get platform analytics
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function index(Request $request): JsonResponse
     {
@@ -64,7 +61,7 @@ class PlatformAnalyticsController extends Controller
             ], 403);
         } elseif ($user->user_type->value === 'landlord') {
             // Landlords see only their properties
-            if (!isset($filters['property_id'])) {
+            if (! isset($filters['property_id'])) {
                 // Get first property owned by landlord
                 $property = $user->properties()->first();
                 if ($property) {
@@ -81,7 +78,7 @@ class PlatformAnalyticsController extends Controller
         $analytics = AnalyticsCache::remember(
             $cacheKey,
             300,
-            fn() => $this->analyticsService->getAnalytics($filters),
+            fn () => $this->analyticsService->getAnalytics($filters),
             $role,
             $filters
         );

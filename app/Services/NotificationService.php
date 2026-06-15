@@ -8,7 +8,7 @@ use App\Models\User;
 
 /**
  * NotificationService
- * 
+ *
  * Centralized service for creating and managing notifications.
  * Handles message formatting, idempotency, and persistence.
  */
@@ -41,7 +41,7 @@ class NotificationService
         if ($notification->isRead()) {
             return; // Already read
         }
-        
+
         $notification->read_at = now();
         $notification->saveQuietly(); // Bypass events
     }

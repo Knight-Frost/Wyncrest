@@ -9,7 +9,7 @@ use Illuminate\Queue\SerializesModels;
 
 /**
  * PaymentSucceeded
- * 
+ *
  * Fired when a Stripe payment succeeds.
  * Triggered by: PaymentService::recordSuccessfulPayment()
  */

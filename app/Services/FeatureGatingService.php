@@ -2,14 +2,14 @@
 
 namespace App\Services;
 
-use App\Models\User;
 use App\Models\Feature;
 use App\Models\LandlordFeature;
+use App\Models\User;
 use Illuminate\Support\Collection;
 
 /**
  * FeatureGatingService
- * 
+ *
  * Backend enforcement of feature flags.
  * ALL feature checks must go through this service.
  */
@@ -20,7 +20,7 @@ class FeatureGatingService
      */
     public function hasFeature(User $landlord, string $featureKey): bool
     {
-        if (!$landlord->isLandlord()) {
+        if (! $landlord->isLandlord()) {
             return false;
         }
 
@@ -28,12 +28,12 @@ class FeatureGatingService
             ->where('is_available', true)
             ->first();
 
-        if (!$feature) {
+        if (! $feature) {
             return false;
         }
 
         // Check if feature requires identity verification
-        if ($feature->requires_identity_verification && !$landlord->hasVerifiedIdentity()) {
+        if ($feature->requires_identity_verification && ! $landlord->hasVerifiedIdentity()) {
             return false;
         }
 
@@ -51,7 +51,7 @@ class FeatureGatingService
      */
     public function requireFeature(User $landlord, string $featureKey): void
     {
-        if (!$this->hasFeature($landlord, $featureKey)) {
+        if (! $this->hasFeature($landlord, $featureKey)) {
             throw new \Exception("Feature '{$featureKey}' is not enabled for this account");
         }
     }
@@ -61,7 +61,7 @@ class FeatureGatingService
      */
     public function getEnabledFeatures(User $landlord): Collection
     {
-        if (!$landlord->isLandlord()) {
+        if (! $landlord->isLandlord()) {
             return collect();
         }
 
@@ -87,7 +87,7 @@ class FeatureGatingService
             ->where('is_available', true)
             ->first();
 
-        if (!$feature) {
+        if (! $feature) {
             return [
                 'can_enable' => false,
                 'reason' => 'Feature not available',
@@ -95,7 +95,7 @@ class FeatureGatingService
         }
 
         // Check identity verification requirement
-        if ($feature->requires_identity_verification && !$landlord->hasVerifiedIdentity()) {
+        if ($feature->requires_identity_verification && ! $landlord->hasVerifiedIdentity()) {
             return [
                 'can_enable' => false,
                 'reason' => 'Identity verification required',
@@ -103,9 +103,9 @@ class FeatureGatingService
         }
 
         // Check feature dependencies
-        if (!empty($feature->requires_features)) {
+        if (! empty($feature->requires_features)) {
             foreach ($feature->requires_features as $requiredFeatureKey) {
-                if (!$this->hasFeature($landlord, $requiredFeatureKey)) {
+                if (! $this->hasFeature($landlord, $requiredFeatureKey)) {
                     return [
                         'can_enable' => false,
                         'reason' => "Requires '{$requiredFeatureKey}' feature",
@@ -129,7 +129,7 @@ class FeatureGatingService
 
         // Check if can enable
         $check = $this->canEnableFeature($landlord, $featureKey);
-        if (!$check['can_enable']) {
+        if (! $check['can_enable']) {
             throw new \Exception($check['reason']);
         }
 

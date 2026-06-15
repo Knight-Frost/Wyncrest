@@ -7,7 +7,7 @@ use Illuminate\Console\Command;
 
 /**
  * DailyDigestNotificationsCommand
- * 
+ *
  * Sends daily notification digests to users.
  * Phase 3.9: Batches notifications from the last 24 hours.
  */

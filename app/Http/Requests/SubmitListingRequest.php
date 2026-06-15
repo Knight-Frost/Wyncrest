@@ -6,7 +6,7 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * SubmitListingRequest
- * 
+ *
  * Validates listing submission for review.
  * Ensures listing meets minimum requirements before admin review.
  */
@@ -51,12 +51,12 @@ class SubmitListingRequest extends FormRequest
             }
 
             // Ensure unit has required data
-            if (!$listing->unit) {
+            if (! $listing->unit) {
                 $validator->errors()->add('listing', 'Listing must be associated with a unit');
             }
 
             // Ensure property has address
-            if (!$listing->unit->property->city || !$listing->unit->property->state) {
+            if (! $listing->unit->property->city || ! $listing->unit->property->state) {
                 $validator->errors()->add('listing', 'Property address must be complete');
             }
         });

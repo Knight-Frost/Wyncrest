@@ -2,16 +2,16 @@
 
 namespace App\Listeners;
 
-use App\Events\RentGenerated;
-use App\Events\LedgerEntryMarkedOverdue;
-use App\Events\PaymentSucceeded;
-use App\Events\PaymentFailed;
 use App\Enums\NotificationType;
+use App\Events\LedgerEntryMarkedOverdue;
+use App\Events\PaymentFailed;
+use App\Events\PaymentSucceeded;
+use App\Events\RentGenerated;
 use App\Services\NotificationService;
 
 /**
  * CreateNotificationListener
- * 
+ *
  * Universal listener that handles all notification-triggering events.
  * Uses match expression to route to appropriate handler.
  */
@@ -41,19 +41,19 @@ class CreateNotificationListener
     protected function handleRentGenerated(RentGenerated $event): void
     {
         $entry = $event->ledgerEntry;
-        
+
         // Generate deterministic event ID for idempotency
         $eventId = "rent-generated:{$entry->id}";
-        
+
         // Check if notification already exists
         if ($this->notificationService->exists($event->tenant, $eventId)) {
             return; // Skip duplicate
         }
-        
+
         $period = "{$entry->billing_period_start->format('M j')} - {$entry->billing_period_end->format('M j, Y')}";
-        $amount = '$' . number_format($entry->amount_cents / 100, 2);
+        $amount = '$'.number_format($entry->amount_cents / 100, 2);
         $dueDate = $entry->due_date->format('F j, Y');
-        
+
         $this->notificationService->create(
             user: $event->tenant,
             type: NotificationType::RENT_GENERATED,
@@ -75,16 +75,16 @@ class CreateNotificationListener
     protected function handleOverdue(LedgerEntryMarkedOverdue $event): void
     {
         $entry = $event->ledgerEntry;
-        
+
         // Generate deterministic event ID
         $eventId = "rent-overdue:{$entry->id}";
-        
+
         if ($this->notificationService->exists($event->tenant, $eventId)) {
             return;
         }
-        
-        $amount = '$' . number_format($entry->amount_cents / 100, 2);
-        
+
+        $amount = '$'.number_format($entry->amount_cents / 100, 2);
+
         $this->notificationService->create(
             user: $event->tenant,
             type: NotificationType::RENT_OVERDUE,
@@ -106,17 +106,17 @@ class CreateNotificationListener
     protected function handlePaymentSuccess(PaymentSucceeded $event): void
     {
         $payment = $event->paymentEntry;
-        
+
         // Generate deterministic event ID
         $eventId = "payment-succeeded:{$payment->id}";
-        
+
         if ($this->notificationService->exists($event->tenant, $eventId)) {
             return;
         }
-        
+
         // Payment amount is negative, so use absolute value
-        $amount = '$' . number_format(abs($payment->amount_cents) / 100, 2);
-        
+        $amount = '$'.number_format(abs($payment->amount_cents) / 100, 2);
+
         $this->notificationService->create(
             user: $event->tenant,
             type: NotificationType::PAYMENT_SUCCEEDED,
@@ -138,16 +138,16 @@ class CreateNotificationListener
     protected function handlePaymentFailure(PaymentFailed $event): void
     {
         $entry = $event->rentEntry;
-        
+
         // Generate deterministic event ID
         $eventId = "payment-failed:{$event->paymentIntentId}";
-        
+
         if ($this->notificationService->exists($event->tenant, $eventId)) {
             return;
         }
-        
-        $amount = '$' . number_format($entry->amount_cents / 100, 2);
-        
+
+        $amount = '$'.number_format($entry->amount_cents / 100, 2);
+
         $this->notificationService->create(
             user: $event->tenant,
             type: NotificationType::PAYMENT_FAILED,

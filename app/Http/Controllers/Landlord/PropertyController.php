@@ -7,12 +7,12 @@ use App\Http\Requests\StorePropertyRequest;
 use App\Http\Requests\UpdatePropertyRequest;
 use App\Models\Property;
 use App\Services\AuditService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * PropertyController
- * 
+ *
  * Handles landlord property management.
  * All operations are owner-restricted via policies.
  */
@@ -24,9 +24,6 @@ class PropertyController extends Controller
 
     /**
      * Display a listing of the landlord's properties.
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function index(Request $request): JsonResponse
     {
@@ -43,9 +40,6 @@ class PropertyController extends Controller
 
     /**
      * Store a newly created property.
-     * 
-     * @param StorePropertyRequest $request
-     * @return JsonResponse
      */
     public function store(StorePropertyRequest $request): JsonResponse
     {
@@ -65,15 +59,12 @@ class PropertyController extends Controller
 
         return response()->json([
             'message' => 'Property created successfully',
-            'property' => $property->load('units')
+            'property' => $property->load('units'),
         ], 201);
     }
 
     /**
      * Display the specified property.
-     * 
-     * @param Property $property
-     * @return JsonResponse
      */
     public function show(Property $property): JsonResponse
     {
@@ -84,10 +75,6 @@ class PropertyController extends Controller
 
     /**
      * Update the specified property.
-     * 
-     * @param UpdatePropertyRequest $request
-     * @param Property $property
-     * @return JsonResponse
      */
     public function update(UpdatePropertyRequest $request, Property $property): JsonResponse
     {
@@ -107,16 +94,12 @@ class PropertyController extends Controller
 
         return response()->json([
             'message' => 'Property updated successfully',
-            'property' => $property->fresh(['units'])
+            'property' => $property->fresh(['units']),
         ]);
     }
 
     /**
      * Remove the specified property (soft delete).
-     * 
-     * @param Request $request
-     * @param Property $property
-     * @return JsonResponse
      */
     public function destroy(Request $request, Property $property): JsonResponse
     {
@@ -125,7 +108,7 @@ class PropertyController extends Controller
         // Check if property has units
         if ($property->units()->count() > 0) {
             return response()->json([
-                'message' => 'Cannot delete property with existing units. Please delete all units first.'
+                'message' => 'Cannot delete property with existing units. Please delete all units first.',
             ], 422);
         }
 
@@ -140,7 +123,7 @@ class PropertyController extends Controller
         );
 
         return response()->json([
-            'message' => 'Property deleted successfully'
+            'message' => 'Property deleted successfully',
         ]);
     }
 }

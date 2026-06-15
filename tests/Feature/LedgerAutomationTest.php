@@ -2,23 +2,23 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
-use App\Models\Property;
-use App\Models\Unit;
-use App\Models\Listing;
+use App\Enums\ContractStatus;
+use App\Enums\LedgerStatus;
+use App\Enums\LedgerType;
 use App\Models\Contract;
 use App\Models\LedgerEntry;
-use App\Enums\ContractStatus;
-use App\Enums\LedgerType;
-use App\Enums\LedgerStatus;
+use App\Models\Listing;
+use App\Models\Property;
+use App\Models\Unit;
+use App\Models\User;
 use App\Services\LedgerAutomationService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
-use Carbon\Carbon;
 
 /**
  * LedgerAutomationTest
- * 
+ *
  * Tests automated rent generation and overdue detection.
  * All tests use time travel for deterministic results.
  */
@@ -27,8 +27,11 @@ class LedgerAutomationTest extends TestCase
     use RefreshDatabase;
 
     protected User $landlord;
+
     protected User $tenant;
+
     protected Contract $contract;
+
     protected LedgerAutomationService $automationService;
 
     protected function setUp(): void
@@ -76,11 +79,11 @@ class LedgerAutomationTest extends TestCase
         $this->assertEquals(LedgerType::RENT, $entry->type);
         $this->assertEquals(LedgerStatus::PENDING, $entry->status);
         $this->assertEquals(250000, $entry->amount_cents);
-        
+
         // Verify period: Feb 15 - Mar 14 (current period for Feb 20)
         $this->assertEquals('2025-02-15', $entry->billing_period_start->format('Y-m-d'));
         $this->assertEquals('2025-03-14', $entry->billing_period_end->format('Y-m-d'));
-        
+
         // Verify due date: March 1 (payment_day of month containing period_end)
         $this->assertEquals('2025-03-01', $entry->due_date->format('Y-m-d'));
 
@@ -335,14 +338,14 @@ class LedgerAutomationTest extends TestCase
 
         // Create 3 active contracts (each needs own listing to avoid unique constraint)
         $property = Property::factory()->create(['landlord_id' => $this->landlord->id]);
-        
+
         for ($i = 0; $i < 3; $i++) {
             $unit = Unit::factory()->create(['property_id' => $property->id]);
             $listing = Listing::factory()->active()->create([
                 'unit_id' => $unit->id,
                 'landlord_id' => $this->landlord->id,
             ]);
-            
+
             Contract::factory()->create([
                 'listing_id' => $listing->id,
                 'landlord_id' => $this->landlord->id,
@@ -386,7 +389,7 @@ class LedgerAutomationTest extends TestCase
 
         // Should handle gracefully (use last day of month)
         $this->assertNotNull($entry);
-        
+
         // Period: Feb 15 - Mar 14
         // Due date should be Mar 30 (payment_day in month containing period_end)
         $this->assertEquals('2025-03-30', $entry->due_date->format('Y-m-d'));

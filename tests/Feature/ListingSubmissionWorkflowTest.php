@@ -2,23 +2,23 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
-use App\Models\Admin;
-use App\Models\Property;
-use App\Models\Unit;
-use App\Models\Listing;
-use App\Models\Feature;
-use App\Models\LandlordFeature;
-use App\Enums\UserType;
+use App\Enums\ListingStatus;
 use App\Enums\PropertyType;
 use App\Enums\UnitAvailabilityStatus;
-use App\Enums\ListingStatus;
+use App\Enums\UserType;
+use App\Models\Admin;
+use App\Models\Feature;
+use App\Models\LandlordFeature;
+use App\Models\Listing;
+use App\Models\Property;
+use App\Models\Unit;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
  * ListingSubmissionWorkflowTest
- * 
+ *
  * Tests the complete landlord → admin workflow:
  * 1. Landlord creates property
  * 2. Landlord creates unit
@@ -32,7 +32,9 @@ class ListingSubmissionWorkflowTest extends TestCase
     use RefreshDatabase;
 
     protected User $landlord;
+
     protected Admin $admin;
+
     protected Feature $listingsFeature;
 
     protected function setUp(): void
@@ -85,7 +87,7 @@ class ListingSubmissionWorkflowTest extends TestCase
         $response->assertStatus(201)
             ->assertJsonStructure([
                 'message',
-                'property' => ['id', 'name', 'property_type']
+                'property' => ['id', 'name', 'property_type'],
             ]);
 
         $this->assertDatabaseHas('properties', [
@@ -112,7 +114,7 @@ class ListingSubmissionWorkflowTest extends TestCase
         $response->assertStatus(201)
             ->assertJsonStructure([
                 'message',
-                'unit' => ['id', 'unit_number']
+                'unit' => ['id', 'unit_number'],
             ]);
 
         $this->assertDatabaseHas('units', [
@@ -155,7 +157,7 @@ class ListingSubmissionWorkflowTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJson([
-                'message' => 'Listing submitted for admin review'
+                'message' => 'Listing submitted for admin review',
             ]);
 
         $this->assertDatabaseHas('listings', [
@@ -169,7 +171,7 @@ class ListingSubmissionWorkflowTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJson([
-                'message' => 'Listing approved and published'
+                'message' => 'Listing approved and published',
             ]);
 
         $this->assertDatabaseHas('listings', [
@@ -219,7 +221,7 @@ class ListingSubmissionWorkflowTest extends TestCase
 
         $response->assertStatus(403)
             ->assertJson([
-                'message' => 'This action is only available to landlords.'
+                'message' => 'This action is only available to landlords.',
             ]);
     }
 
@@ -230,7 +232,7 @@ class ListingSubmissionWorkflowTest extends TestCase
 
         $response->assertStatus(403)
             ->assertJson([
-                'message' => 'This action is only available to tenants.'
+                'message' => 'This action is only available to tenants.',
             ]);
     }
 }

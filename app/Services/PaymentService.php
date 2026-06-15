@@ -2,21 +2,21 @@
 
 namespace App\Services;
 
+use App\Enums\LedgerStatus;
+use App\Enums\LedgerType;
+use App\Events\PaymentFailed;
+use App\Events\PaymentSucceeded;
 use App\Models\LedgerEntry;
 use App\Models\User;
-use App\Enums\LedgerType;
-use App\Enums\LedgerStatus;
-use App\Events\PaymentSucceeded;
-use App\Events\PaymentFailed;
-use Stripe\StripeClient;
 use Stripe\Exception\ApiErrorException;
+use Stripe\StripeClient;
 
 /**
  * PaymentService
- * 
+ *
  * Handles Stripe payment processing.
  * Ledger remains the source of truth.
- * 
+ *
  * Phase 3.5: Fires domain events for notifications
  */
 class PaymentService
@@ -29,15 +29,13 @@ class PaymentService
         // Only initialize Stripe client if API key is configured
         // This allows the service to be instantiated in tests without real keys
         $stripeKey = config('services.stripe.secret');
-        if (!empty($stripeKey)) {
+        if (! empty($stripeKey)) {
             $this->stripe = new StripeClient($stripeKey);
         }
     }
 
     /**
      * Check if Stripe is configured and available.
-     *
-     * @return bool
      */
     protected function isStripeConfigured(): bool
     {
@@ -47,28 +45,28 @@ class PaymentService
     /**
      * Get the Stripe client, throwing if not configured.
      *
-     * @return StripeClient
      * @throws \Exception If Stripe is not configured
      */
     protected function getStripeClient(): StripeClient
     {
-        if (!$this->isStripeConfigured()) {
+        if (! $this->isStripeConfigured()) {
             throw new \Exception('Stripe is not configured. Please set STRIPE_SECRET_KEY in your environment.');
         }
+
         return $this->stripe;
     }
 
     /**
      * Create a Stripe PaymentIntent for a ledger entry
-     * 
-     * @param LedgerEntry $entry The obligation to pay (rent or late_fee)
-     * @param User $tenant The tenant making the payment
+     *
+     * @param  LedgerEntry  $entry  The obligation to pay (rent or late_fee)
+     * @param  User  $tenant  The tenant making the payment
      * @return array ['client_secret' => string, 'payment_intent_id' => string]
      */
     public function createPaymentIntent(LedgerEntry $entry, User $tenant): array
     {
         // Validate entry can be paid
-        if (!$entry->canBePaid()) {
+        if (! $entry->canBePaid()) {
             throw new \Exception('This ledger entry cannot be paid');
         }
 
@@ -143,10 +141,10 @@ class PaymentService
     /**
      * Record successful payment from Stripe webhook
      * Creates a new PAYMENT ledger entry
-     * 
+     *
      * Phase 3.5: Fires PaymentSucceeded event
-     * 
-     * @param string $paymentIntentId Stripe payment intent ID
+     *
+     * @param  string  $paymentIntentId  Stripe payment intent ID
      * @return LedgerEntry The payment ledger entry
      */
     public function recordSuccessfulPayment(string $paymentIntentId): LedgerEntry
@@ -169,12 +167,12 @@ class PaymentService
 
         // Get original ledger entry from metadata
         $ledgerEntryId = $intent->metadata->ledger_entry_id ?? null;
-        if (!$ledgerEntryId) {
+        if (! $ledgerEntryId) {
             throw new \Exception('Payment intent missing ledger_entry_id in metadata');
         }
 
         $originalEntry = LedgerEntry::find($ledgerEntryId);
-        if (!$originalEntry) {
+        if (! $originalEntry) {
             throw new \Exception("Original ledger entry not found: {$ledgerEntryId}");
         }
 
@@ -216,10 +214,10 @@ class PaymentService
 
     /**
      * Record failed payment from Stripe webhook
-     * 
+     *
      * Phase 3.5: Fires PaymentFailed event
-     * 
-     * @param string $paymentIntentId Stripe payment intent ID
+     *
+     * @param  string  $paymentIntentId  Stripe payment intent ID
      */
     public function recordFailedPayment(string $paymentIntentId): void
     {
@@ -232,12 +230,12 @@ class PaymentService
 
         // Get original ledger entry from metadata
         $ledgerEntryId = $intent->metadata->ledger_entry_id ?? null;
-        if (!$ledgerEntryId) {
+        if (! $ledgerEntryId) {
             return; // Nothing to log if no ledger entry
         }
 
         $originalEntry = LedgerEntry::find($ledgerEntryId);
-        if (!$originalEntry) {
+        if (! $originalEntry) {
             return;
         }
 
@@ -264,8 +262,7 @@ class PaymentService
 
     /**
      * Get tenant's payment balance (what they owe)
-     * 
-     * @param User $tenant
+     *
      * @return int Balance in cents (positive = owes money)
      */
     public function getTenantBalance(User $tenant): int

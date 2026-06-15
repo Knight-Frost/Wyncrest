@@ -2,17 +2,17 @@
 
 namespace App\Models;
 
+use App\Enums\BillingCycle;
+use App\Enums\ContractStatus;
+use App\Enums\TerminatedBy;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Enums\ContractStatus;
-use App\Enums\BillingCycle;
-use App\Enums\TerminatedBy;
 
 /**
  * Contract Model
- * 
+ *
  * Represents a rental contract between landlord and tenant.
  * Immutable after creation - changes require versioning.
  */

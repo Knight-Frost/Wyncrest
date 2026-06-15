@@ -4,16 +4,16 @@ namespace App\Http\Controllers\Analytics;
 
 use App\Http\Controllers\Controller;
 use App\Services\Analytics\NotificationAnalyticsService;
-use App\Support\Cache\AnalyticsCacheKey;
 use App\Support\Cache\AnalyticsCache;
-use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Validator;
+use App\Support\Cache\AnalyticsCacheKey;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 /**
  * NotificationAnalyticsController
- * 
+ *
  * Phase 4.0a: API endpoint for notification analytics
  * Phase 5.1: Added Redis caching with 300s TTL
  * Phase 5.1 Fix: Normalize 'type' parameter to service expectation
@@ -29,9 +29,6 @@ class NotificationAnalyticsController extends Controller
 
     /**
      * Get notification analytics
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function index(Request $request): JsonResponse
     {
@@ -87,7 +84,7 @@ class NotificationAnalyticsController extends Controller
         $analytics = AnalyticsCache::remember(
             $cacheKey,
             300,
-            fn() => $this->analyticsService->getAnalytics($filters),
+            fn () => $this->analyticsService->getAnalytics($filters),
             $role,
             $filters
         );

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * AuditService
- * 
+ *
  * Centralized service for creating audit logs.
  * All critical actions must be logged through this service.
  */

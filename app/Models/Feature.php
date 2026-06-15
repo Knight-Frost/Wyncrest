@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Feature Model
- * 
+ *
  * Master list of all gateable features.
  * Features are enabled/disabled per landlord via LandlordFeature pivot.
  */
@@ -43,7 +43,6 @@ class Feature extends Model
     /**
      * Relationships
      */
-    
     public function landlords()
     {
         return $this->belongsToMany(User::class, 'landlord_features', 'feature_id', 'landlord_id')
@@ -59,7 +58,7 @@ class Feature extends Model
 
 /**
  * LandlordFeature Model
- * 
+ *
  * Pivot model for feature gating.
  * Tracks which features are enabled per landlord with full audit trail.
  */
@@ -87,7 +86,6 @@ class LandlordFeature extends Model
     /**
      * Relationships
      */
-    
     public function landlord()
     {
         return $this->belongsTo(User::class, 'landlord_id');

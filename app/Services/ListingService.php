@@ -3,17 +3,16 @@
 namespace App\Services;
 
 use App\Enums\ListingStatus;
+use App\Events\ListingPublished;
 use App\Models\Listing;
 use App\Models\Unit;
 use App\Models\User;
-use App\Events\ListingPublished;
-use App\Events\ListingSubmittedForReview;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 /**
  * ListingService
- * 
+ *
  * Handles all listing business logic.
  * Controllers should delegate to this service.
  */
@@ -29,11 +28,11 @@ class ListingService
             ->with(['unit.property', 'primaryPhoto', 'landlord']);
 
         // Apply filters
-        if (!empty($filters['keyword'])) {
+        if (! empty($filters['keyword'])) {
             $query->search($filters['keyword']);
         }
 
-        if (!empty($filters['city']) || !empty($filters['state']) || !empty($filters['zip_code'])) {
+        if (! empty($filters['city']) || ! empty($filters['state']) || ! empty($filters['zip_code'])) {
             $query->inLocation(
                 $filters['city'] ?? null,
                 $filters['state'] ?? null,
@@ -48,15 +47,15 @@ class ListingService
             );
         }
 
-        if (!empty($filters['bedrooms'])) {
+        if (! empty($filters['bedrooms'])) {
             $query->withBedrooms((int) $filters['bedrooms']);
         }
 
-        if (!empty($filters['property_type'])) {
+        if (! empty($filters['property_type'])) {
             $query->ofPropertyType($filters['property_type']);
         }
 
-        if (!empty($filters['pets_allowed'])) {
+        if (! empty($filters['pets_allowed'])) {
             $query->where('pets_allowed', true);
         }
 
@@ -65,17 +64,17 @@ class ListingService
         switch ($sortBy) {
             case 'price_low':
                 $query->join('units', 'listings.unit_id', '=', 'units.id')
-                      ->orderBy('units.rent_amount', 'asc')
-                      ->select('listings.*');
+                    ->orderBy('units.rent_amount', 'asc')
+                    ->select('listings.*');
                 break;
             case 'price_high':
                 $query->join('units', 'listings.unit_id', '=', 'units.id')
-                      ->orderBy('units.rent_amount', 'desc')
-                      ->select('listings.*');
+                    ->orderBy('units.rent_amount', 'desc')
+                    ->select('listings.*');
                 break;
             case 'featured':
                 $query->orderBy('featured', 'desc')
-                      ->orderBy('published_at', 'desc');
+                    ->orderBy('published_at', 'desc');
                 break;
             case 'newest':
             default:
@@ -130,7 +129,7 @@ class ListingService
      */
     public function publishListing(Listing $listing): Listing
     {
-        if (!in_array($listing->status, [ListingStatus::DRAFT, ListingStatus::PENDING_REVIEW], true)) {
+        if (! in_array($listing->status, [ListingStatus::DRAFT, ListingStatus::PENDING_REVIEW], true)) {
             throw new \Exception('Only draft or pending review listings can be published');
         }
 

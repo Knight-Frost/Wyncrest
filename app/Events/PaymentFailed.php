@@ -9,7 +9,7 @@ use Illuminate\Queue\SerializesModels;
 
 /**
  * PaymentFailed
- * 
+ *
  * Fired when a Stripe payment fails.
  * Triggered by: PaymentService::recordFailedPayment() or webhook handler
  */

@@ -2,8 +2,8 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -45,27 +45,27 @@ return new class extends Migration
         ");
 
         // Copy existing data
-        DB::statement("
+        DB::statement('
             INSERT INTO ledger_entries_new 
             SELECT id, contract_id, tenant_id, landlord_id, type, amount_cents, currency,
                    billing_period_start, billing_period_end, due_date, status, 
                    related_rent_entry_id, NULL as stripe_payment_intent_id, created_at
             FROM ledger_entries
-        ");
+        ');
 
         // Drop old table and rename new one
-        DB::statement("DROP TABLE ledger_entries");
-        DB::statement("ALTER TABLE ledger_entries_new RENAME TO ledger_entries");
+        DB::statement('DROP TABLE ledger_entries');
+        DB::statement('ALTER TABLE ledger_entries_new RENAME TO ledger_entries');
 
         // Recreate indexes
-        DB::statement("CREATE INDEX ledger_entries_contract_id_index ON ledger_entries(contract_id)");
-        DB::statement("CREATE INDEX ledger_entries_tenant_id_index ON ledger_entries(tenant_id)");
-        DB::statement("CREATE INDEX ledger_entries_landlord_id_index ON ledger_entries(landlord_id)");
-        DB::statement("CREATE INDEX ledger_entries_type_index ON ledger_entries(type)");
-        DB::statement("CREATE INDEX ledger_entries_status_index ON ledger_entries(status)");
-        DB::statement("CREATE INDEX ledger_entries_due_date_index ON ledger_entries(due_date)");
-        DB::statement("CREATE INDEX ledger_entries_related_rent_entry_id_index ON ledger_entries(related_rent_entry_id)");
-        DB::statement("CREATE INDEX ledger_entries_stripe_payment_intent_id_index ON ledger_entries(stripe_payment_intent_id)");
+        DB::statement('CREATE INDEX ledger_entries_contract_id_index ON ledger_entries(contract_id)');
+        DB::statement('CREATE INDEX ledger_entries_tenant_id_index ON ledger_entries(tenant_id)');
+        DB::statement('CREATE INDEX ledger_entries_landlord_id_index ON ledger_entries(landlord_id)');
+        DB::statement('CREATE INDEX ledger_entries_type_index ON ledger_entries(type)');
+        DB::statement('CREATE INDEX ledger_entries_status_index ON ledger_entries(status)');
+        DB::statement('CREATE INDEX ledger_entries_due_date_index ON ledger_entries(due_date)');
+        DB::statement('CREATE INDEX ledger_entries_related_rent_entry_id_index ON ledger_entries(related_rent_entry_id)');
+        DB::statement('CREATE INDEX ledger_entries_stripe_payment_intent_id_index ON ledger_entries(stripe_payment_intent_id)');
     }
 
     /**
@@ -107,16 +107,16 @@ return new class extends Migration
         ");
 
         // Drop current table and rename old one
-        DB::statement("DROP TABLE ledger_entries");
-        DB::statement("ALTER TABLE ledger_entries_old RENAME TO ledger_entries");
+        DB::statement('DROP TABLE ledger_entries');
+        DB::statement('ALTER TABLE ledger_entries_old RENAME TO ledger_entries');
 
         // Recreate indexes
-        DB::statement("CREATE INDEX ledger_entries_contract_id_index ON ledger_entries(contract_id)");
-        DB::statement("CREATE INDEX ledger_entries_tenant_id_index ON ledger_entries(tenant_id)");
-        DB::statement("CREATE INDEX ledger_entries_landlord_id_index ON ledger_entries(landlord_id)");
-        DB::statement("CREATE INDEX ledger_entries_type_index ON ledger_entries(type)");
-        DB::statement("CREATE INDEX ledger_entries_status_index ON ledger_entries(status)");
-        DB::statement("CREATE INDEX ledger_entries_due_date_index ON ledger_entries(due_date)");
-        DB::statement("CREATE INDEX ledger_entries_related_rent_entry_id_index ON ledger_entries(related_rent_entry_id)");
+        DB::statement('CREATE INDEX ledger_entries_contract_id_index ON ledger_entries(contract_id)');
+        DB::statement('CREATE INDEX ledger_entries_tenant_id_index ON ledger_entries(tenant_id)');
+        DB::statement('CREATE INDEX ledger_entries_landlord_id_index ON ledger_entries(landlord_id)');
+        DB::statement('CREATE INDEX ledger_entries_type_index ON ledger_entries(type)');
+        DB::statement('CREATE INDEX ledger_entries_status_index ON ledger_entries(status)');
+        DB::statement('CREATE INDEX ledger_entries_due_date_index ON ledger_entries(due_date)');
+        DB::statement('CREATE INDEX ledger_entries_related_rent_entry_id_index ON ledger_entries(related_rent_entry_id)');
     }
 };

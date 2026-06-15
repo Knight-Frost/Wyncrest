@@ -2,24 +2,18 @@
 
 namespace Tests\Feature;
 
-use Tests\TestCase;
-use App\Models\User;
+use App\Models\Contract;
 use App\Models\Property;
 use App\Models\Unit;
-use App\Models\Listing;
-use App\Models\Contract;
-use App\Models\LedgerEntry;
-use App\Models\Notification;
-use App\Enums\ContractStatus;
-use App\Enums\LedgerType;
-use App\Enums\NotificationType;
+use App\Models\User;
 use App\Support\Cache\AnalyticsCacheMetadata;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Tests\TestCase;
 
 /**
  * SelectiveCacheInvalidationTest
- * 
+ *
  * Phase 5.3: Tests selective cache invalidation using metadata overlap detection.
  */
 class SelectiveCacheInvalidationTest extends TestCase
@@ -27,9 +21,13 @@ class SelectiveCacheInvalidationTest extends TestCase
     use RefreshDatabase;
 
     protected User $tenant1;
+
     protected User $tenant2;
+
     protected User $landlord;
+
     protected Property $property1;
+
     protected Property $property2;
 
     protected function setUp(): void
@@ -39,7 +37,7 @@ class SelectiveCacheInvalidationTest extends TestCase
         $this->tenant1 = User::factory()->tenant()->create();
         $this->tenant2 = User::factory()->tenant()->create();
         $this->landlord = User::factory()->landlord()->create();
-        
+
         $this->property1 = Property::factory()->create(['landlord_id' => $this->landlord->id]);
         $this->property2 = Property::factory()->create(['landlord_id' => $this->landlord->id]);
     }
@@ -104,7 +102,7 @@ class SelectiveCacheInvalidationTest extends TestCase
     {
         $cacheKey = 'nexus:testing:analytics:contracts:tenant:nonexistent';
         $retrieved = AnalyticsCacheMetadata::read($cacheKey);
-        
+
         $this->assertNull($retrieved);
     }
 
@@ -120,7 +118,7 @@ class SelectiveCacheInvalidationTest extends TestCase
 
         // Same user - should overlap
         $this->assertTrue(AnalyticsCacheMetadata::overlaps($metadata, ['user_id' => 42]));
-        
+
         // Different user - should NOT overlap
         $this->assertFalse(AnalyticsCacheMetadata::overlaps($metadata, ['user_id' => 99]));
     }
@@ -137,7 +135,7 @@ class SelectiveCacheInvalidationTest extends TestCase
 
         // Same property - should overlap
         $this->assertTrue(AnalyticsCacheMetadata::overlaps($metadata, ['property_id' => 12]));
-        
+
         // Different property - should NOT overlap
         $this->assertFalse(AnalyticsCacheMetadata::overlaps($metadata, ['property_id' => 99]));
     }
@@ -157,13 +155,13 @@ class SelectiveCacheInvalidationTest extends TestCase
             'user_id' => 42,
             'date' => '2025-06-15',
         ]));
-        
+
         // Date before range - should NOT overlap
         $this->assertFalse(AnalyticsCacheMetadata::overlaps($metadata, [
             'user_id' => 42,
             'date' => '2024-12-31',
         ]));
-        
+
         // Date after range - should NOT overlap
         $this->assertFalse(AnalyticsCacheMetadata::overlaps($metadata, [
             'user_id' => 42,
@@ -186,7 +184,7 @@ class SelectiveCacheInvalidationTest extends TestCase
             'user_id' => 42,
             'date' => '2025-06-15',
         ]));
-        
+
         $this->assertTrue(AnalyticsCacheMetadata::overlaps($metadata, [
             'user_id' => 42,
             'date' => '2099-12-31',
@@ -214,7 +212,7 @@ class SelectiveCacheInvalidationTest extends TestCase
     {
         // This test validates selective invalidation in practice
         // We can't easily test Redis in unit tests, but we validate the logic
-        
+
         $metadata1 = [
             'role' => 'tenant',
             'user_id' => $this->tenant1->id,
@@ -222,7 +220,7 @@ class SelectiveCacheInvalidationTest extends TestCase
             'start_date' => null,
             'end_date' => null,
         ];
-        
+
         $metadata2 = [
             'role' => 'tenant',
             'user_id' => $this->tenant2->id,
@@ -230,15 +228,15 @@ class SelectiveCacheInvalidationTest extends TestCase
             'start_date' => null,
             'end_date' => null,
         ];
-        
+
         // Contract change for tenant1
         $changedData = [
             'user_id' => $this->tenant1->id,
         ];
-        
+
         // Tenant1's cache should overlap
         $this->assertTrue(AnalyticsCacheMetadata::overlaps($metadata1, $changedData));
-        
+
         // Tenant2's cache should NOT overlap
         $this->assertFalse(AnalyticsCacheMetadata::overlaps($metadata2, $changedData));
     }
@@ -252,7 +250,7 @@ class SelectiveCacheInvalidationTest extends TestCase
             'start_date' => null,
             'end_date' => null,
         ];
-        
+
         $metadata2 = [
             'role' => 'landlord',
             'user_id' => null,
@@ -260,15 +258,15 @@ class SelectiveCacheInvalidationTest extends TestCase
             'start_date' => null,
             'end_date' => null,
         ];
-        
+
         // Ledger change for property1
         $changedData = [
             'property_id' => $this->property1->id,
         ];
-        
+
         // Property1's cache should overlap
         $this->assertTrue(AnalyticsCacheMetadata::overlaps($metadata1, $changedData));
-        
+
         // Property2's cache should NOT overlap
         $this->assertFalse(AnalyticsCacheMetadata::overlaps($metadata2, $changedData));
     }
@@ -283,13 +281,13 @@ class SelectiveCacheInvalidationTest extends TestCase
             'start_date' => '2025-01-01',
             'end_date' => '2025-03-31',
         ];
-        
+
         // Change in Q2 2025
         $changedDataQ2 = [
             'user_id' => $this->tenant1->id,
             'date' => '2025-04-15',
         ];
-        
+
         // Q1 cache should NOT overlap with Q2 change
         $this->assertFalse(AnalyticsCacheMetadata::overlaps($metadataQ1, $changedDataQ2));
     }
@@ -299,9 +297,9 @@ class SelectiveCacheInvalidationTest extends TestCase
         // Missing required fields
         $cacheKey = 'nexus:testing:analytics:contracts:tenant:test456';
         $invalidMetadata = ['role' => 'tenant']; // Missing other fields
-        
+
         AnalyticsCacheMetadata::write($cacheKey, $invalidMetadata, 300);
-        
+
         // Should return null due to validation failure
         $retrieved = AnalyticsCacheMetadata::read($cacheKey);
         $this->assertNull($retrieved);
@@ -317,9 +315,9 @@ class SelectiveCacheInvalidationTest extends TestCase
             'start_date' => null,
             'end_date' => null,
         ];
-        
+
         AnalyticsCacheMetadata::write($cacheKey, $invalidMetadata, 300);
-        
+
         // Should return null due to invalid role
         $retrieved = AnalyticsCacheMetadata::read($cacheKey);
         $this->assertNull($retrieved);
@@ -353,19 +351,19 @@ class SelectiveCacheInvalidationTest extends TestCase
             'start_date' => '2025-01-01',
             'end_date' => '2025-06-30',
         ];
-        
+
         // Same tenant, date in range - SHOULD overlap
         $this->assertTrue(AnalyticsCacheMetadata::overlaps($metadata, [
             'user_id' => $this->tenant1->id,
             'date' => '2025-03-15',
         ]));
-        
+
         // Same tenant, date out of range - should NOT overlap
         $this->assertFalse(AnalyticsCacheMetadata::overlaps($metadata, [
             'user_id' => $this->tenant1->id,
             'date' => '2025-07-01',
         ]));
-        
+
         // Different tenant, date in range - should NOT overlap
         $this->assertFalse(AnalyticsCacheMetadata::overlaps($metadata, [
             'user_id' => $this->tenant2->id,

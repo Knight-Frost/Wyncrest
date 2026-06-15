@@ -2,9 +2,9 @@
 
 namespace App\Providers;
 
-use Illuminate\Support\ServiceProvider;
 use App\Services\Sms\SmsClientInterface;
 use App\Services\Sms\TwilioSmsClient;
+use Illuminate\Support\ServiceProvider;
 
 class SmsServiceProvider extends ServiceProvider
 {
@@ -14,7 +14,7 @@ class SmsServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(SmsClientInterface::class, function ($app) {
-            return new TwilioSmsClient();
+            return new TwilioSmsClient;
         });
     }
 

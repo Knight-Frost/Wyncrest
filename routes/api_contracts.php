@@ -1,8 +1,8 @@
 <?php
 
+use App\Http\Controllers\Admin\AdminContractController;
 use App\Http\Controllers\Landlord\LandlordContractController;
 use App\Http\Controllers\Tenant\TenantContractController;
-use App\Http\Controllers\Admin\AdminContractController;
 
 /*
 |--------------------------------------------------------------------------

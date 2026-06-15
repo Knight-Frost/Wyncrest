@@ -2,18 +2,18 @@
 
 namespace App\Services\Analytics;
 
-use App\Models\User;
-use App\Models\Property;
-use App\Models\Unit;
-use App\Models\Listing;
-use App\Models\Contract;
 use App\Enums\ContractStatus;
 use App\Enums\ListingStatus;
+use App\Models\Contract;
+use App\Models\Listing;
+use App\Models\Property;
+use App\Models\Unit;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 /**
  * PlatformAnalyticsService
- * 
+ *
  * Phase 4.0c: Read-only platform health analytics
  */
 class PlatformAnalyticsService
@@ -30,13 +30,13 @@ class PlatformAnalyticsService
     public function getOccupancyMetrics(array $filters = []): array
     {
         $unitsQuery = Unit::query();
-        
+
         if (isset($filters['property_id'])) {
             $unitsQuery->where('property_id', $filters['property_id']);
         }
-        
+
         $totalUnits = $unitsQuery->count();
-        
+
         // Units are occupied if they have a listing with an active contract
         $occupiedUnits = (clone $unitsQuery)
             ->whereHas('listings', function ($listingQuery) {
@@ -47,15 +47,15 @@ class PlatformAnalyticsService
                 });
             })
             ->count();
-        
+
         $vacantUnits = $totalUnits - $occupiedUnits;
-        
-        $occupancyRate = $totalUnits > 0 
-            ? round(($occupiedUnits / $totalUnits) * 100, 2) 
+
+        $occupancyRate = $totalUnits > 0
+            ? round(($occupiedUnits / $totalUnits) * 100, 2)
             : 0.0;
-        
+
         $averageVacancyDuration = $this->getAverageVacancyDuration($filters);
-        
+
         return [
             'total_units' => $totalUnits,
             'occupied_units' => $occupiedUnits,
@@ -71,27 +71,28 @@ class PlatformAnalyticsService
             ->groupBy('user_type')
             ->get()
             ->mapWithKeys(function ($item) {
-                $roleValue = $item->user_type instanceof \UnitEnum 
-                    ? $item->user_type->value 
+                $roleValue = $item->user_type instanceof \UnitEnum
+                    ? $item->user_type->value
                     : $item->user_type;
+
                 return [$roleValue => $item->count];
             })
             ->toArray();
-        
+
         $propertyQuery = Property::query();
         if (isset($filters['property_id'])) {
             $propertyQuery->where('id', $filters['property_id']);
         }
-        
+
         $totalProperties = $propertyQuery->count();
-        
+
         $unitQuery = Unit::query();
         if (isset($filters['property_id'])) {
             $unitQuery->where('property_id', $filters['property_id']);
         }
-        
+
         $totalUnits = $unitQuery->count();
-        
+
         return [
             'total_users' => User::count(),
             'users_by_role' => $usersByRole,
@@ -103,19 +104,19 @@ class PlatformAnalyticsService
     public function getUtilizationMetrics(array $filters = []): array
     {
         $listingQuery = Listing::query();
-        
+
         if (isset($filters['property_id'])) {
             $listingQuery->whereHas('unit', function ($q) use ($filters) {
                 $q->where('property_id', $filters['property_id']);
             });
         }
-        
+
         $totalListings = $listingQuery->count();
-        
+
         $activeListings = (clone $listingQuery)
             ->where('status', ListingStatus::ACTIVE)
             ->count();
-        
+
         // Count contracts - check listing_id exists in contracts table
         $contractsFromListings = Contract::query()
             ->when(isset($filters['property_id']), function ($q) use ($filters) {
@@ -124,11 +125,11 @@ class PlatformAnalyticsService
                 });
             })
             ->count();
-        
-        $conversionRate = $totalListings > 0 
-            ? round(($contractsFromListings / $totalListings) * 100, 2) 
+
+        $conversionRate = $totalListings > 0
+            ? round(($contractsFromListings / $totalListings) * 100, 2)
             : 0.0;
-        
+
         return [
             'total_listings' => $totalListings,
             'active_listings' => $activeListings,
@@ -139,11 +140,11 @@ class PlatformAnalyticsService
     protected function getAverageVacancyDuration(array $filters = []): float
     {
         $unitsQuery = Unit::query();
-        
+
         if (isset($filters['property_id'])) {
             $unitsQuery->where('property_id', $filters['property_id']);
         }
-        
+
         // Get vacant units (units without active contracts)
         $vacantUnits = $unitsQuery
             ->whereDoesntHave('listings', function ($listingQuery) {
@@ -157,35 +158,35 @@ class PlatformAnalyticsService
                 $q->select('id', 'unit_id');
             }])
             ->get();
-        
+
         if ($vacantUnits->isEmpty()) {
             return 0.0;
         }
-        
+
         $totalDays = 0;
         $countedUnits = 0;
-        
+
         foreach ($vacantUnits as $unit) {
             // Find the most recent ended contract for any of this unit's listings
             $listingIds = $unit->listings->pluck('id')->toArray();
-            
+
             if (empty($listingIds)) {
                 continue;
             }
-            
+
             $lastContract = Contract::whereIn('listing_id', $listingIds)
                 ->whereIn('status', [ContractStatus::EXPIRED, ContractStatus::TERMINATED])
                 ->orderBy('end_date', 'desc')
                 ->first();
-            
+
             if ($lastContract && $lastContract->end_date) {
                 $totalDays += $lastContract->end_date->diffInDays(now());
                 $countedUnits++;
             }
         }
-        
-        return $countedUnits > 0 
-            ? round($totalDays / $countedUnits, 2) 
+
+        return $countedUnits > 0
+            ? round($totalDays / $countedUnits, 2)
             : 0.0;
     }
 }

@@ -2,22 +2,22 @@
 
 namespace App\Http\Controllers\Landlord;
 
+use App\Enums\ListingStatus;
+use App\Events\ListingSubmittedForReview;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreListingRequest;
-use App\Http\Requests\UpdateListingRequest;
 use App\Http\Requests\SubmitListingRequest;
-use App\Models\Unit;
+use App\Http\Requests\UpdateListingRequest;
 use App\Models\Listing;
-use App\Services\FeatureGatingService;
+use App\Models\Unit;
 use App\Services\AuditService;
-use App\Events\ListingSubmittedForReview;
-use App\Enums\ListingStatus;
-use Illuminate\Http\Request;
+use App\Services\FeatureGatingService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * LandlordListingController
- * 
+ *
  * Handles landlord listing management with feature gating.
  * Listing lifecycle: Draft → Submit → (Admin Review) → Active
  */
@@ -30,9 +30,6 @@ class LandlordListingController extends Controller
 
     /**
      * Display a listing of the landlord's listings.
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function index(Request $request): JsonResponse
     {
@@ -52,10 +49,6 @@ class LandlordListingController extends Controller
 
     /**
      * Store a newly created listing (as DRAFT).
-     * 
-     * @param StoreListingRequest $request
-     * @param Unit $unit
-     * @return JsonResponse
      */
     public function store(StoreListingRequest $request, Unit $unit): JsonResponse
     {
@@ -67,7 +60,7 @@ class LandlordListingController extends Controller
         // Check if unit already has an active listing
         if ($unit->activeListing) {
             return response()->json([
-                'message' => 'This unit already has an active listing'
+                'message' => 'This unit already has an active listing',
             ], 422);
         }
 
@@ -87,15 +80,12 @@ class LandlordListingController extends Controller
 
         return response()->json([
             'message' => 'Listing created as draft',
-            'listing' => $listing->load(['unit.property', 'photos'])
+            'listing' => $listing->load(['unit.property', 'photos']),
         ], 201);
     }
 
     /**
      * Display the specified listing.
-     * 
-     * @param Listing $listing
-     * @return JsonResponse
      */
     public function show(Listing $listing): JsonResponse
     {
@@ -106,10 +96,6 @@ class LandlordListingController extends Controller
 
     /**
      * Update the specified listing.
-     * 
-     * @param UpdateListingRequest $request
-     * @param Listing $listing
-     * @return JsonResponse
      */
     public function update(UpdateListingRequest $request, Listing $listing): JsonResponse
     {
@@ -129,22 +115,18 @@ class LandlordListingController extends Controller
 
         return response()->json([
             'message' => 'Listing updated successfully',
-            'listing' => $listing->fresh(['unit.property', 'photos'])
+            'listing' => $listing->fresh(['unit.property', 'photos']),
         ]);
     }
 
     /**
      * Submit listing for admin review.
-     * 
-     * @param SubmitListingRequest $request
-     * @param Listing $listing
-     * @return JsonResponse
      */
     public function submit(SubmitListingRequest $request, Listing $listing): JsonResponse
     {
         // Update status
         $listing->update([
-            'status' => ListingStatus::PENDING_REVIEW
+            'status' => ListingStatus::PENDING_REVIEW,
         ]);
 
         // Fire event (triggers email to admin)
@@ -161,16 +143,12 @@ class LandlordListingController extends Controller
 
         return response()->json([
             'message' => 'Listing submitted for admin review',
-            'listing' => $listing->fresh()
+            'listing' => $listing->fresh(),
         ]);
     }
 
     /**
      * Remove the specified listing (soft delete).
-     * 
-     * @param Request $request
-     * @param Listing $listing
-     * @return JsonResponse
      */
     public function destroy(Request $request, Listing $listing): JsonResponse
     {
@@ -187,7 +165,7 @@ class LandlordListingController extends Controller
         );
 
         return response()->json([
-            'message' => 'Listing deleted successfully'
+            'message' => 'Listing deleted successfully',
         ]);
     }
 }

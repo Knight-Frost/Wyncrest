@@ -4,7 +4,7 @@ namespace App\Enums;
 
 /**
  * PropertyType Enum
- * 
+ *
  * Defines property classification types.
  */
 enum PropertyType: string
@@ -16,13 +16,13 @@ enum PropertyType: string
     case TOWNHOUSE = 'townhouse';
     case COMMERCIAL = 'commercial';
     case OTHER = 'other';
-    
+
     /**
      * Get human-readable label
      */
     public function label(): string
     {
-        return match($this) {
+        return match ($this) {
             self::SINGLE_FAMILY => 'Single Family Home',
             self::MULTI_FAMILY => 'Multi-Family',
             self::APARTMENT => 'Apartment',
@@ -32,14 +32,14 @@ enum PropertyType: string
             self::OTHER => 'Other',
         };
     }
-    
+
     /**
      * Get all values for dropdowns
      */
     public static function options(): array
     {
         return array_map(
-            fn($case) => ['value' => $case->value, 'label' => $case->label()],
+            fn ($case) => ['value' => $case->value, 'label' => $case->label()],
             self::cases()
         );
     }

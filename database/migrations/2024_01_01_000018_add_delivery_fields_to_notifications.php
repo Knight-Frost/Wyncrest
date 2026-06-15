@@ -15,7 +15,7 @@ return new class extends Migration
             $table->timestamp('delivered_at')->nullable()->after('read_at');
             $table->timestamp('delivery_failed_at')->nullable()->after('delivered_at');
             $table->text('delivery_error')->nullable()->after('delivery_failed_at');
-            
+
             // Indexes for delivery queries
             $table->index('delivered_at');
             $table->index('delivery_failed_at');

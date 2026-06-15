@@ -2,14 +2,14 @@
 
 namespace Tests\Feature;
 
-use Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
 
 /**
  * QueueCacheValidationTest - Phase 7.5 Task 3
- * 
+ *
  * Validates queue and cache behavior
  */
 class QueueCacheValidationTest extends TestCase
@@ -35,7 +35,7 @@ class QueueCacheValidationTest extends TestCase
     public function test_failed_jobs_are_tracked(): void
     {
         $failedCount = DB::table('failed_jobs')->count();
-        
+
         // Initially should be 0 or low
         $this->assertLessThan(10, $failedCount, 'Too many failed jobs');
     }

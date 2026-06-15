@@ -11,7 +11,7 @@ use Laravel\Sanctum\HasApiTokens;
 
 /**
  * User Model
- * 
+ *
  * Represents both tenants and landlords.
  * Role is strictly enforced via user_type enum.
  * Admins are NOT in this table.
@@ -109,7 +109,7 @@ class User extends Authenticatable
     /**
      * Relationships
      */
-    
+
     // Landlord relationships
     public function properties()
     {
@@ -144,7 +144,7 @@ class User extends Authenticatable
 
     /**
      * Get user's notification preferences
-     * 
+     *
      * Phase 3.8: User preferences for notification channels
      * Phase 3.9: Includes delivery_mode for digest timing
      */

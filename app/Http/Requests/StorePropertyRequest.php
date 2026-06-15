@@ -2,13 +2,13 @@
 
 namespace App\Http\Requests;
 
-use Illuminate\Foundation\Http\FormRequest;
 use App\Enums\PropertyType;
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
  * StorePropertyRequest
- * 
+ *
  * Validates property creation data.
  */
 class StorePropertyRequest extends FormRequest
@@ -35,7 +35,7 @@ class StorePropertyRequest extends FormRequest
             'state' => ['required', 'string', 'size:2', 'uppercase'],
             'zip_code' => ['required', 'string', 'max:10'],
             'country' => ['nullable', 'string', 'size:2', 'uppercase'],
-            'year_built' => ['nullable', 'integer', 'min:1800', 'max:' . (date('Y') + 1)],
+            'year_built' => ['nullable', 'integer', 'min:1800', 'max:'.(date('Y') + 1)],
             'lot_size' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
             'description' => ['nullable', 'string', 'max:2000'],
         ];

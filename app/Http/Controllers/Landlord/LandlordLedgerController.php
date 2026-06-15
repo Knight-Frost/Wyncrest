@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Landlord;
 
 use App\Http\Controllers\Controller;
 use App\Models\LedgerEntry;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * LandlordLedgerController
- * 
+ *
  * Handles landlord ledger viewing (read-only).
  */
 class LandlordLedgerController extends Controller

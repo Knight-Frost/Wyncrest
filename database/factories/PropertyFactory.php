@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Models\User;
 use App\Enums\PropertyType;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -15,7 +15,7 @@ class PropertyFactory extends Factory
     {
         return [
             'landlord_id' => User::factory()->landlord(),
-            'name' => fake()->company() . ' Apartments',
+            'name' => fake()->company().' Apartments',
             'property_type' => fake()->randomElement(PropertyType::cases()),
             'street_address' => fake()->streetAddress(),
             'street_address_2' => fake()->optional()->secondaryAddress(),

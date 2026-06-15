@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * NotificationPreference
- * 
+ *
  * Stores user preferences for notification delivery channels and timing.
  * Phase 3.8: Controls which channels (email/SMS) are used per notification type.
  * Phase 3.9: Controls WHEN notifications are delivered (immediate vs digest).
@@ -40,8 +40,6 @@ class NotificationPreference extends Model
 
     /**
      * Check if delivery mode is immediate
-     * 
-     * @return bool
      */
     public function isImmediate(): bool
     {
@@ -50,8 +48,6 @@ class NotificationPreference extends Model
 
     /**
      * Check if delivery mode is daily digest
-     * 
-     * @return bool
      */
     public function isDailyDigest(): bool
     {
@@ -60,8 +56,6 @@ class NotificationPreference extends Model
 
     /**
      * Check if delivery mode is weekly digest
-     * 
-     * @return bool
      */
     public function isWeeklyDigest(): bool
     {

@@ -4,7 +4,7 @@ namespace App\Enums;
 
 /**
  * NotificationType
- * 
+ *
  * Defines all notification types in the system.
  * Phase 3.5 implements: rent_generated, rent_overdue, payment_succeeded, payment_failed
  */

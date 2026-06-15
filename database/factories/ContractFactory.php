@@ -2,10 +2,10 @@
 
 namespace Database\Factories;
 
+use App\Enums\BillingCycle;
+use App\Enums\ContractStatus;
 use App\Models\Listing;
 use App\Models\User;
-use App\Enums\ContractStatus;
-use App\Enums\BillingCycle;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

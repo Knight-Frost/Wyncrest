@@ -10,7 +10,7 @@ use Illuminate\Queue\SerializesModels;
 
 /**
  * NotificationDigestEmail
- * 
+ *
  * Email containing batched notifications.
  * Phase 3.9: Digest delivery for users who prefer batched notifications.
  */
@@ -31,7 +31,7 @@ class NotificationDigestEmail extends Mailable
     public function envelope(): Envelope
     {
         $count = $this->notifications->count();
-        
+
         return new Envelope(
             subject: "Your Nexus Notifications ({$count})",
         );

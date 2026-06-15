@@ -7,7 +7,7 @@ use Illuminate\Queue\SerializesModels;
 
 /**
  * Phase 5.5: Cache Job Started Event
- * 
+ *
  * Emitted when async invalidation job begins execution
  */
 class CacheJobStarted
@@ -15,7 +15,9 @@ class CacheJobStarted
     use Dispatchable, SerializesModels;
 
     public string $domain;
+
     public string $queue;
+
     public array $scopes;
 
     public function __construct(

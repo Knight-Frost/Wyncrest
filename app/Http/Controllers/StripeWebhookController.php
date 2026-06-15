@@ -3,11 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Services\PaymentService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Stripe\Webhook;
 use Stripe\Exception\SignatureVerificationException;
+use Stripe\Webhook;
 
 /**
  * StripeWebhookController
@@ -36,6 +36,7 @@ class StripeWebhookController extends Controller
             Log::critical('Stripe webhook rejected: webhook secret not configured', [
                 'ip' => $request->ip(),
             ]);
+
             return response()->json(['error' => 'Webhook not configured'], 503);
         }
 
@@ -44,6 +45,7 @@ class StripeWebhookController extends Controller
             Log::warning('Stripe webhook rejected: missing signature header', [
                 'ip' => $request->ip(),
             ]);
+
             return response()->json(['error' => 'Missing signature'], 400);
         }
 
@@ -59,18 +61,21 @@ class StripeWebhookController extends Controller
                 'error' => $e->getMessage(),
                 'ip' => $request->ip(),
             ]);
+
             return response()->json(['error' => 'Invalid signature'], 400);
         } catch (\UnexpectedValueException $e) {
             Log::error('Stripe webhook invalid payload', [
                 'error' => $e->getMessage(),
                 'ip' => $request->ip(),
             ]);
+
             return response()->json(['error' => 'Invalid payload'], 400);
         } catch (\Exception $e) {
             Log::error('Stripe webhook processing error', [
                 'error' => $e->getMessage(),
                 'ip' => $request->ip(),
             ]);
+
             return response()->json(['error' => 'Webhook error'], 400);
         }
 
@@ -87,7 +92,7 @@ class StripeWebhookController extends Controller
 
                 default:
                     Log::info('Unhandled Stripe webhook event', [
-                        'type' => $event->type
+                        'type' => $event->type,
                     ]);
             }
 
@@ -98,6 +103,7 @@ class StripeWebhookController extends Controller
                 'event_id' => $event->id,
                 'error' => $e->getMessage(),
             ]);
+
             // Return 200 to prevent Stripe from retrying (we logged the error)
             // Stripe will keep retrying 5xx errors
             return response()->json(['status' => 'logged_error'], 200);

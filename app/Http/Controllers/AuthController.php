@@ -2,18 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
-use App\Models\Admin;
 use App\Enums\UserType;
+use App\Models\Admin;
+use App\Models\User;
 use App\Services\AuditService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Support\Str;
 
 /**
  * AuthController
@@ -103,13 +102,14 @@ class AuthController extends Controller
         $admin = Admin::where('email', $validated['email'])->first();
         if ($admin && Hash::check($validated['password'], $admin->password)) {
             RateLimiter::clear($throttleKey);
+
             return $this->handleAdminLogin($admin);
         }
 
         // Check regular user
         $user = User::where('email', $validated['email'])->first();
 
-        if (!$user || !Hash::check($validated['password'], $user->password)) {
+        if (! $user || ! Hash::check($validated['password'], $user->password)) {
             RateLimiter::hit($throttleKey, 60);
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
@@ -117,7 +117,7 @@ class AuthController extends Controller
         }
 
         // Check if user is active
-        if (!$user->is_active) {
+        if (! $user->is_active) {
             RateLimiter::hit($throttleKey, 60);
             throw ValidationException::withMessages([
                 'email' => ['Your account has been deactivated.'],
@@ -158,7 +158,7 @@ class AuthController extends Controller
      */
     protected function throttleKey(Request $request, string $email): string
     {
-        return Str::transliterate(Str::lower($email) . '|' . $request->ip());
+        return Str::transliterate(Str::lower($email).'|'.$request->ip());
     }
 
     /**
@@ -167,7 +167,7 @@ class AuthController extends Controller
     protected function handleAdminLogin(Admin $admin): JsonResponse
     {
         // Check if admin is active
-        if (!$admin->is_active) {
+        if (! $admin->is_active) {
             throw ValidationException::withMessages([
                 'email' => ['Your admin account has been deactivated.'],
             ]);

@@ -6,7 +6,7 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * AdminTerminateContractRequest
- * 
+ *
  * Validates admin forced contract termination.
  */
 class AdminTerminateContractRequest extends FormRequest

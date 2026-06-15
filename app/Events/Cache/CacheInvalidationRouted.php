@@ -7,7 +7,7 @@ use Illuminate\Queue\SerializesModels;
 
 /**
  * Phase 5.5: Cache Invalidation Routed Event
- * 
+ *
  * Emitted when invalidator decides between sync vs async execution
  */
 class CacheInvalidationRouted
@@ -15,9 +15,13 @@ class CacheInvalidationRouted
     use Dispatchable, SerializesModels;
 
     public string $domain;
+
     public string $mode; // 'sync' or 'async'
+
     public int $keyCount;
+
     public int $threshold;
+
     public array $scopes;
 
     public function __construct(

@@ -2,11 +2,11 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\UserType;
 use Closure;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Facades\Auth;
-use App\Enums\UserType;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * EnsureAdminOrLandlord Middleware
@@ -30,36 +30,37 @@ class EnsureAdminOrLandlord
         // Check Sanctum-authenticated user
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json([
-                'message' => 'Unauthenticated.'
+                'message' => 'Unauthenticated.',
             ], 401);
         }
 
         // Check if the authenticated user is from the Admin model
         if ($user instanceof \App\Models\Admin) {
             // Check if admin is active
-            if (!$user->is_active) {
+            if (! $user->is_active) {
                 return response()->json([
-                    'message' => 'Your admin account has been deactivated.'
+                    'message' => 'Your admin account has been deactivated.',
                 ], 403);
             }
+
             return $next($request);
         }
 
         // Check if user is a landlord
         if ($user instanceof \App\Models\User && $user->user_type === UserType::LANDLORD) {
             // Security: Check if account is active
-            if (!$user->is_active) {
+            if (! $user->is_active) {
                 return response()->json([
-                    'message' => 'Your account has been deactivated.'
+                    'message' => 'Your account has been deactivated.',
                 ], 403);
             }
 
             // Security: Check if account is suspended
             if ($user->suspended_at !== null) {
                 return response()->json([
-                    'message' => 'Your account has been suspended.'
+                    'message' => 'Your account has been suspended.',
                 ], 403);
             }
 
@@ -67,7 +68,7 @@ class EnsureAdminOrLandlord
         }
 
         return response()->json([
-            'message' => 'This action is only available to administrators and landlords.'
+            'message' => 'This action is only available to administrators and landlords.',
         ], 403);
     }
 }

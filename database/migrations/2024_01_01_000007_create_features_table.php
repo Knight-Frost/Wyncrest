@@ -8,7 +8,7 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
-     * 
+     *
      * Features table defines all gateable features in the system.
      * This is the master list of features that can be enabled/disabled per landlord.
      */
@@ -19,17 +19,17 @@ return new class extends Migration
             $table->string('key')->unique(); // e.g., 'applications', 'payments', 'maintenance'
             $table->string('name'); // Human-readable name
             $table->text('description')->nullable();
-            
+
             // Feature requirements
             $table->json('requires_features')->nullable(); // e.g., ["identity_verification"]
             $table->boolean('requires_identity_verification')->default(false);
-            
+
             // Feature configuration
             $table->boolean('enabled_by_default')->default(false);
             $table->boolean('is_available')->default(true); // System-wide availability
-            
+
             $table->timestamps();
-            
+
             $table->index('is_available');
         });
     }

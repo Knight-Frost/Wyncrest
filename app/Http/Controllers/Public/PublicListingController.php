@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
 use App\Services\ListingService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * PublicListingController
- * 
+ *
  * Handles public listing discovery (no authentication required).
  * Provides search, filtering, and listing detail views.
  */
@@ -21,9 +21,6 @@ class PublicListingController extends Controller
 
     /**
      * Display a listing of active listings with search and filters.
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function index(Request $request): JsonResponse
     {
@@ -52,17 +49,14 @@ class PublicListingController extends Controller
 
     /**
      * Display the specified listing.
-     * 
-     * @param int $id
-     * @return JsonResponse
      */
     public function show(int $id): JsonResponse
     {
         $listing = $this->listingService->getPublicListing($id);
 
-        if (!$listing) {
+        if (! $listing) {
             return response()->json([
-                'message' => 'Listing not found or is not publicly available'
+                'message' => 'Listing not found or is not publicly available',
             ], 404);
         }
 
@@ -71,14 +65,11 @@ class PublicListingController extends Controller
 
     /**
      * Get featured listings for homepage.
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function featured(Request $request): JsonResponse
     {
         $limit = $request->validate([
-            'limit' => ['nullable', 'integer', 'min:1', 'max:20']
+            'limit' => ['nullable', 'integer', 'min:1', 'max:20'],
         ])['limit'] ?? 6;
 
         $listings = $this->listingService->getFeaturedListings($limit);

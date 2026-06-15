@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
-use Tests\TestCase;
-use App\Models\User;
 use App\Enums\UserType;
+use App\Models\User;
 use App\Services\MetricsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
 class MetricsTest extends TestCase
 {
@@ -17,7 +17,7 @@ class MetricsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        
+
         $this->metricsService = app(MetricsService::class);
         $this->metricsService->reset();
     }
@@ -34,7 +34,7 @@ class MetricsTest extends TestCase
         $response->assertStatus(200);
 
         $summary = $this->metricsService->getSummary();
-        
+
         $this->assertGreaterThan(0, $summary['requests']['total']);
     }
 
@@ -78,7 +78,7 @@ class MetricsTest extends TestCase
     {
         // Reset metrics to ensure absolutely clean state
         $this->metricsService->reset();
-        
+
         $tenant = User::factory()->create(['user_type' => UserType::TENANT]);
         $landlord = User::factory()->create(['user_type' => UserType::LANDLORD]);
 
@@ -88,7 +88,7 @@ class MetricsTest extends TestCase
         // Make tenant request (this should always work)
         $tenantResponse = $this->withHeaders(['Authorization' => "Bearer {$tenantToken}"])
             ->getJson('/api/tenant/dashboard');
-        
+
         // Make landlord request (this might fail)
         $landlordResponse = $this->withHeaders(['Authorization' => "Bearer {$landlordToken}"])
             ->getJson('/api/landlord/properties');
@@ -97,11 +97,11 @@ class MetricsTest extends TestCase
 
         // Verify structure exists
         $this->assertArrayHasKey('by_role', $summary);
-        
+
         // Tenant metrics should always be recorded
         $this->assertArrayHasKey('tenant', $summary['by_role']);
         $this->assertGreaterThanOrEqual(1, $summary['by_role']['tenant']);
-        
+
         // Landlord metrics - only assert if the request was successful
         if ($landlordResponse->isSuccessful()) {
             // If landlord request succeeded, metrics should be recorded

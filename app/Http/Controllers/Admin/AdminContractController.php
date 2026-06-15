@@ -2,18 +2,18 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\ContractStatus;
+use App\Enums\TerminatedBy;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AdminTerminateContractRequest;
 use App\Models\Contract;
-use App\Enums\ContractStatus;
-use App\Enums\TerminatedBy;
 use App\Services\AuditService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * AdminContractController
- * 
+ *
  * Handles admin contract operations.
  */
 class AdminContractController extends Controller
@@ -36,15 +36,15 @@ class AdminContractController extends Controller
         $query = Contract::with(['listing', 'landlord', 'tenant', 'admin'])
             ->orderBy('created_at', 'desc');
 
-        if (!empty($filters['status'])) {
+        if (! empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
 
-        if (!empty($filters['landlord_id'])) {
+        if (! empty($filters['landlord_id'])) {
             $query->where('landlord_id', $filters['landlord_id']);
         }
 
-        if (!empty($filters['tenant_id'])) {
+        if (! empty($filters['tenant_id'])) {
             $query->where('tenant_id', $filters['tenant_id']);
         }
 
@@ -66,9 +66,9 @@ class AdminContractController extends Controller
      */
     public function terminate(AdminTerminateContractRequest $request, Contract $contract): JsonResponse
     {
-        if (!$contract->canBeTerminated()) {
+        if (! $contract->canBeTerminated()) {
             return response()->json([
-                'message' => 'Only active contracts can be terminated'
+                'message' => 'Only active contracts can be terminated',
             ], 422);
         }
 
@@ -84,13 +84,13 @@ class AdminContractController extends Controller
             actor: $request->user(),
             action: 'contract_force_terminated',
             subject: $contract,
-            description: "Admin force terminated contract",
+            description: 'Admin force terminated contract',
             severity: 'critical'
         );
 
         return response()->json([
             'message' => 'Contract terminated by admin',
-            'contract' => $contract->fresh()
+            'contract' => $contract->fresh(),
         ]);
     }
 }

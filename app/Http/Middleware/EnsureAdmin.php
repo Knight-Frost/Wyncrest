@@ -26,23 +26,23 @@ class EnsureAdmin
         // After auth:sanctum middleware runs, $request->user() returns the authenticated user
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json([
-                'message' => 'Unauthenticated.'
+                'message' => 'Unauthenticated.',
             ], 401);
         }
 
         // Check if the authenticated user is from the Admin model
-        if (!($user instanceof \App\Models\Admin)) {
+        if (! ($user instanceof \App\Models\Admin)) {
             return response()->json([
-                'message' => 'This action is only available to administrators.'
+                'message' => 'This action is only available to administrators.',
             ], 403);
         }
 
         // Check if admin is active
-        if (!$user->is_active) {
+        if (! $user->is_active) {
             return response()->json([
-                'message' => 'Your admin account has been deactivated.'
+                'message' => 'Your admin account has been deactivated.',
             ], 403);
         }
 

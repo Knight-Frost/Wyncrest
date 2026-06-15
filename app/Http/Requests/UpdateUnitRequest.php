@@ -2,13 +2,13 @@
 
 namespace App\Http\Requests;
 
-use Illuminate\Foundation\Http\FormRequest;
 use App\Enums\UnitAvailabilityStatus;
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
  * UpdateUnitRequest
- * 
+ *
  * Validates unit update data.
  * All fields optional for partial updates.
  */
