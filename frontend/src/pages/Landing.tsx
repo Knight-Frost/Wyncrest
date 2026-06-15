@@ -323,9 +323,19 @@ export function Landing() {
 
       {/* roles */}
       <section className="nx-section alt" id="roles">
-        <div className="nx-wrap">
-          <span className="nx-eyebrow" data-reveal>Choose your path</span>
-          <h2 className="nx-h2" data-reveal>One platform, made for each side of the lease.</h2>
+        <div className="nx-wrap nx-roles-split">
+          <div className="nx-roles-intro" data-reveal>
+            <span className="nx-eyebrow">Choose your path</span>
+            <h2 className="nx-h2">One platform, made for each side of the lease.</h2>
+            <p className="nx-lead">
+              Whether you are searching for a place to live or running a portfolio of homes, Nexus
+              gives each side of the lease its own secure, purpose-built workspace.
+            </p>
+            <div className="nx-roles-note">
+              <span>{Ic.shield}</span>
+              Every account is verified and every action is logged.
+            </div>
+          </div>
           <div className="nx-roles">
             {roles.map((r) => (
               <Link className={'nx-role' + (r.feature ? ' feature' : '')} to={exploreTo} key={r.t} data-reveal>
