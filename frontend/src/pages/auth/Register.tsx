@@ -125,7 +125,7 @@ export function Register() {
   ];
 
   return (
-    <AuthScene nav="full" left={<LeftPanel />} footer={FOOTER} form={
+    <AuthScene left={<LeftPanel />} footer={FOOTER} form={
       <FormCard label="Create your account">
         <h1 className="font-display text-3xl font-medium text-ink-950">Create your account</h1>
         <p className="mt-2 text-sm leading-relaxed text-ink-500">

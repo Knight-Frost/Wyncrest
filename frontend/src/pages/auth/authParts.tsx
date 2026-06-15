@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- shared auth parts module
    intentionally exports components alongside icons and style constants. */
 import { forwardRef, useState, type ReactNode, type SVGProps } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { cn } from '@/lib/cn';
 import heroImg from '@/assets/auth/property-hero.jpg';
 
@@ -95,6 +95,11 @@ export const Icons = {
       <path d="m6 9 6 6 6-6" />
     </I>
   ),
+  arrowLeft: (p: SVGProps<SVGSVGElement>) => (
+    <I {...p}>
+      <path d="M19 12H5M11 6l-6 6 6 6" />
+    </I>
+  ),
   apple: (p: SVGProps<SVGSVGElement>) => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...p}>
       <path d="M16.4 12.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.8-3.5.8s-1.8-.8-3-.8c-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7 2-1.1 2.8-2.2c.9-1.3 1.2-2.5 1.3-2.6-.1 0-2.5-1-2.5-3.8zM14.3 5.6c.6-.8 1.1-1.9 1-3-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-1 2.8 1 .1 2-.5 2.7-1.2z" />
@@ -141,37 +146,31 @@ interface FooterItem {
   sub: string;
 }
 
-function AuthNav({ variant }: { variant: 'full' | 'minimal' }) {
+/** Minimal, contextual auth nav: logo home, a quiet exit, and the opposite action. */
+function AuthNav() {
+  const { pathname } = useLocation();
+  const onRegister = pathname.startsWith('/register');
   return (
     <header className="flex items-center justify-between px-6 py-5 sm:px-10">
       <AuthLogo />
-      {variant === 'full' && (
-        <>
-          <nav className="hidden items-center gap-8 lg:flex">
-            {[
-              { l: 'Listings', h: '/#listings' },
-              { l: 'How it works', h: '/#how' },
-              { l: 'Security', h: '/#trust' },
-              { l: 'For you', h: '/#roles' },
-            ].map((it) => (
-              <a key={it.l} href={it.h} className="text-sm text-ink-700 transition hover:text-brand-400">
-                {it.l}
-              </a>
-            ))}
-          </nav>
-          <div className="flex items-center gap-3 sm:gap-5">
-            <Link to="/login" className="text-sm font-medium text-ink-800 transition hover:text-ink-950">
-              Sign in
-            </Link>
-            <Link
-              to="/register"
-              className="rounded-lg border border-brand-600 px-4 py-2 text-sm font-medium text-brand-400 transition hover:bg-brand-600 hover:text-canvas"
-            >
-              Request access
-            </Link>
-          </div>
-        </>
-      )}
+      <div className="flex items-center gap-2 sm:gap-5">
+        <Link
+          to="/"
+          className="hidden items-center gap-1.5 text-sm text-ink-600 transition hover:text-ink-900 sm:inline-flex"
+        >
+          <Icons.arrowLeft width={16} height={16} />
+          Back to home
+        </Link>
+        <span className="hidden text-sm text-ink-500 md:inline">
+          {onRegister ? 'Already a member?' : 'New to Nexus?'}
+        </span>
+        <Link
+          to={onRegister ? '/login' : '/register'}
+          className="rounded-lg border border-brand-600/70 px-4 py-2 text-sm font-medium text-brand-400 transition hover:bg-brand-600 hover:text-canvas"
+        >
+          {onRegister ? 'Sign in' : 'Create account'}
+        </Link>
+      </div>
     </header>
   );
 }
@@ -195,12 +194,10 @@ function AuthFooter({ items }: { items: FooterItem[] }) {
 }
 
 export function AuthScene({
-  nav,
   left,
   form,
   footer,
 }: {
-  nav: 'full' | 'minimal';
   left: ReactNode;
   form: ReactNode;
   footer: FooterItem[];
@@ -213,7 +210,7 @@ export function AuthScene({
       </div>
 
       <div className="relative z-10 flex min-h-screen flex-col">
-        <AuthNav variant={nav} />
+        <AuthNav />
         <main className="grid flex-1 items-center gap-12 px-6 py-6 sm:px-10 lg:grid-cols-[1.05fr_minmax(420px,540px)] lg:gap-16">
           <div className="hidden lg:block animate-rise">{left}</div>
           <div className="flex w-full justify-center lg:justify-end">{form}</div>

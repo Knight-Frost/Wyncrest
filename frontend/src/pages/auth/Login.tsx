@@ -80,7 +80,7 @@ export function Login() {
     toast(`${what} isn’t available yet. Use email and password for now.`, 'info');
 
   return (
-    <AuthScene nav="minimal" left={<LeftPanel />} footer={FOOTER} form={
+    <AuthScene left={<LeftPanel />} footer={FOOTER} form={
       <FormCard label="Welcome back">
         <h1 className="text-center font-display text-4xl font-medium text-ink-950">Welcome back</h1>
         <p className="mx-auto mt-2 max-w-xs text-center text-sm leading-relaxed text-ink-500">
