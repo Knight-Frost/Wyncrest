@@ -36,6 +36,16 @@ class SecurityHeaders
         // Permissions policy (formerly Feature-Policy)
         $response->headers->set('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
 
+        // Content Security Policy. This middleware only guards the JSON API, which
+        // never serves HTML or executes scripts, so we can lock it down completely.
+        $response->headers->set('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+
+        // Strict-Transport-Security: only emit over HTTPS so local HTTP dev is unaffected.
+        // Tells browsers to refuse plain-HTTP connections to this host for a year.
+        if ($request->isSecure()) {
+            $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+        }
+
         // Remove server information leakage
         $response->headers->remove('X-Powered-By');
         $response->headers->remove('Server');
