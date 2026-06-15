@@ -30,7 +30,7 @@ function LeftPanel() {
         The unified home for property rentals.
       </h1>
       <p className="mt-5 max-w-md text-base leading-relaxed text-ink-500">
-        Manage properties, tenants, contracts, and payments — all in one secure platform built for
+        Manage properties, tenants, contracts, and payments, all in one secure platform built for
         trust.
       </p>
 
@@ -77,7 +77,7 @@ export function Login() {
   }
 
   const notAvailable = (what: string) => () =>
-    toast(`${what} isn’t available yet — use email and password for now.`, 'info');
+    toast(`${what} isn’t available yet. Use email and password for now.`, 'info');
 
   return (
     <AuthScene nav="minimal" left={<LeftPanel />} footer={FOOTER} form={

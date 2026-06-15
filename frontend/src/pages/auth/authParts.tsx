@@ -345,3 +345,32 @@ export function PasswordInput({
     </span>
   );
 }
+
+/** Live password rules that highlight as each is satisfied. Mirrors the backend
+ *  policy: min 8 chars, mixed case, and at least one number. */
+export function PasswordChecklist({ value }: { value: string }) {
+  const rules = [
+    { label: 'At least 8 characters', ok: value.length >= 8 },
+    { label: 'Upper & lowercase letters', ok: /[a-z]/.test(value) && /[A-Z]/.test(value) },
+    { label: 'At least one number', ok: /\d/.test(value) },
+  ];
+  return (
+    <ul className="mt-2.5 grid gap-1.5">
+      {rules.map((r) => (
+        <li key={r.label} className="flex items-center gap-2 text-xs">
+          <span
+            className={cn(
+              'flex h-4 w-4 items-center justify-center rounded-full border transition',
+              r.ok ? 'border-brand-500 bg-brand-500/15 text-brand-400' : 'border-ink-300 text-transparent',
+            )}
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 13l4 4L19 7" />
+            </svg>
+          </span>
+          <span className={cn('transition-colors', r.ok ? 'text-brand-400' : 'text-ink-500')}>{r.label}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}

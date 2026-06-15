@@ -12,6 +12,7 @@ import {
   FieldLabel,
   FormCard,
   Icons,
+  PasswordChecklist,
   PasswordInput,
 } from './authParts';
 
@@ -38,7 +39,7 @@ function LeftPanel() {
         The unified home for property <span className="italic text-brand-400">rentals.</span>
       </h1>
       <p className="mt-5 max-w-md text-base leading-relaxed text-ink-500">
-        Everything you need to find, manage, and grow property rentals — in one secure, intelligent
+        Everything you need to find, manage, and grow property rentals in one secure, intelligent
         platform.
       </p>
 
@@ -128,7 +129,7 @@ export function Register() {
       <FormCard label="Create your account">
         <h1 className="font-display text-3xl font-medium text-ink-950">Create your account</h1>
         <p className="mt-2 text-sm leading-relaxed text-ink-500">
-          Join Nexus as a tenant or a landlord — and manage everything with confidence.
+          Join Nexus as a tenant or a landlord and manage everything with confidence.
         </p>
 
         <form onSubmit={onSubmit} className="mt-7 space-y-5" noValidate>
@@ -222,11 +223,8 @@ export function Register() {
           <label className="block">
             <FieldLabel>Password</FieldLabel>
             <PasswordInput value={form.password} onChange={set('password')} invalid={!!errors.password} placeholder="Create a strong password" autoComplete="new-password" />
-            {errors.password ? (
-              <span className="mt-1 block text-xs text-danger-500">{errors.password}</span>
-            ) : (
-              <span className="mt-1.5 block text-xs text-ink-500">At least 8 characters, with mixed case and a number.</span>
-            )}
+            {errors.password && <span className="mt-1 block text-xs text-danger-500">{errors.password}</span>}
+            <PasswordChecklist value={form.password} />
           </label>
 
           {/* Confirm */}
