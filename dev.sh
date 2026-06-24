@@ -122,7 +122,7 @@ printf '\n'
 ok "Nexus is running:"
 printf '   %s→%s  App (SPA):  %shttp://localhost:%s%s\n' "$c_green" "$c_reset" "$c_blue" "$WEB_PORT" "$c_reset"
 printf '   %s→%s  API:        http://localhost:%s\n' "$c_green" "$c_reset" "$API_PORT"
-printf '   %sDemo logins (password: "password"): admin@nexus.com · landlord1@example.com · tenant1@example.com%s\n' "$c_yellow" "$c_reset"
+printf '   %sDemo logins (password: "password"): admin@wyncrest.test · landlord.verified@wyncrest.test · tenant.showcase@wyncrest.test%s\n' "$c_yellow" "$c_reset"
 printf '   Press Ctrl+C to stop.\n\n'
 
 # Wait on the servers; if any exits, the trap tears the rest down.
