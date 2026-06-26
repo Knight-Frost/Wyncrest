@@ -338,6 +338,52 @@ One-shot dev (server + queue + logs + vite): `composer run dev`.
 - Configure a real queue worker and scheduler (`php artisan schedule:run` cron).
 - Point `CORS_ALLOWED_ORIGINS` / `SANCTUM_STATEFUL_DOMAINS` at the deployed SPA.
 
+### 21a. Live EC2 Demo Deployment (set up June 2026)
+
+A **demo/staging** instance is live. This is a showcase box, **not** hardened production
+(see caveats below) — do not treat it as the production environment.
+
+- **URL:** http://18.216.245.190 — **HTTP only, no domain/TLS.** (So Stripe webhooks
+  and secure cookies do NOT work; auth is Bearer-token so login works fine.)
+- **Host:** `ec2-user@18.216.245.190` · region us-east-2 (Ohio) · instance
+  `i-0f4e0733ca1f463bc` · t3.micro (912 MB RAM) · Amazon Linux 2023.
+  SSH key: `~/Downloads/Wyncrest.pem` (must be `chmod 600`). Ports 22 + 80 open in the SG.
+- **App dir:** `/var/www/wyncrest` (owner `ec2-user:apache`; `storage/`,
+  `bootstrap/cache/`, `database/` are `775` group-writable so php-fpm — user `apache` — can write).
+- **Stack:** PHP 8.3 + php-fpm (socket `/run/php-fpm/www.sock`,
+  `listen.acl_users=apache,nginx`) · nginx (`/etc/nginx/conf.d/wyncrest.conf`) · composer.
+  A **2 GB swapfile** (`/swapfile`) was added so `composer install` doesn't OOM on 912 MB.
+  Both services run under **systemd** (`enable --now`), so they survive reboots and are
+  independent of any SSH session (closing your laptop terminal does NOT stop the site).
+- **Serving model — single origin:** nginx serves the SPA build (`frontend/dist`) at `/`
+  with an `index.html` fallback, and proxies the backend prefixes **`/api`, `/sanctum`,
+  `/storage`, `/up`** to Laravel's `public/index.php`. Because it's same-origin, the SPA
+  needs **no** API-URL env (`lib/api.ts` defaults `baseURL` to `/api`) and there's no CORS.
+- **Data layer:** SQLite at `/var/www/wyncrest/database/database.sqlite`;
+  `QUEUE_CONNECTION=sync` (no worker needed), `CACHE`/`SESSION=database`,
+  `APP_ENV=production`, `APP_DEBUG=false`.
+- **Demo data:** the dev demo graph is seeded **in a production env** via
+  `NEXUS_SEED_MODE=development` + `NEXUS_ALLOW_DEV_SEED_IN_PROD=true` in `.env`.
+  ⚠️ The demo seeders depend on **faker (a `require-dev` package)** — `composer install
+  --no-dev` breaks seeding with `Call to undefined function fake()`, so the **full**
+  dependency set is installed on this box. A genuine production deploy would keep
+  `--no-dev` and seed only the safe baseline (`NEXUS_SEED_MODE=production`).
+  Demo logins (password `password`): `admin@wyncrest.test`, `landlord.verified@wyncrest.test`,
+  `tenant.showcase@wyncrest.test`, `tenant.active@wyncrest.test`.
+- **Redeploy after code changes:** build the frontend locally
+  (`cd frontend && npm run build`), `rsync -az --delete` the tree to
+  `/var/www/wyncrest` (exclude `.git node_modules vendor .env *.sqlite Claude_Study_Guide`),
+  then on the server: `composer install` (if deps changed) → `php artisan migrate` (or
+  `migrate:fresh --seed --force` to reset demo data) → `php artisan config:cache route:cache`
+  → `sudo systemctl reload php-fpm nginx`.
+- **Cost note:** a running instance bills per hour regardless of traffic. Use EC2 console
+  **Stop** to pause compute cost (keeps the EBS disk + setup); restarting yields a **new
+  public IP** unless an Elastic IP is attached. Local AWS CLI is **not** configured —
+  security-group / instance changes must be done in the AWS console.
+- **Caveats (not done — this is a demo):** no TLS/domain, no real Stripe/Twilio/Google
+  creds (those features stay gated off), no queue worker or scheduler cron, dev
+  dependencies present, SQLite rather than MySQL/Postgres.
+
 ## 22. Known Risks
 
 - All admins are super-admins (granular admin RBAC is a future phase).
