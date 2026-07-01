@@ -1,5 +1,14 @@
 # Claude Project Knowledge - Nexus
 
+> **Internal AI working context.** This folder documents how Claude should behave
+> and think while working on this project. It is not user-facing product
+> documentation, is not the public source of truth for Wyncrest's features or
+> status (that is `CLAUDE.md` at the repo root and the `docs/` folder), and it
+> retains the project's old "Nexus" working name in its own historical prose
+> intentionally, since it is a study/decision log, not branding surface. It lives
+> under `.internal/` so it does not sit beside the application source as if it
+> were part of the product.
+
 **Read this first before doing any Nexus work.**
 
 This folder is the project memory for Nexus. It was built by studying six learning archives in `Claude_Study_Guide/` and combining those lessons with established Nexus design direction.
