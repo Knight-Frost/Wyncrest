@@ -32,6 +32,8 @@ class AuditLogResource extends JsonResource
             'summary' => $this->description ?? AuditClassifier::actionLabel($this->action),
             'subject_label' => $this->resolveSubjectLabel(),
             'ip_address' => $this->ip_address,
+            // Tamper-evidence: this row's SHA-256 chain hash (short form shown as a pill).
+            'hash' => $this->hash,
         ];
     }
 

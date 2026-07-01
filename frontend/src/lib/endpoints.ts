@@ -28,6 +28,7 @@ import type {
   AuditLog,
   AuditLogDetail,
   AuditSummary,
+  AuditVerify,
   AuthResponse,
   Contract,
   ConversationDetail,
@@ -72,6 +73,19 @@ export interface AnalyticsResponse {
 function activePortalClient() {
   const p = getActivePortal();
   return p ? portalHttp[p] : http;
+}
+
+/**
+ * The browser's IANA timezone (e.g. "America/New_York"), sent to endpoints that
+ * filter by calendar day so the server resolves day boundaries on the user's
+ * clock rather than UTC. Falls back to UTC if unavailable.
+ */
+function clientTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
 }
 
 /** Response from GET /auth/providers */
@@ -850,8 +864,11 @@ export const adminApi = {
     page?: number;
     per_page?: number;
   }): Promise<Paginated<AuditLog>> {
+    // Send the client timezone so calendar-day filters (e.g. "Last 7 days")
+    // resolve on the admin's own clock — keeping the list consistent with the
+    // summary counts (backend: AuditLogService::dateBoundsUtc).
     const { data } = await portalHttp.admin.get<Paginated<AuditLog>>('/admin/audit-logs', {
-      params,
+      params: { ...params, tz: clientTimezone() },
     });
     return data;
   },
@@ -860,7 +877,14 @@ export const adminApi = {
     return data;
   },
   async auditSummary(): Promise<AuditSummary> {
-    const { data } = await portalHttp.admin.get<AuditSummary>('/admin/audit-logs/summary');
+    const { data } = await portalHttp.admin.get<AuditSummary>('/admin/audit-logs/summary', {
+      params: { tz: clientTimezone() },
+    });
+    return data;
+  },
+  /** Recompute + verify the SHA-256 audit hash chain (whole table). */
+  async auditVerify(): Promise<AuditVerify> {
+    const { data } = await portalHttp.admin.get<AuditVerify>('/admin/audit-logs/verify');
     return data;
   },
   async auditExport(params?: {
@@ -872,7 +896,10 @@ export const adminApi = {
     search?: string;
     sort?: 'newest' | 'oldest';
   }): Promise<void> {
-    await downloadCsv(portalHttp.admin, '/admin/audit-logs/export', 'audit-logs.csv', params);
+    await downloadCsv(portalHttp.admin, '/admin/audit-logs/export', 'audit-logs.csv', {
+      ...params,
+      tz: clientTimezone(),
+    });
   },
   async contracts(params?: { page?: number }): Promise<Paginated<Contract>> {
     const { data } = await portalHttp.admin.get<Paginated<Contract>>('/admin/contracts', {

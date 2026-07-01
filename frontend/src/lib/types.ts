@@ -270,6 +270,8 @@ export interface AuditLog {
   summary: string;
   subject_label: string | null;
   ip_address: string | null;
+  /** This row's SHA-256 chain hash (64 hex chars). */
+  hash: string;
 }
 
 /** Additional fields returned by GET /admin/audit-logs/{id}. */
@@ -281,8 +283,20 @@ export interface AuditLogDetail extends AuditLog {
   metadata: Record<string, unknown> | null;
   old_values: Record<string, unknown> | null;
   new_values: Record<string, unknown> | null;
+  /** The prior row's hash this entry commits to (GENESIS for the first row). */
+  previous_hash: string;
   why_it_matters: string;
   recommended_steps: { label: string; to: string | null }[];
+}
+
+/** Result of GET /admin/audit-logs/verify — real SHA-256 chain recomputation. */
+export interface AuditVerify {
+  intact: boolean;
+  verified: number;
+  total: number;
+  head: string | null;
+  broken_at: number | null;
+  checked_at: string;
 }
 
 export interface AuditInsight {
@@ -298,6 +312,12 @@ export interface AuditSummaryMetric {
   trend?: AuditTrend;
 }
 
+/** A headline stat-strip figure (value + short descriptor). */
+export interface AuditStat {
+  value: number;
+  sub: string;
+}
+
 export interface AuditSummary {
   metrics: {
     critical_today: AuditSummaryMetric;
@@ -307,6 +327,11 @@ export interface AuditSummary {
     needs_review: Omit<AuditSummaryMetric, 'trend'>;
   };
   insights: AuditInsight[];
+  stats: {
+    events_today: AuditStat;
+    total_on_record: AuditStat;
+    actors_active_24h: AuditStat;
+  };
 }
 
 export interface Feature {

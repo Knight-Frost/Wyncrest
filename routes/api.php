@@ -383,6 +383,8 @@ Route::middleware(['metrics'])->group(function () {
             Route::get('/audit-logs', [AdminAuditController::class, 'index']);
             Route::get('/audit-logs/summary', [AdminAuditController::class, 'summary']);
             Route::get('/audit-logs/export', [AdminAuditController::class, 'export']);
+            // Declared BEFORE {auditLog} so "verify" is not captured as an id.
+            Route::get('/audit-logs/verify', [AdminAuditController::class, 'verify']);
             Route::get('/audit-logs/{auditLog}', [AdminAuditController::class, 'show']);
         });
 

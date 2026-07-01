@@ -20,6 +20,17 @@ class AuditClassifier
         'user_login' => 'Access',
         'login_rate_limited' => 'Access',
 
+        // Access control (admin team & permissions)
+        'admin_invited' => 'Access',
+        'admin_invite_resent' => 'Access',
+        'admin_invite_revoked' => 'Access',
+        'admin_invite_accepted' => 'Access',
+        'admin_capabilities_updated' => 'Access',
+        'admin_promoted_super' => 'Access',
+        'admin_demoted_super' => 'Access',
+        'admin_deactivated' => 'Access',
+        'admin_reactivated' => 'Access',
+
         // Users
         'user_created' => 'Users',
         'email_verified' => 'Users',
@@ -207,6 +218,17 @@ class AuditClassifier
             'user_login' => 'A user signed in. Review if you do not recognise the actor or location.',
             'login_rate_limited' => 'Sign-in attempts were rate-limited for this account. This may indicate a brute-force attempt.',
 
+            // Access control (admin team & permissions)
+            'admin_invited' => 'A new admin was invited to the team. Confirm the inviter and the granted access are correct.',
+            'admin_invite_resent' => 'An admin invitation email was resent.',
+            'admin_invite_revoked' => 'A pending admin invitation was revoked before it was accepted.',
+            'admin_invite_accepted' => 'An invited admin set their password and activated their account.',
+            'admin_capabilities_updated' => 'A regular admin\'s capabilities were changed. Review the before/after values.',
+            'admin_promoted_super' => 'An admin was promoted to Super Admin — full platform authority. Confirm this was authorised.',
+            'admin_demoted_super' => 'A Super Admin was demoted to a regular admin.',
+            'admin_deactivated' => 'An admin\'s console access was deactivated.',
+            'admin_reactivated' => 'An admin\'s console access was reactivated.',
+
             // Users
             'user_created' => 'A new user registered on the platform.',
             'email_verified' => 'A user verified their email address.',
@@ -310,6 +332,15 @@ class AuditClassifier
 
         if ($action === 'user_login') {
             return [];
+        }
+
+        // Access-control (admin team & permissions) events
+        if (in_array($action, [
+            'admin_invited', 'admin_invite_resent', 'admin_invite_revoked', 'admin_invite_accepted',
+            'admin_capabilities_updated', 'admin_promoted_super', 'admin_demoted_super',
+            'admin_deactivated', 'admin_reactivated',
+        ])) {
+            return [['label' => 'Manage users & permissions', 'to' => '/app/manage-access']];
         }
 
         // User account actions

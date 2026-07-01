@@ -42,6 +42,7 @@ const LandlordReviews      = lazy(() => import('@/pages/landlord/LandlordReviews
 // Admin
 const Moderation              = lazy(() => import('@/pages/admin/Moderation').then((m) => ({ default: m.Moderation })));
 const AuditLogs               = lazy(() => import('@/pages/admin/AuditLogs').then((m) => ({ default: m.AuditLogs })));
+const AuditLogDetail          = lazy(() => import('@/pages/admin/AuditLogDetail').then((m) => ({ default: m.AuditLogDetail })));
 const UsersPage               = lazy(() => import('@/pages/admin/UsersPage').then((m) => ({ default: m.UsersPage })));
 const ManageAccessPage        = lazy(() => import('@/pages/admin/ManageAccessPage').then((m) => ({ default: m.ManageAccessPage })));
 const VerificationModeration  = lazy(() => import('@/pages/admin/VerificationModeration').then((m) => ({ default: m.VerificationModeration })));
@@ -325,6 +326,14 @@ export default function App() {
           element={
             <RequireRole roles={['admin']}>
               <Lazy><AuditLogs /></Lazy>
+            </RequireRole>
+          }
+        />
+        <Route
+          path="audit/:id"
+          element={
+            <RequireRole roles={['admin']}>
+              <Lazy><AuditLogDetail /></Lazy>
             </RequireRole>
           }
         />

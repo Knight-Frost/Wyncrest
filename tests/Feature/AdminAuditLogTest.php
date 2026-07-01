@@ -6,6 +6,7 @@ use App\Models\Admin;
 use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -578,6 +579,13 @@ class AdminAuditLogTest extends TestCase
         $this->assertContains('/app/moderation', $routes);
     }
 
+    public function test_show_returns_404_for_missing_audit_log(): void
+    {
+        Sanctum::actingAs($this->admin, [], 'sanctum');
+
+        $this->getJson('/api/admin/audit-logs/999999')->assertStatus(404);
+    }
+
     // =========================================================================
     // Export
     // =========================================================================
@@ -608,5 +616,94 @@ class AdminAuditLogTest extends TestCase
         $this->assertStringContainsString('Area', $content);
         $this->assertStringContainsString('Action', $content);
         $this->assertStringContainsString('Severity', $content);
+    }
+
+    // =========================================================================
+    // Hash chain (tamper evidence)
+    // =========================================================================
+
+    public function test_new_audit_logs_are_hash_chained(): void
+    {
+        AuditLog::factory()->count(3)->create();
+
+        $logs = AuditLog::orderBy('id')->get();
+
+        // First row links to the genesis anchor; every hash is 64 hex chars.
+        $this->assertSame(AuditLog::GENESIS_HASH, $logs[0]->previous_hash);
+        foreach ($logs as $log) {
+            $this->assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $log->hash);
+        }
+
+        // Each row commits to the previous row's hash.
+        for ($i = 1; $i < $logs->count(); $i++) {
+            $this->assertSame($logs[$i - 1]->hash, $logs[$i]->previous_hash);
+        }
+    }
+
+    public function test_verify_reports_intact_chain(): void
+    {
+        AuditLog::factory()->count(5)->create();
+        Sanctum::actingAs($this->admin, [], 'sanctum');
+
+        $response = $this->getJson('/api/admin/audit-logs/verify');
+        $response->assertStatus(200);
+
+        $response->assertJson([
+            'intact' => true,
+            'verified' => 5,
+            'total' => 5,
+            'broken_at' => null,
+        ]);
+
+        // Head is the newest row's hash.
+        $head = AuditLog::orderByDesc('id')->value('hash');
+        $this->assertSame($head, $response->json('head'));
+    }
+
+    public function test_verify_detects_tampering(): void
+    {
+        AuditLog::factory()->count(4)->create();
+
+        // Tamper with a historical row's content directly in the DB, bypassing
+        // the model — its stored hash no longer matches the recomputed one.
+        $target = AuditLog::orderBy('id')->skip(1)->first();
+        DB::table('audit_logs')->where('id', $target->id)->update(['action' => 'tampered_action']);
+
+        Sanctum::actingAs($this->admin, [], 'sanctum');
+
+        $response = $this->getJson('/api/admin/audit-logs/verify');
+        $response->assertStatus(200);
+
+        $this->assertFalse($response->json('intact'));
+        $this->assertSame($target->id, $response->json('broken_at'));
+        $this->assertLessThan($response->json('total'), $response->json('verified'));
+    }
+
+    public function test_verify_requires_admin(): void
+    {
+        $this->getJson('/api/admin/audit-logs/verify')->assertStatus(401);
+
+        $tenant = User::factory()->tenant()->create();
+        Sanctum::actingAs($tenant, [], 'sanctum');
+        $this->getJson('/api/admin/audit-logs/verify')->assertStatus(403);
+    }
+
+    public function test_show_includes_hash_chain_fields(): void
+    {
+        $log = AuditLog::factory()->create();
+        Sanctum::actingAs($this->admin, [], 'sanctum');
+
+        $response = $this->getJson("/api/admin/audit-logs/{$log->id}");
+        $response->assertStatus(200)->assertJsonStructure(['hash', 'previous_hash']);
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $response->json('hash'));
+    }
+
+    public function test_index_rows_include_hash(): void
+    {
+        AuditLog::factory()->count(2)->create();
+        Sanctum::actingAs($this->admin, [], 'sanctum');
+
+        $response = $this->getJson('/api/admin/audit-logs');
+        $response->assertStatus(200)->assertJsonStructure(['data' => [['hash']]]);
     }
 }

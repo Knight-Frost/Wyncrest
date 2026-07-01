@@ -3,10 +3,9 @@
  *
  * critical → danger (oxblood)  — most severe, needs action
  * warning  → warning (clay)    — review recommended
- * info     → neutral           — routine information
+ * info     → info (blue)       — routine information
  *
  * Uses SemanticBadge so the color contract is consistent with the card system.
- * The --audit-* token tint on the icon ring is kept by AuditSummaryCard (page-scoped).
  */
 import { SemanticBadge } from '@/components/cards';
 import type { SemanticRole } from '@/components/cards/variants';
@@ -16,7 +15,7 @@ function severityRole(severity: AuditLog['severity']): SemanticRole {
   switch (severity) {
     case 'critical': return 'danger';
     case 'warning':  return 'warning';
-    default:         return 'neutral';
+    default:         return 'info';
   }
 }
 

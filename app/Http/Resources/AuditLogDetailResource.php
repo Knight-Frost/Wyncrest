@@ -40,6 +40,9 @@ class AuditLogDetailResource extends AuditLogResource
             'old_values' => $this->old_values,
             'new_values' => $this->new_values,
 
+            // Hash-chain link for this entry (this row + the one it commits to).
+            'previous_hash' => $this->previous_hash,
+
             // Classifier-derived guidance
             'why_it_matters' => AuditClassifier::whyItMatters($this->action, $this->severity),
             'recommended_steps' => AuditClassifier::recommendedSteps(

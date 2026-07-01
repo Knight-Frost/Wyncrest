@@ -219,6 +219,117 @@ class AuditLogService
         return [
             'metrics' => $metrics,
             'insights' => $insights,
+            'stats' => $this->headlineStats($tz, $todayStart, $activityToday),
+        ];
+    }
+
+    /**
+     * Headline stat-strip figures for the Audit page header (all real):
+     *   events_today       count today + distinct areas today
+     *   total_on_record    lifetime count + "since <first month>"
+     *   actors_active_24h  distinct actors in the last 24h + which kinds
+     *
+     * Chain integrity is intentionally NOT here — it comes from verifyChain()
+     * so the (O(n)) recompute runs once per page load, not on every summary.
+     *
+     * @return array<string, mixed>
+     */
+    private function headlineStats(string $tz, Carbon $todayStart, int $activityToday): array
+    {
+        $categoriesToday = AuditLog::where('created_at', '>=', $todayStart)
+            ->pluck('action')
+            ->map(fn ($action) => AuditClassifier::area($action))
+            ->unique()
+            ->count();
+
+        $total = AuditLog::count();
+        $firstAt = AuditLog::min('created_at');
+        $since = $firstAt ? Carbon::parse($firstAt)->timezone($tz)->format('M Y') : null;
+
+        // Distinct actors over the trailing 24h; null actor collapses to one
+        // "system" identity. Descriptor lists only the kinds that actually appear.
+        $since24h = Carbon::now($tz)->subDay()->utc();
+        $recentActors = AuditLog::where('created_at', '>=', $since24h)
+            ->get(['actor_type', 'actor_id']);
+
+        $actorKeys = $recentActors
+            ->map(fn ($log) => $log->actor_type ? $log->actor_type.'#'.$log->actor_id : 'system')
+            ->unique();
+
+        $kinds = [];
+        if ($recentActors->contains(fn ($l) => $l->actor_type === Admin::class)) {
+            $kinds[] = 'admins';
+        }
+        if ($recentActors->contains(fn ($l) => $l->actor_type === User::class)) {
+            $kinds[] = 'users';
+        }
+        if ($recentActors->contains(fn ($l) => $l->actor_type === null)) {
+            $kinds[] = 'system';
+        }
+
+        return [
+            'events_today' => [
+                'value' => $activityToday,
+                'sub' => 'across '.$categoriesToday.' '.($categoriesToday === 1 ? 'category' : 'categories'),
+            ],
+            'total_on_record' => [
+                'value' => $total,
+                'sub' => $since ? 'since '.$since : 'no events yet',
+            ],
+            'actors_active_24h' => [
+                'value' => $actorKeys->count(),
+                'sub' => $kinds ? implode(', ', $kinds) : 'no activity',
+            ],
+        ];
+    }
+
+    /**
+     * Recompute the SHA-256 hash chain over the whole table (oldest → newest)
+     * and report whether it is intact. This is REAL verification: it rebuilds
+     * each row's canonical payload with the same serialization used at write
+     * time and compares both the stored hash and the previous-hash link.
+     *
+     * A tampered historical row (content edited, or a hash/link overwritten)
+     * produces a mismatch that is reported at `broken_at` (the first bad id).
+     *
+     * @return array{intact: bool, verified: int, total: int, head: ?string, broken_at: ?int, checked_at: string}
+     */
+    public function verifyChain(): array
+    {
+        $previous = AuditLog::GENESIS_HASH;
+        $verified = 0;
+        $total = 0;
+        $head = null;
+        $brokenAt = null;
+
+        AuditLog::query()->orderBy('id')->chunk(500, function ($rows) use (&$previous, &$verified, &$total, &$head, &$brokenAt) {
+            foreach ($rows as $log) {
+                $total++;
+                $expected = AuditLog::chainHashFor($previous, $log->canonicalFields());
+
+                $linkOk = $log->previous_hash === $previous;
+                $hashOk = $log->hash === $expected;
+
+                if ($linkOk && $hashOk) {
+                    $verified++;
+                } elseif ($brokenAt === null) {
+                    $brokenAt = $log->id;
+                }
+
+                // Continue from the STORED hash so a single tampered row is
+                // localized rather than cascading a break through the tail.
+                $previous = $log->hash ?? $expected;
+                $head = $log->hash;
+            }
+        });
+
+        return [
+            'intact' => $brokenAt === null && $total === $verified,
+            'verified' => $verified,
+            'total' => $total,
+            'head' => $head,
+            'broken_at' => $brokenAt,
+            'checked_at' => now()->toIso8601String(),
         ];
     }
 

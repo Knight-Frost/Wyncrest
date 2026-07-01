@@ -74,6 +74,15 @@ class AdminAuditController extends Controller
     }
 
     /**
+     * Verify the audit hash chain and report integrity.
+     * Recomputes SHA-256 links over every row — no filters, whole chain.
+     */
+    public function verify(): JsonResponse
+    {
+        return response()->json($this->service->verifyChain());
+    }
+
+    /**
      * CSV export of filtered audit logs (max 5 000 rows).
      */
     public function export(Request $request): StreamedResponse
