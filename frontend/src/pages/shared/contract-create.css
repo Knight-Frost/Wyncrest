@@ -1,0 +1,106 @@
+/* ==========================================================================
+   CONTRACT CREATE — dedicated full page for landlord contract creation.
+   White Liquid Glass; token-driven; prefix `.cc-`. A spacious card panel with a
+   two-step (Details → Review) flow. Hairlines over shadows; generous padding.
+   ========================================================================== */
+
+.cc-page { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+
+/* ── panel card ───────────────────────────────────────────────────────────── */
+.cc-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-ink-200);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-sm);
+  padding: 28px;
+}
+
+.cc-steps { max-width: 360px; margin: 0 auto 28px; }
+
+.cc-general-error {
+  font-size: 13.5px;
+  color: var(--color-danger-600);
+  background: var(--color-danger-50);
+  border: 1px solid color-mix(in srgb, var(--color-danger-600) 20%, transparent);
+  border-radius: var(--radius-xl);
+  padding: 12px 16px;
+  margin-bottom: 20px;
+}
+
+/* ── form ─────────────────────────────────────────────────────────────────── */
+.cc-form { display: flex; flex-direction: column; gap: 20px; }
+.cc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+/* selected-listing summary chip */
+.cc-picked {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 12px 16px;
+  background: var(--color-brand-50);
+  border: 1px solid var(--color-brand-200, var(--color-ink-200));
+  border-radius: var(--radius-xl);
+}
+.cc-picked-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--color-brand-700); }
+.cc-picked-value { font-size: 14px; font-weight: 600; color: var(--color-ink-900); }
+
+/* GH₵ prefixed money input */
+.cc-money { position: relative; display: flex; align-items: center; }
+.cc-money-prefix {
+  position: absolute; left: 14px; font-size: 13px; font-weight: 600;
+  color: var(--color-ink-500); pointer-events: none;
+}
+.cc-money-input { padding-left: 46px; }
+
+/* ── review ───────────────────────────────────────────────────────────────── */
+.cc-review { display: flex; flex-direction: column; gap: 20px; }
+.cc-review-lead { font-size: 14px; color: var(--color-ink-600); }
+.cc-summary {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--color-ink-200);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+.cc-summary-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--color-ink-200);
+}
+.cc-summary-row:first-child { border-top: none; }
+.cc-summary-label { font-size: 13px; color: var(--color-ink-500); flex: 0 0 auto; }
+.cc-summary-value { font-size: 14px; font-weight: 600; color: var(--color-ink-900); text-align: right; min-width: 0; word-break: break-word; }
+
+.cc-note {
+  font-size: 13px; color: var(--color-ink-600);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-ink-200);
+  border-radius: var(--radius-xl);
+  padding: 12px 16px;
+}
+
+/* ── actions ──────────────────────────────────────────────────────────────── */
+.cc-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 8px; }
+
+/* ── success ──────────────────────────────────────────────────────────────── */
+.cc-success {
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px;
+  padding: 56px 24px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-ink-200);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-sm);
+}
+.cc-success-ico {
+  width: 68px; height: 68px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--color-success-50); color: var(--color-success-600);
+  margin-bottom: 4px;
+}
+.cc-success-title { font-family: var(--font-display); font-weight: 600; font-size: 24px; color: var(--color-ink-950); }
+.cc-success-text { font-size: 14px; color: var(--color-ink-500); max-width: 40ch; }
+
+/* ── responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .cc-card { padding: 20px; }
+  .cc-grid { grid-template-columns: 1fr; }
+  .cc-actions { flex-direction: column-reverse; }
+  .cc-actions > * { width: 100%; }
+}

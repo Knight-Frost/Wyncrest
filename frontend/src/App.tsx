@@ -53,6 +53,7 @@ const ReviewModeration        = lazy(() => import('@/pages/admin/ReviewModeratio
 
 // Shared
 const ContractsPage     = lazy(() => import('@/pages/shared/ContractsPage').then((m) => ({ default: m.ContractsPage })));
+const ContractCreatePage = lazy(() => import('@/pages/shared/ContractCreatePage').then((m) => ({ default: m.ContractCreatePage })));
 const ContractDetail    = lazy(() => import('@/pages/shared/ContractDetail').then((m) => ({ default: m.ContractDetail })));
 const LedgerPage        = lazy(() => import('@/pages/shared/LedgerPage').then((m) => ({ default: m.LedgerPage })));
 const Notifications     = lazy(() => import('@/pages/shared/Notifications').then((m) => ({ default: m.Notifications })));
@@ -150,6 +151,16 @@ export default function App() {
         <Route
           path="contracts"
           element={<Lazy><ContractsPage /></Lazy>}
+        />
+        {/* Landlord-only create page — declared BEFORE contracts/:id so "new"
+            isn't captured by the :id param. Guarded here + inside the page. */}
+        <Route
+          path="contracts/new"
+          element={
+            <RequireRole roles={['landlord']}>
+              <Lazy><ContractCreatePage /></Lazy>
+            </RequireRole>
+          }
         />
         <Route
           path="contracts/:id"

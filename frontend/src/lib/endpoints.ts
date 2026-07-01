@@ -648,11 +648,15 @@ export const landlordApi = {
   },
   async createContract(payload: {
     listing_id: number;
-    tenant_id: number;
+    // The landlord identifies the tenant by email; the API resolves it to a
+    // real tenant id server-side (StoreContractRequest::prepareForValidation).
+    tenant_email: string;
     rent_amount: number;
     payment_day: number;
     start_date: string;
-    end_date: string;
+    // Optional at the backend (`end_date` is nullable). Omit for an open-ended
+    // lease rather than sending an empty string.
+    end_date?: string;
   }): Promise<Contract> {
     const { data } = await portalHttp.landlord.post<{ contract: Contract }>(
       '/landlord/contracts',
