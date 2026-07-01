@@ -16,6 +16,7 @@ use App\Http\Controllers\Admin\AdminFeatureController;
 // ============================================================================
 use App\Http\Controllers\Admin\AdminLedgerController;
 use App\Http\Controllers\Admin\AdminListingModerationController;
+use App\Http\Controllers\Admin\AdminNotificationController;
 use App\Http\Controllers\Admin\AdminReviewController;
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\AdminVerificationController;
@@ -387,6 +388,9 @@ Route::middleware(['metrics'])->group(function () {
             // Declared BEFORE {auditLog} so "verify" is not captured as an id.
             Route::get('/audit-logs/verify', [AdminAuditController::class, 'verify']);
             Route::get('/audit-logs/{auditLog}', [AdminAuditController::class, 'show']);
+
+            // Platform notification delivery monitor (read-only, truthful)
+            Route::get('/notifications/deliveries', [AdminNotificationController::class, 'deliveries']);
         });
 
         // Contracts (Phase 3.1)

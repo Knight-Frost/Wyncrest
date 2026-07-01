@@ -790,6 +790,40 @@ export interface AdminDashboard {
   recent_listings: Listing[];
 }
 
+/* ---- Admin platform delivery monitor ------------------------------------- */
+/**
+ * Per-channel delivery outcome for a notification. `not_sent` covers queued,
+ * user-disabled-channel, or digest-deferred — it is neither a failure nor a
+ * success, so the UI must label it neutrally (never "pending"/"failed").
+ */
+export interface AdminNotificationDeliveryChannel {
+  status: 'delivered' | 'failed' | 'not_sent';
+  at: string | null;
+  error: string | null;
+}
+
+export interface AdminNotificationDelivery {
+  id: string;
+  type: string;
+  title: string;
+  created_at: string;
+  read_at: string | null;
+  recipient: { id: number; name: string; email: string; user_type: string | null } | null;
+  email: AdminNotificationDeliveryChannel;
+  sms: AdminNotificationDeliveryChannel;
+}
+
+export interface AdminNotificationDeliveriesResponse {
+  data: AdminNotificationDelivery[];
+  meta: { current_page: number; last_page: number; per_page: number; total: number };
+  summary: {
+    total: number;
+    email: { delivered: number; failed: number };
+    sms: { delivered: number; failed: number };
+    failed_total: number;
+  };
+}
+
 /* ---- Verification -------------------------------------------------------- */
 export type VerificationStatus =
   | 'unverified'

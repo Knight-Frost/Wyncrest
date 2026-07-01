@@ -17,6 +17,7 @@ import type {
   Admin,
   AdminCapability,
   AdminDashboard,
+  AdminNotificationDeliveriesResponse,
   AdminReview,
   AdminTeamMember,
   AdminUserDetail,
@@ -916,6 +917,27 @@ export const adminApi = {
   async landlordFeatures(landlordId: number): Promise<Feature[]> {
     const { data } = await portalHttp.admin.get<Feature[]>(
       `/admin/landlords/${landlordId}/features`,
+    );
+    return data;
+  },
+
+  /**
+   * Platform-wide notification delivery monitor (email/SMS outcomes across all
+   * users). Admin-only. All filters optional; paginated via `meta`.
+   */
+  async deliveries(params?: {
+    channel?: 'email' | 'sms';
+    status?: 'delivered' | 'failed';
+    type?: string;
+    search?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    per_page?: number;
+  }): Promise<AdminNotificationDeliveriesResponse> {
+    const { data } = await portalHttp.admin.get<AdminNotificationDeliveriesResponse>(
+      '/admin/notifications/deliveries',
+      { params },
     );
     return data;
   },
