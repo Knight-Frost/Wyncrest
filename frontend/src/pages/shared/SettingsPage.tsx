@@ -375,10 +375,16 @@ function ChangePasswordForm({ portal }: { portal: Portal }) {
 export function SettingsPage() {
   const { choice, setChoice } = useTheme();
   const { user, portal, logout } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   /* Notification preferences — loaded from and saved to the real backend
-     (GET/PUT /api/notification-preferences), per notification type. */
-  const prefsQ = useApi(() => notificationApi.getPreferences(), []);
+     (GET/PUT /api/notification-preferences), per notification type. The backend
+     403s admins on this endpoint (they have no per-type tenant/landlord alerts),
+     so admins never call it — the fetcher short-circuits to an empty map. */
+  const prefsQ = useApi<PrefMap>(
+    () => (isAdmin ? Promise.resolve<PrefMap>({}) : notificationApi.getPreferences()),
+    [isAdmin],
+  );
   // Optimistic override layered over the fetched prefs — derived during render
   // (no effect mirroring), so the toggles reflect saves immediately.
   const [override, setOverride] = useState<PrefMap | null>(null);
@@ -443,19 +449,46 @@ export function SettingsPage() {
                     <div className="ac-field-lab">Role</div>
                     <div className="ac-field-val" style={{ textTransform: 'capitalize' }}>{role}</div>
                   </div>
-                  <div className="ac-field">
-                    <div className="ac-field-lab">Member since</div>
-                    <div className="ac-field-val">{memberSince}</div>
-                  </div>
-                  <div className="ac-field">
-                    <div className="ac-field-lab">Identity verification</div>
-                    <div className="ac-field-val">
-                      {verified
-                        ? <SemanticBadge role="success">Verified</SemanticBadge>
-                        : <SemanticBadge role="warning">Pending</SemanticBadge>}
+                  {!isAdmin && (
+                    <div className="ac-field">
+                      <div className="ac-field-lab">Member since</div>
+                      <div className="ac-field-val">{memberSince}</div>
                     </div>
-                  </div>
-                  {user && 'account_status' in user && (
+                  )}
+                  {/* Identity verification only applies to tenants/landlords —
+                      admins have no identity_verified field, so never show it. */}
+                  {!isAdmin && (
+                    <div className="ac-field">
+                      <div className="ac-field-lab">Identity verification</div>
+                      <div className="ac-field-val">
+                        {verified
+                          ? <SemanticBadge role="success">Verified</SemanticBadge>
+                          : <SemanticBadge role="warning">Pending</SemanticBadge>}
+                      </div>
+                    </div>
+                  )}
+                  {/* Admin-only: access level (super admin) + active state. */}
+                  {isAdmin && user && 'is_super_admin' in user && (
+                    <div className="ac-field">
+                      <div className="ac-field-lab">Access level</div>
+                      <div className="ac-field-val">
+                        {user.is_super_admin
+                          ? <SemanticBadge role="info">Super admin</SemanticBadge>
+                          : <SemanticBadge role="neutral">Admin</SemanticBadge>}
+                      </div>
+                    </div>
+                  )}
+                  {isAdmin && user && 'is_active' in user && (
+                    <div className="ac-field">
+                      <div className="ac-field-lab">Account</div>
+                      <div className="ac-field-val">
+                        {user.is_active
+                          ? <SemanticBadge role="success">Active</SemanticBadge>
+                          : <SemanticBadge role="danger">Inactive</SemanticBadge>}
+                      </div>
+                    </div>
+                  )}
+                  {!isAdmin && user && 'account_status' in user && (
                     <div className="ac-field">
                       <div className="ac-field-lab">Account status</div>
                       <div className="ac-field-val">
@@ -538,7 +571,34 @@ export function SettingsPage() {
             </div>
           </div>
 
-          {/* ── Notification preferences (real backend, per type) ── */}
+          {/* ── Notification preferences (real backend, per type) ──
+              Admins have no per-type tenant/landlord alert prefs (the backend
+              403s them on this endpoint), so instead of fake toggles we show an
+              honest note. Tenants/landlords get the real, saved preferences. */}
+          {isAdmin ? (
+            <div className="ac-card">
+              <div className="ac-sec">
+                <div className="ac-sec-l">
+                  <span className="ac-sec-ico"><IconBell size={20} /></span>
+                  <div>
+                    <div className="ac-sec-name">Notification preferences</div>
+                    <div className="ac-sec-desc">How you're alerted to platform events.</div>
+                  </div>
+                </div>
+                <div className="ac-sec-r">
+                  <p className="ac-accent-note" style={{ marginTop: 0 }}>
+                    Per-channel alert preferences aren't configurable for admin accounts yet.
+                    Platform events still appear in your in-app notifications, and you can monitor
+                    email/SMS delivery across all users from the{' '}
+                    <Link to="/app/notifications" style={{ color: 'var(--color-brand-700)' }}>
+                      Notifications
+                    </Link>{' '}
+                    page.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
           <div className="ac-card">
             <div className="ac-sec">
               <div className="ac-sec-l">
@@ -575,12 +635,12 @@ export function SettingsPage() {
                             <Toggle
                               on={p.email}
                               onChange={() => toggleChannel(n.type, 'email')}
-                              label={`${n.name} — email`}
+                              label={`${n.name} (email)`}
                             />
                             <Toggle
                               on={p.sms}
                               onChange={() => toggleChannel(n.type, 'sms')}
-                              label={`${n.name} — SMS`}
+                              label={`${n.name} (SMS)`}
                             />
                           </div>
                         </div>
@@ -590,7 +650,7 @@ export function SettingsPage() {
                       {saveState === 'saving' && <span className="ac-pending">Saving…</span>}
                       {saveState === 'saved' && <span className="ac-ok">All changes saved</span>}
                       {saveState === 'error' && (
-                        <span className="ac-err">Couldn't save — please try again</span>
+                        <span className="ac-err">Couldn't save. Please try again</span>
                       )}
                     </div>
                   </>
@@ -598,6 +658,7 @@ export function SettingsPage() {
               </div>
             </div>
           </div>
+          )}
 
           {/* ── Privacy (informational only) ── */}
           <div className="ac-card">
@@ -681,41 +742,69 @@ export function SettingsPage() {
 
         </div>
 
-        {/* ── Account health band — truthful summary ── */}
-        <div className="ac-card ac-completion">
-          <div className="ac-completion-head">
-            {verified
-              ? <IconCheckCircle size={56} style={{ color: 'var(--color-success-600)' }} />
-              : <IconClock size={56} style={{ color: 'var(--color-warning-500)' }} />}
-            <p className="ac-prog-text">
-              <strong>{verified ? 'Identity verified' : 'Verification pending'}</strong>
-              {verified
-                ? `Your identity has been confirmed by the ${brand.appName} team.`
-                : 'Complete identity verification to unlock all platform features.'}
-            </p>
+        {/* ── Account health band — truthful summary (role-aware) ──
+            Admins have no identity-verification lifecycle, so their band reflects
+            admin standing (active + access level) instead of a "pending" clock. */}
+        {isAdmin ? (
+          <div className="ac-card ac-completion">
+            <div className="ac-completion-head">
+              <IconCheckCircle size={56} style={{ color: 'var(--color-success-600)' }} />
+              <p className="ac-prog-text">
+                <strong>Admin account active</strong>
+                {`You have platform administrator access to ${brand.appName}.`}
+              </p>
+            </div>
+            <ul className="ac-check ac-check-grid">
+              <li>
+                <IconCheckCircle size={17} className="ac-check-ico ac-ok" />
+                Account active
+                <span className="ac-check-state ac-ok">Active</span>
+              </li>
+              <li>
+                <IconCheckCircle size={17} className="ac-check-ico ac-ok" />
+                Access level
+                <span className="ac-check-state ac-ok">
+                  {user && 'is_super_admin' in user && user.is_super_admin ? 'Super admin' : 'Admin'}
+                </span>
+              </li>
+            </ul>
           </div>
-          <ul className="ac-check ac-check-grid">
-            <li>
-              <IconCheckCircle size={17} className="ac-check-ico ac-ok" />
-              Account active
-              <span className="ac-check-state ac-ok">Active</span>
-            </li>
-            <li>
+        ) : (
+          <div className="ac-card ac-completion">
+            <div className="ac-completion-head">
               {verified
-                ? <IconCheckCircle size={17} className="ac-check-ico ac-ok" />
-                : <IconClock size={17} className="ac-check-ico ac-pending" />}
-              Identity verification
-              <span className={`ac-check-state ${verified ? 'ac-ok' : 'ac-pending'}`}>
-                {verified ? 'Verified' : 'Pending'}
-              </span>
-            </li>
-            <li>
-              <IconCheckCircle size={17} className="ac-check-ico ac-ok" />
-              Email confirmed
-              <span className="ac-check-state ac-ok">Confirmed</span>
-            </li>
-          </ul>
-        </div>
+                ? <IconCheckCircle size={56} style={{ color: 'var(--color-success-600)' }} />
+                : <IconClock size={56} style={{ color: 'var(--color-warning-500)' }} />}
+              <p className="ac-prog-text">
+                <strong>{verified ? 'Identity verified' : 'Verification pending'}</strong>
+                {verified
+                  ? `Your identity has been confirmed by the ${brand.appName} team.`
+                  : 'Complete identity verification to unlock all platform features.'}
+              </p>
+            </div>
+            <ul className="ac-check ac-check-grid">
+              <li>
+                <IconCheckCircle size={17} className="ac-check-ico ac-ok" />
+                Account active
+                <span className="ac-check-state ac-ok">Active</span>
+              </li>
+              <li>
+                {verified
+                  ? <IconCheckCircle size={17} className="ac-check-ico ac-ok" />
+                  : <IconClock size={17} className="ac-check-ico ac-pending" />}
+                Identity verification
+                <span className={`ac-check-state ${verified ? 'ac-ok' : 'ac-pending'}`}>
+                  {verified ? 'Verified' : 'Pending'}
+                </span>
+              </li>
+              <li>
+                <IconCheckCircle size={17} className="ac-check-ico ac-ok" />
+                Email confirmed
+                <span className="ac-check-state ac-ok">Confirmed</span>
+              </li>
+            </ul>
+          </div>
+        )}
 
         {/* ── Support rail ── */}
         <aside className="ac-rail">
