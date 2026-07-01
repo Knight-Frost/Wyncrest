@@ -32,7 +32,7 @@ export function ThemeToggle({
         type="button"
         onClick={() => setChoice(next)}
         aria-label={`Theme: ${choice}. Switch to ${next}.`}
-        title={`Theme: ${choice} — click for ${next}`}
+        title={`Theme: ${choice}. Click to switch to ${next}.`}
         className={cn(
           'inline-flex h-9 w-9 items-center justify-center rounded-lg opacity-80 transition hover:opacity-100 focus-visible:outline-2',
           className,

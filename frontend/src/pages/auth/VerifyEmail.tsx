@@ -22,7 +22,7 @@ export function VerifyEmail() {
 
   const [state, setState] = useState<State>(hasParams ? 'loading' : 'error');
   const [message, setMessage] = useState(
-    hasParams ? '' : 'Invalid verification link — missing parameters.',
+    hasParams ? '' : 'This verification link is invalid or incomplete.',
   );
 
   useEffect(() => {

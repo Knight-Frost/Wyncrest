@@ -41,7 +41,7 @@
 
 /* toolbar: tabs (left) + search + filter (right) */
 .dx-toolbar { display: flex; align-items: center; gap: 16px; padding: 8px 20px 0; border-bottom: 1px solid var(--color-ink-200); flex-wrap: wrap; }
-.dx-tabs { display: flex; align-items: center; gap: 4px; flex: 1 1 auto; min-width: 0; overflow-x: auto; }
+.dx-tabs { display: flex; align-items: center; gap: 4px; flex: 1 1 auto; min-width: 0; flex-wrap: wrap; }
 .dx-tab { position: relative; font-family: var(--font-sans); font-size: 14px; font-weight: 600; color: var(--color-ink-500); background: none; border: none; padding: 14px 6px; margin: 0 8px; cursor: pointer; white-space: nowrap; transition: color .12s; }
 .dx-tab:first-child { margin-left: 0; }
 .dx-tab:hover { color: var(--color-ink-800); }

@@ -73,7 +73,7 @@ function ListingReviewSection({ listingId }: { listingId: number }) {
         body: body.trim(),
       });
       setSubmitted(true);
-      toast('Review submitted — thank you!', 'success');
+      toast('Review submitted. Thank you!', 'success');
     } catch (err) {
       const msg = (err as { message?: string })?.message ?? 'Could not submit. Please try again.';
       toast(msg, 'error');
