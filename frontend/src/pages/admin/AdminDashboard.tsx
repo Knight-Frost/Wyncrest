@@ -1,364 +1,613 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApi } from '@/hooks/useApi';
 import { useAuth } from '@/context/auth';
 import { adminApi } from '@/lib/endpoints';
-import { formatCents } from '@/lib/format';
-import { PageHeader } from '@/components/layout/PageHeader';
+import {
+  formatCents,
+  formatCedisDecimal,
+  storageUrl,
+  timeAgo,
+  humanize,
+} from '@/lib/format';
 import { ErrorState, ForbiddenState } from '@/components/ui/states';
 import { useToast } from '@/components/ui/toast';
-import {
-  IconUsers,
-  IconShield,
-  IconFileText,
-  IconWallet,
-  IconCalendar,
-  IconAlertTriangle,
-  IconAlertCircle,
-  IconActivity,
-} from '@/components/ui/icons';
-import {
-  CommandCard,
-  StatusCard,
-  DashboardSection,
-  SectionHeader,
-  DataCardGrid,
-  getAdminCriticalVariant,
-  getFailedSigninsVariant,
-  getPolicyChangesVariant,
-  getUserActivityVariant,
-  getReviewQueueVariant,
-  getLedgerHealthVariant,
-} from '@/components/cards';
-import type { AdminDashboard as AdminDashboardData, AuditSummary, Listing } from '@/lib/types';
-import hero1 from '@/assets/dashboard/home-2.jpg';
-import hero2 from '@/assets/dashboard/home-6.jpg';
-import hero3 from '@/assets/dashboard/home-3.jpg';
-import hero4 from '@/assets/dashboard/home-7.jpg';
-
-import { ReviewQueuePanel } from './components/ReviewQueuePanel';
-import { ContractLifecycle } from './components/ContractLifecycle';
-import { LedgerHealth } from './components/LedgerHealth';
-import { PlatformInventory } from './components/PlatformInventory';
-import { AuditTimeline } from './components/AuditTimeline';
+import { DestructiveConfirmDialog } from '@/components/ui/DestructiveConfirmDialog';
+import { PageHeader } from '@/components/layout/PageHeader';
+import type { AdminDashboard as AdminDashboardData, AuditLog, Listing } from '@/lib/types';
+import heroArt1 from '@/assets/dashboard/home-7.jpg';
+import heroArt2 from '@/assets/dashboard/home-2.jpg';
+import heroArt3 from '@/assets/dashboard/home-6.jpg';
+import heroArt4 from '@/assets/dashboard/home-3.jpg';
 import './admin-dashboard.css';
 
-/* Decorative hero photography — cross-faded over time. */
-const HERO_SLIDES = [hero1, hero2, hero3, hero4];
+/* Decorative hero photography — cross-faded over time (respects reduced-motion). */
+const HERO_SLIDES = [heroArt1, heroArt2, heroArt3, heroArt4];
 
-/* Re-renders once a minute so the greeting + clock stay honest. */
-function useNow() {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(id);
-  }, []);
-  return now;
-}
+/* ============================================================================
+   ADMIN DASHBOARD — "Wyncrest Admin Console" design (ported from the approved
+   standalone mockup) wired to 100% real backend data. Three live endpoints:
+     • adminApi.dashboard()        → platform aggregates (stats/contracts/ledger)
+     • adminApi.pendingListings()  → the review queue
+     • adminApi.auditLogs()        → recent activity timeline
+   Nothing here is fabricated: panels that the mockup invented placeholder data
+   for (weekly bars, verification ring, "by city", a "dispute" line) are mapped
+   to real aggregates or relabeled to the truth (catalogue / collection /
+   contracts). Styling lives in admin-dashboard.css, scoped under `.wadm`.
+   ============================================================================ */
 
-/* Live status line — surfaces the single most pressing real platform item,
-   falling back to the standing overview copy. Never invented. */
-function heroSubtitle(d: AdminDashboardData | null | undefined): string {
-  if (!d) return 'Here’s your platform overview. Monitor platform health, review listings, and keep the marketplace safe and trustworthy.';
-  const n = (c: number, one: string, many: string) => `${c} ${c === 1 ? one : many}`;
-  if (d.statistics.pending_listings > 0) {
-    return `${n(d.statistics.pending_listings, 'listing is', 'listings are')} awaiting review — keep the marketplace moving.`;
-  }
-  if (d.ledger.overdue_cents > 0) {
-    return `${formatCents(d.ledger.overdue_cents)} in rent is overdue across the platform.`;
-  }
-  if (d.contracts.pending_tenant > 0) {
-    return `${n(d.contracts.pending_tenant, 'contract is', 'contracts are')} awaiting a tenant signature.`;
-  }
-  return 'Here’s your platform overview. Monitor platform health, review listings, and keep the marketplace safe and trustworthy.';
-}
+/* ── small motion utilities ──────────────────────────────────────────────── */
 
-function AdminHero({ name, data }: { name: string; data: AdminDashboardData | null | undefined }) {
-  const now = useNow();
-  const [slide, setSlide] = useState(0);
-
-  // Cross-fade the decorative photography (respects reduced-motion).
-  useEffect(() => {
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-    const id = setInterval(() => setSlide((p) => (p + 1) % HERO_SLIDES.length), 7000);
-    return () => clearInterval(id);
-  }, []);
-
-  const hour = now.getHours();
-  const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
-  const dateLabel = now.toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
-  const timeLabel = now.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true });
-
-  return (
-    <header className="adm-hero">
-      <div className="adm-hero-stage" aria-hidden="true">
-        {HERO_SLIDES.map((src, i) => (
-          <div
-            key={src}
-            className={`adm-hero-photo${i === slide ? ' on' : ''}`}
-            style={{ backgroundImage: `url(${src})` }}
-          />
-        ))}
-        <div className="adm-hero-wash" />
-      </div>
-      <div className="adm-hero-body">
-        <span className="adm-hero-eyebrow">Good {timeOfDay}</span>
-        <h1 className="adm-hero-greet">{name}</h1>
-        <p className="adm-hero-sub">{heroSubtitle(data)}</p>
-        <span className="adm-hero-meta">
-          <IconCalendar size={15} />
-          {dateLabel} · {timeLabel}
-        </span>
-      </div>
-    </header>
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(
+    () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
   );
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const handler = () => setReduced(mq.matches);
+    mq.addEventListener?.('change', handler);
+    return () => mq.removeEventListener?.('change', handler);
+  }, []);
+  return reduced;
 }
 
-/* ── Audit summary KPI row ────────────────────────────────────────────────────
-   Five metrics from adminApi.auditSummary(). Variant functions drive color —
-   no ad-hoc conditionals. Trends are only rendered when backend provides them.
-   needs_review has no trend field per the AuditSummary type. */
-function AuditKpiRow({
-  summary,
-  loading,
-  onViewAudit,
-}: {
-  summary: AuditSummary | null | undefined;
-  loading: boolean;
-  onViewAudit: () => void;
-}) {
-  const m = summary?.metrics;
+/** Animates a number toward `target` with an ease-out cubic (count-up).
+   Eases from whatever is currently shown (so it never resets to 0 if the effect
+   re-runs), only writes state inside async callbacks (rAF / timeout — never
+   synchronously in the effect body), and a guaranteed final timeout snaps to the
+   exact target even if rAF frames are throttled/stalled (e.g. a backgrounded
+   tab). Reduced-motion short-circuits to the final value. */
+function useCountUp(target: number, durationMs = 900) {
+  const reduced = usePrefersReducedMotion();
+  const [value, setValue] = useState(0);
+  const valueRef = useRef(0);
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
 
-  /* Critical today → CommandCard (danger when >0, success otherwise) */
-  const criticalRole = getAdminCriticalVariant(m?.critical_today.value ?? 0);
-  /* Failed sign-ins → StatusCard (warning below threshold, danger at/above) */
-  const failedRole = getFailedSigninsVariant(m?.failed_signins.value ?? 0);
-  /* Policy changes → StatusCard (clay/warning when present, neutral otherwise) */
-  const policyRole = getPolicyChangesVariant(m?.policy_changes.value ?? 0);
-  /* User activity → StatusCard (success/teal — healthy activity is never danger) */
-  const activityRole = getUserActivityVariant(m?.user_activity.value ?? 0);
-  /* Needs review → CommandCard (clay/warning when >0, neutral when queue is clear) */
-  const reviewRole = getReviewQueueVariant(m?.needs_review.value ?? 0);
-
-  /**
-   * Convert a backend AuditTrend into a StatusCard TrendInfo.
-   * Returns undefined when the backend did not send a trend (so the chip is
-   * not rendered — no fabricated trend data).
-   * upIsBad is passed per-metric at call sites for correct color semantics:
-   *   failed_signins going UP = bad (red chip), policy_changes UP = neutral watch.
-   */
-  function auditTrend(
-    metric: { trend?: { direction: string; pct: number | null; label: string } } | undefined,
-    upIsBad = false,
-  ) {
-    if (!metric?.trend) return undefined;
-    const { direction, label } = metric.trend;
-    return {
-      direction: (direction === 'up' ? 'up' : direction === 'down' ? 'down' : 'neutral') as 'up' | 'down' | 'neutral',
-      value: label,
-      upIsBad,
+  useEffect(() => {
+    if (reduced) return;
+    const from = valueRef.current;
+    if (from === target) return;
+    let raf = 0;
+    let start = 0;
+    const step = (t: number) => {
+      if (!start) start = t;
+      const p = Math.min(1, (t - start) / durationMs);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setValue(from + (target - from) * eased);
+      if (p < 1) raf = requestAnimationFrame(step);
+      else setValue(target);
     };
-  }
+    raf = requestAnimationFrame(step);
+    // Safety net: guarantee the exact target even if rAF never delivers a final frame.
+    const settle = setTimeout(() => setValue(target), durationMs + 80);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(settle);
+    };
+  }, [target, durationMs, reduced]);
 
+  return reduced ? target : value;
+}
+
+function CountUp({ value }: { value: number }) {
+  const v = useCountUp(value);
+  return <>{Math.round(v).toLocaleString()}</>;
+}
+
+/** Decorative hero photography that cross-fades between slides over time. */
+function HeroPhotos() {
+  const reduced = usePrefersReducedMotion();
+  const [slide, setSlide] = useState(0);
+  useEffect(() => {
+    if (reduced) return;
+    const id = setInterval(() => setSlide((p) => (p + 1) % HERO_SLIDES.length), 6000);
+    return () => clearInterval(id);
+  }, [reduced]);
   return (
-    <DashboardSection>
-      <SectionHeader
-        eyebrow="Security & Audit"
-        title="Platform health"
-        description="Live metrics from the immutable audit log — updated on each page load."
-        action={
-          <button
-            type="button"
-            className="text-sm font-medium text-brand-700 hover:text-brand-900 transition-colors"
-            onClick={onViewAudit}
-          >
-            View full audit log →
-          </button>
-        }
-      />
-
-      <DataCardGrid cols={5}>
-        {/* 1. Critical today — Level 3 Command card */}
-        <CommandCard
-          label="Critical today"
-          value={loading ? '—' : String(m?.critical_today.value ?? 0)}
-          sub={
-            loading
-              ? undefined
-              : criticalRole === 'success'
-              ? 'No critical events'
-              : `${m?.critical_today.value} critical ${m?.critical_today.value === 1 ? 'event' : 'events'}`
-          }
-          icon={<IconAlertCircle size={18} />}
-          role={criticalRole}
-          loading={loading}
-        />
-
-        {/* 2. Failed sign-ins — Level 2 StatusCard */}
-        <StatusCard
-          label="Failed sign-ins"
-          value={loading ? '—' : String(m?.failed_signins.value ?? 0)}
-          sub={loading ? undefined : m?.failed_signins.label}
-          icon={<IconShield size={16} />}
-          role={failedRole}
-          trend={auditTrend(m?.failed_signins, /* upIsBad */ true)}
-          loading={loading}
-        />
-
-        {/* 3. Policy changes — Level 2 StatusCard (clay) */}
-        <StatusCard
-          label="Policy changes"
-          value={loading ? '—' : String(m?.policy_changes.value ?? 0)}
-          sub={loading ? undefined : m?.policy_changes.label}
-          icon={<IconFileText size={16} />}
-          role={policyRole}
-          trend={auditTrend(m?.policy_changes, /* upIsBad */ true)}
-          loading={loading}
-        />
-
-        {/* 4. User activity — Level 2 StatusCard (estate green / teal — never danger) */}
-        <StatusCard
-          label="User activity"
-          value={loading ? '—' : String(m?.user_activity.value ?? 0)}
-          sub={loading ? undefined : m?.user_activity.label}
-          icon={<IconActivity size={16} />}
-          role={activityRole}
-          trend={auditTrend(m?.user_activity, /* upIsBad */ false)}
-          loading={loading}
-        />
-
-        {/* 5. Needs review — Level 3 Command card (clay when items present) */}
-        <CommandCard
-          label="Needs review"
-          value={loading ? '—' : String(m?.needs_review.value ?? 0)}
-          sub={
-            loading
-              ? undefined
-              : reviewRole === 'neutral'
-              ? 'Nothing pending review'
-              : `${m?.needs_review.value} ${m?.needs_review.value === 1 ? 'item' : 'items'} pending`
-          }
-          icon={<IconAlertTriangle size={18} />}
-          role={reviewRole}
-          loading={loading}
-          /* needs_review has no trend — omitted intentionally. */
-        />
-      </DataCardGrid>
-    </DashboardSection>
+    <div className="hc-photos" aria-hidden="true">
+      {HERO_SLIDES.map((src, i) => (
+        <img key={src} className={`hc-photo${i === slide ? ' on' : ''}`} src={src} alt="" />
+      ))}
+    </div>
   );
 }
 
-/* ── Headline KPI row ────────────────────────────────────────────────────────
-   Four platform-wide headline stats. Outstanding ledger is a CommandCard (most
-   important single figure in admin context); the others are StatusCards. */
-function HeadlineKpis({
+/* ── derivations from real data ──────────────────────────────────────────── */
+
+function greetWord(hour: number) {
+  return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+}
+
+/** Compact age badge for queue rows, e.g. "2h", "1d", "3w" — always real. */
+function compactAge(iso: string | null | undefined) {
+  if (!iso) return '';
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '';
+  const secs = Math.max(0, Math.round((Date.now() - t) / 1000));
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${Math.max(1, mins)}m`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  const days = Math.round(hrs / 24);
+  if (days < 7) return `${days}d`;
+  const weeks = Math.round(days / 7);
+  if (weeks < 5) return `${weeks}w`;
+  return `${Math.round(days / 30)}mo`;
+}
+
+/** Joins phrases into a readable list: "a", "a and b", "a, b and c". */
+function joinPhrases(parts: string[]): string {
+  if (parts.length <= 1) return parts.join('');
+  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+}
+
+/**
+ * Live, never-invented hero status line. Sums the four real attention signals
+ * (pending listings + pending verifications + overdue rent cases + failed
+ * deliveries) into one truthful one-liner. If nothing is outstanding it says so.
+ */
+function HeroStatus({ data }: { data: AdminDashboardData | null | undefined }) {
+  if (!data) return <>Bringing the platform overview together…</>;
+  const pendingListings = data.statistics.pending_listings;
+  const pendingVerifs = data.statistics.pending_verifications;
+  const overdueEntries = data.ledger.overdue_entries;
+  const failed = data.notifications.failed_deliveries;
+  const total = pendingListings + pendingVerifs + overdueEntries + failed;
+
+  if (total === 0) {
+    return (
+      <>
+        No urgent admin tasks — the review queue is clear, no verifications are waiting, nothing is
+        overdue, and every notification has been delivered.
+      </>
+    );
+  }
+
+  const parts: string[] = [];
+  if (pendingListings > 0)
+    parts.push(`${pendingListings} ${pendingListings === 1 ? 'listing' : 'listings'} to review`);
+  if (pendingVerifs > 0)
+    parts.push(
+      `${pendingVerifs} ${pendingVerifs === 1 ? 'verification' : 'verifications'} to decide`,
+    );
+  if (overdueEntries > 0)
+    parts.push(`${overdueEntries} overdue rent ${overdueEntries === 1 ? 'case' : 'cases'}`);
+  if (failed > 0)
+    parts.push(`${failed} failed ${failed === 1 ? 'delivery' : 'deliveries'}`);
+
+  return (
+    <>
+      <b>{total}</b> {total === 1 ? 'item needs' : 'items need'} your attention today:{' '}
+      {joinPhrases(parts)}.
+    </>
+  );
+}
+
+/* Resolve a real thumbnail for a queue row, or null → lettered placeholder. */
+function listingThumb(listing: Listing): string | null {
+  if (listing.primary_photo?.path) return storageUrl(listing.primary_photo.path);
+  if (listing.photos?.[0]?.path) return storageUrl(listing.photos[0].path);
+  const media = listing.media_assets?.[0]?.url ?? listing.unit?.media_assets?.[0]?.url;
+  return media ?? null;
+}
+
+/* ── icons (inline, matching the mockup's hairline SVG style) ────────────── */
+
+const ArrowRight = () => (
+  <svg className="a" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 12h14M13 6l6 6-6 6" />
+  </svg>
+);
+const Check = () => (
+  <svg viewBox="0 0 24 24">
+    <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+const Cross = () => (
+  <svg viewBox="0 0 24 24">
+    <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+  </svg>
+);
+
+/* ── panels ──────────────────────────────────────────────────────────────── */
+
+function ReviewQueue({
+  listings,
+  loading,
+  busyId,
+  onApprove,
+  onReject,
+  onViewAll,
+}: {
+  listings: Listing[];
+  loading: boolean;
+  busyId: number | null;
+  onApprove: (l: Listing) => void;
+  onReject: (l: Listing) => void;
+  onViewAll: () => void;
+}) {
+  const rows = listings.slice(0, 5);
+  return (
+    <section className="panel glass reveal" style={{ '--i': 6 } as React.CSSProperties}>
+      <div className="panel-head">
+        <div>
+          <h2>Awaiting review</h2>
+          <div className="ph-sub">Submitted for verification</div>
+        </div>
+        <button className="link" type="button" onClick={onViewAll}>
+          View all <span>&rarr;</span>
+        </button>
+      </div>
+      <div className="queue">
+        {loading ? (
+          [0, 1, 2].map((i) => <div key={i} className="q-skel" />)
+        ) : rows.length === 0 ? (
+          <div className="q-empty">
+            <span className="it">Queue clear.</span>
+            Every submitted listing has been reviewed.
+          </div>
+        ) : (
+          rows.map((l) => {
+            const thumb = listingThumb(l);
+            const city = l.unit?.property?.city ?? null;
+            const landlord = l.landlord?.full_name ?? `Landlord #${l.landlord_id}`;
+            const rent = l.unit?.rent_amount ? formatCedisDecimal(l.unit.rent_amount) : null;
+            return (
+              <div className="q-row" key={l.id}>
+                <div className="q-thumb">
+                  {thumb ? (
+                    <img src={thumb} alt="" />
+                  ) : (
+                    <span className="q-thumb-ph">{l.title.charAt(0).toUpperCase()}</span>
+                  )}
+                </div>
+                <div>
+                  <div className="q-name">{l.title}</div>
+                  <div className="q-line">
+                    {city && (
+                      <>
+                        <span>{city}</span>
+                        <span className="sep" />
+                      </>
+                    )}
+                    <span>{landlord}</span>
+                    {rent && (
+                      <>
+                        <span className="sep" />
+                        <span className="q-rent">{rent}/mo</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="q-act">
+                  <span className="mono-l q-time">{compactAge(l.created_at)}</span>
+                  <button
+                    className="q-btn ok"
+                    type="button"
+                    aria-label={`Approve ${l.title}`}
+                    disabled={busyId !== null}
+                    onClick={() => onApprove(l)}
+                  >
+                    <Check />
+                  </button>
+                  <button
+                    className="q-btn no"
+                    type="button"
+                    aria-label={`Reject ${l.title}`}
+                    disabled={busyId !== null}
+                    onClick={() => onReject(l)}
+                  >
+                    <Cross />
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ActivityTimeline({
   data,
   loading,
-  onNavigateQueue,
-  onNavigateUsers,
+  onViewAll,
 }: {
-  data: AdminDashboardData | null | undefined;
+  data: AuditLog[];
   loading: boolean;
-  onNavigateQueue: () => void;
-  onNavigateUsers: () => void;
+  onViewAll: () => void;
 }) {
-  const stats = data?.statistics;
-  const usersTotal = stats ? stats.landlords + stats.tenants : 0;
-  const ledgerRole = data
-    ? getLedgerHealthVariant(data.ledger.outstanding_cents, data.ledger.overdue_cents)
-    : 'neutral';
-
+  const items = data.slice(0, 5);
   return (
-    <DashboardSection>
-      <SectionHeader eyebrow="Platform overview" title="At a glance" />
-      <DataCardGrid cols={4}>
-        {/* 1. Users */}
-        <StatusCard
-          label="Users"
-          value={loading ? '—' : String(usersTotal)}
-          sub={
-            stats
-              ? `${stats.landlords} landlords · ${stats.tenants} tenants`
-              : undefined
-          }
-          icon={<IconUsers size={16} />}
-          role="info"
-          loading={loading}
-          onClick={onNavigateUsers}
-        />
-
-        {/* 2. Review queue — StatusCard, navigates to moderation */}
-        <StatusCard
-          label="Review queue"
-          value={loading ? '—' : String(stats?.pending_listings ?? 0)}
-          sub="pending listings"
-          icon={<IconShield size={16} />}
-          role={getReviewQueueVariant(stats?.pending_listings ?? 0)}
-          loading={loading}
-          onClick={onNavigateQueue}
-        />
-
-        {/* 3. Active contracts */}
-        <StatusCard
-          label="Active contracts"
-          value={loading ? '—' : String(stats?.active_contracts ?? 0)}
-          sub={
-            data
-              ? `${data.contracts.pending_tenant} awaiting tenant`
-              : undefined
-          }
-          icon={<IconFileText size={16} />}
-          role="success"
-          loading={loading}
-        />
-
-        {/* 4. Outstanding ledger — CommandCard (most important platform figure) */}
-        <CommandCard
-          label="Outstanding ledger"
-          value={data ? formatCents(data.ledger.outstanding_cents) : '—'}
-          sub={
-            data
-              ? data.ledger.overdue_cents > 0
-                ? `${formatCents(data.ledger.overdue_cents)} overdue`
-                : 'No overdue entries'
-              : undefined
-          }
-          icon={<IconWallet size={18} />}
-          role={ledgerRole}
-          loading={loading}
-        />
-      </DataCardGrid>
-    </DashboardSection>
+    <section className="panel glass reveal" style={{ '--i': 7 } as React.CSSProperties}>
+      <div className="panel-head">
+        <div>
+          <h2>Recent activity</h2>
+          <div className="ph-sub">Across the platform</div>
+        </div>
+        <button className="link" type="button" onClick={onViewAll}>
+          Audit log <span>&rarr;</span>
+        </button>
+      </div>
+      <div className="timeline">
+        <div className="tl">
+          {loading ? (
+            <div className="tl-empty">Loading recent activity…</div>
+          ) : items.length === 0 ? (
+            <div className="tl-empty">No recorded activity yet.</div>
+          ) : (
+            items.map((log) => {
+              const tone =
+                log.severity === 'critical' ? 'blood' : log.severity === 'warning' ? 'warn' : '';
+              return (
+                <div className={`tl-item ${tone}`.trim()} key={log.id}>
+                  <div className="t">{log.summary}</div>
+                  <div className="tm">
+                    {timeAgo(log.created_at)} · {humanize(log.area)}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
-/* ── Truthfulness guard: "No overdue entries" is only shown when backend
-   confirms overdue_cents === 0 (not on loading). Outstanding/overdue values
-   are never invented — they come directly from data.ledger.*. ──────────────── */
+/* Catalogue breakdown — real listings_by_status as a bar chart. */
+function CatalogueChart({ data }: { data: AdminDashboardData | null | undefined }) {
+  const buckets = useMemo(() => {
+    const s = data?.listings_by_status;
+    return [
+      { label: 'Active', n: s?.active ?? 0 },
+      { label: 'Pending', n: s?.pending_review ?? 0 },
+      { label: 'Draft', n: s?.draft ?? 0 },
+      { label: 'Rejected', n: s?.rejected ?? 0 },
+      { label: 'Inactive', n: s?.inactive ?? 0 },
+      { label: 'Archived', n: s?.archived ?? 0 },
+    ];
+  }, [data]);
+  const max = Math.max(1, ...buckets.map((b) => b.n));
+  const total = buckets.reduce((a, b) => a + b.n, 0);
+  const peakIdx = buckets.reduce((best, b, i) => (b.n > buckets[best].n ? i : best), 0);
+
+  return (
+    <section className="panel glass reveal" style={{ '--i': 8 } as React.CSSProperties}>
+      <div className="panel-head">
+        <div>
+          <h2>Listings by status</h2>
+          <div className="ph-sub">Catalogue breakdown</div>
+        </div>
+      </div>
+      <div className="chart">
+        <div className="bars">
+          {buckets.map((b, i) => (
+            <div className="bar-col" key={b.label}>
+              <div className="bar-cap">{b.n}</div>
+              <div
+                className={`bar${i === peakIdx && b.n > 0 ? ' peak' : ''}`}
+                style={{ '--h': `${(b.n / max) * 100}%`, '--bi': i } as React.CSSProperties}
+              />
+              <div className="bar-lbl">{b.label}</div>
+            </div>
+          ))}
+        </div>
+        <div className="chart-foot">
+          <span>Total listings</span>
+          <b>{total}</b>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* Collection health ring — share of outstanding rent that is current (not yet
+   overdue). Always well-defined since `overdue` ⊆ `outstanding`. Higher = healthier. */
+function CollectionRing({ data }: { data: AdminDashboardData | null | undefined }) {
+  const C = 2 * Math.PI * 54;
+  const outstanding = data?.ledger.outstanding_cents ?? 0;
+  const overdue = Math.max(0, data?.ledger.overdue_cents ?? 0);
+  const current = Math.max(0, outstanding - overdue);
+  // 100% healthy when nothing is outstanding at all.
+  const pct = outstanding > 0 ? Math.min(1, current / outstanding) : 1;
+  const pctInt = Math.round(pct * 100);
+  const offset = C * (1 - pct);
+  const stroke = pct >= 0.85 ? 'var(--green)' : pct >= 0.6 ? 'var(--amber)' : 'var(--oxblood)';
+
+  return (
+    <section className="panel glass reveal" style={{ '--i': 9 } as React.CSSProperties}>
+      <div className="panel-head">
+        <div>
+          <h2>Collection health</h2>
+          <div className="ph-sub">Outstanding rent — current vs overdue</div>
+        </div>
+      </div>
+      <div className="ring-wrap">
+        <div className="ring">
+          <svg width="128" height="128" viewBox="0 0 128 128">
+            <circle className="track" cx="64" cy="64" r="54" />
+            <circle
+              className="prog"
+              cx="64"
+              cy="64"
+              r="54"
+              style={
+                {
+                  stroke,
+                  strokeDasharray: C,
+                  strokeDashoffset: offset,
+                  '--dash': `${C}px`,
+                } as React.CSSProperties
+              }
+            />
+          </svg>
+          <div className="pct">{pctInt}%</div>
+        </div>
+        <div className="ring-legend">
+          <div className="lg">
+            <i style={{ background: stroke }} />
+            Current<b>{formatCents(current)}</b>
+          </div>
+          <div className="lg">
+            <i style={{ background: 'var(--oxblood)' }} />
+            Overdue<b>{formatCents(overdue)}</b>
+          </div>
+          <div className="lg note">
+            {outstanding > 0 ? (
+              <>
+                {formatCents(outstanding)} outstanding ·{' '}
+                <b
+                  style={{ color: overdue > 0 ? 'var(--oxblood)' : 'var(--green)', margin: 0 }}
+                >
+                  {pctInt}% on track
+                </b>
+              </>
+            ) : (
+              <>
+                Nothing outstanding —{' '}
+                <b style={{ color: 'var(--green)', margin: 0 }}>fully collected</b>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* Contracts by status — real contract aggregates as track bars. */
+function ContractBreakdown({ data }: { data: AdminDashboardData | null | undefined }) {
+  const rows = useMemo(() => {
+    const c = data?.contracts;
+    const list = [
+      { label: 'Active', n: c?.active ?? 0 },
+      { label: 'Awaiting tenant', n: c?.pending_tenant ?? 0 },
+      { label: 'Draft', n: c?.draft ?? 0 },
+      { label: 'Terminated', n: c?.terminated ?? 0 },
+      { label: 'Expired', n: c?.expired ?? 0 },
+    ];
+    return list.sort((a, b) => b.n - a.n);
+  }, [data]);
+  const max = Math.max(1, ...rows.map((r) => r.n));
+  const [filled, setFilled] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setFilled(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  return (
+    <section className="panel glass reveal" style={{ '--i': 10 } as React.CSSProperties}>
+      <div className="panel-head">
+        <div>
+          <h2>Contracts by status</h2>
+          <div className="ph-sub">Across the platform</div>
+        </div>
+      </div>
+      <div className="city">
+        {rows.map((r, i) => (
+          <div className={`city-row${i === 0 && r.n > 0 ? ' lead' : ''}`} key={r.label}>
+            <div className="ct-top">
+              <span>{r.label}</span>
+              <b>{r.n}</b>
+            </div>
+            <div className="track-bar">
+              <i style={{ width: filled ? `${(r.n / max) * 100}%` : 0 }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ── KPI tile ────────────────────────────────────────────────────────────── */
+
+function Kpi({
+  label,
+  alert,
+  value,
+  delta,
+}: {
+  label: string;
+  alert?: boolean;
+  value: React.ReactNode;
+  delta: React.ReactNode;
+}) {
+  return (
+    <div className={`kpi glass reveal${alert ? ' alert' : ''}`}>
+      <div className="k">
+        <i />
+        {label}
+      </div>
+      <div className="v">{value}</div>
+      <div className="delta">{delta}</div>
+    </div>
+  );
+}
+
+/* ── operational-signal card (clickable KPI that deep-links to its queue) ──── */
+
+function SignalCard({
+  label,
+  value,
+  hint,
+  alert,
+  onClick,
+}: {
+  label: string;
+  value: React.ReactNode;
+  hint: React.ReactNode;
+  alert?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`kpi glass reveal signal${alert ? ' alert' : ''}`}
+      onClick={onClick}
+    >
+      <div className="k">
+        <i />
+        {label}
+      </div>
+      <div className="v">{value}</div>
+      <div className="delta">
+        {hint} <ArrowRight />
+      </div>
+    </button>
+  );
+}
+
+/* ── page ────────────────────────────────────────────────────────────────── */
 
 export function AdminDashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
   const adminName = user && user.role === 'admin' ? user.name : 'Administrator';
+  const firstName = adminName.split(' ')[0];
 
   const dashboardReq = useApi(() => adminApi.dashboard(), []);
-  const pendingReq   = useApi(() => adminApi.pendingListings(), []);
-  const auditReq     = useApi(() => adminApi.auditLogs({ page: 1 }), []);
-  const summaryReq   = useApi(() => adminApi.auditSummary(), []);
+  const pendingReq = useApi(() => adminApi.pendingListings(), []);
+  const auditReq = useApi(() => adminApi.auditLogs({ page: 1 }), []);
 
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [rejecting, setRejecting] = useState<Listing | null>(null);
+  const [submittingReject, setSubmittingReject] = useState(false);
+
+  const nowRef = useRef(new Date());
+  const now = nowRef.current;
 
   async function handleApprove(listing: Listing) {
     setBusyId(listing.id);
     try {
       await adminApi.approveListing(listing.id);
-      toast(`Approved "${listing.title}"`, 'success');
+      toast(`Approved “${listing.title}”`, 'success');
       pendingReq.reload();
       dashboardReq.reload();
     } catch {
@@ -368,15 +617,19 @@ export function AdminDashboard() {
     }
   }
 
-  async function handleReject(listing: Listing, reason: string) {
+  async function handleReject(reason?: string) {
+    if (!rejecting || !reason) return;
+    setSubmittingReject(true);
     try {
-      await adminApi.rejectListing(listing.id, reason);
-      toast(`Rejected "${listing.title}"`, 'success');
+      await adminApi.rejectListing(rejecting.id, reason);
+      toast(`Rejected “${rejecting.title}”`, 'success');
+      setRejecting(null);
       pendingReq.reload();
       dashboardReq.reload();
     } catch {
       toast('Could not reject listing. Please retry.', 'error');
-      throw new Error('reject failed');
+    } finally {
+      setSubmittingReject(false);
     }
   }
 
@@ -384,7 +637,7 @@ export function AdminDashboard() {
   if (dashboardReq.error?.status === 403) {
     return (
       <div className="animate-rise">
-        <PageHeader eyebrow="Platform" title="Command center" />
+        <PageHeader eyebrow="Platform" title="Admin console" />
         <ForbiddenState
           title="Admin access required"
           message="This area is restricted to platform administrators."
@@ -392,77 +645,199 @@ export function AdminDashboard() {
       </div>
     );
   }
-
   if (dashboardReq.error) {
     return (
       <div className="animate-rise">
-        <PageHeader eyebrow="Platform" title="Command center" />
+        <PageHeader eyebrow="Platform" title="Admin console" />
         <ErrorState message={dashboardReq.error.message} onRetry={dashboardReq.reload} />
       </div>
     );
   }
 
   const data = dashboardReq.data;
-  const loading = dashboardReq.loading;
+  const stats = data?.statistics;
+
+  // Oldest item still in the queue → real "oldest waiting" KPI sub.
+  const oldestPending =
+    pendingReq.data && pendingReq.data.length > 0
+      ? pendingReq.data.reduce((oldest, l) =>
+          new Date(l.created_at).getTime() < new Date(oldest.created_at).getTime() ? l : oldest,
+        )
+      : null;
+
+  const dateLabel = now.toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
 
   return (
-    <div className="animate-rise space-y-10">
-      {/* Hero masthead */}
-      <AdminHero name={adminName} data={data} />
-
-      {/* Headline KPIs — users / review queue / contracts / outstanding */}
-      <HeadlineKpis
-        data={data}
-        loading={loading}
-        onNavigateQueue={() => navigate('/app/moderation')}
-        onNavigateUsers={() => navigate('/app/admin/users')}
-      />
-
-      {/* Security & Audit KPI row — audit summary metrics */}
-      <AuditKpiRow
-        summary={summaryReq.data}
-        loading={summaryReq.loading}
-        onViewAudit={() => navigate('/app/audit')}
-      />
-
-      {/* Main two-column grid */}
-      <div className="grid grid-cols-1 gap-10 xl:grid-cols-[1fr_360px]">
-        {/* Left column */}
-        <div className="space-y-10">
-          <ReviewQueuePanel
-            listings={pendingReq.data ?? []}
-            loading={pendingReq.loading}
-            busyId={busyId}
-            onApprove={handleApprove}
-            onReject={handleReject}
-            onOpenQueue={() => navigate('/app/moderation')}
-          />
-
-          {data && <LedgerHealth ledger={data.ledger} />}
-
-          {data && <ContractLifecycle contracts={data.contracts} />}
-        </div>
-
-        {/* Right column */}
-        <div className="space-y-10">
-          <AuditTimeline
-            logs={auditReq.data?.data ?? []}
-            loading={auditReq.loading}
-            max={6}
-            onFullLog={() => navigate('/app/audit')}
-          />
-
-          {data && (
-            <PlatformInventory
-              listingsByStatus={data.listings_by_status}
-              properties={data.statistics.properties}
-              units={data.statistics.units}
-              totalListings={data.statistics.total_listings}
-            />
-          )}
-        </div>
+    <div className="wadm">
+      <div className="wadm-bg" aria-hidden="true">
+        <div className="blob b1" />
+        <div className="blob b2" />
+        <div className="blob b3" />
       </div>
+
+      {/* GREETING HERO */}
+      <section className="hero glass reveal" style={{ '--i': 0 } as React.CSSProperties}>
+        <div className="hc-left">
+          <div>
+            <div className="hc-date">
+              <span className="pill">{dateLabel}</span>
+              <span className="mono-l">Admin console</span>
+            </div>
+            <h1 className="hc-greet">
+              {greetWord(now.getHours())}, <span className="it">{firstName}.</span>
+            </h1>
+            <p className="hc-status">
+              <HeroStatus data={data} />
+            </p>
+          </div>
+          <div className="hc-actions">
+            <button className="btn btn-blood" type="button" onClick={() => navigate('/app/moderation')}>
+              Review listings <ArrowRight />
+            </button>
+          </div>
+        </div>
+        <div className="hc-art">
+          <HeroPhotos />
+        </div>
+      </section>
+
+      {/* KPIs */}
+      <section className="kpis">
+        <Kpi
+          label="Active listings"
+          value={<CountUp value={stats?.active_listings ?? 0} />}
+          delta={
+            <>
+              {(stats?.total_listings ?? 0).toLocaleString()} total in catalogue
+            </>
+          }
+        />
+        <Kpi
+          label="Pending review"
+          alert={(stats?.pending_listings ?? 0) > 0}
+          value={<CountUp value={stats?.pending_listings ?? 0} />}
+          delta={
+            oldestPending ? (
+              <>
+                oldest waiting <b className="down">{compactAge(oldestPending.created_at)}</b>
+              </>
+            ) : (
+              'queue is clear'
+            )
+          }
+        />
+        <Kpi
+          label="Active contracts"
+          value={<CountUp value={stats?.active_contracts ?? 0} />}
+          delta={
+            <>{(data?.contracts.pending_tenant ?? 0).toLocaleString()} awaiting tenant signature</>
+          }
+        />
+        <Kpi
+          label="Outstanding rent"
+          alert={(data?.ledger.overdue_cents ?? 0) > 0}
+          value={data ? formatCedisDecimal(data.ledger.outstanding_cents / 100) : '—'}
+          delta={
+            data && data.ledger.overdue_cents > 0 ? (
+              <>
+                <b className="down">{formatCents(data.ledger.overdue_cents)}</b> overdue
+              </>
+            ) : (
+              'none overdue'
+            )
+          }
+        />
+      </section>
+
+      {/* OPERATIONAL SIGNALS — each deep-links to its filtered queue. Zero values
+          still render (calm "clear" state), never hidden. */}
+      <section className="signals">
+        <SignalCard
+          label="Pending verifications"
+          alert={(stats?.pending_verifications ?? 0) > 0}
+          value={<CountUp value={stats?.pending_verifications ?? 0} />}
+          hint={
+            (stats?.pending_verifications ?? 0) > 0 ? 'Review the queue' : 'None waiting'
+          }
+          onClick={() => navigate('/app/verifications')}
+        />
+        <SignalCard
+          label="Overdue rent cases"
+          alert={(data?.ledger.overdue_entries ?? 0) > 0}
+          value={<CountUp value={data?.ledger.overdue_entries ?? 0} />}
+          hint={
+            data && data.ledger.overdue_entries > 0 ? (
+              <>
+                <b className="down">{formatCents(data.ledger.overdue_cents)}</b> overdue
+              </>
+            ) : (
+              'Nothing overdue'
+            )
+          }
+          onClick={() => navigate('/app/ledger')}
+        />
+        <SignalCard
+          label="Failed deliveries"
+          alert={(data?.notifications.failed_deliveries ?? 0) > 0}
+          value={<CountUp value={data?.notifications.failed_deliveries ?? 0} />}
+          hint={
+            (data?.notifications.failed_deliveries ?? 0) > 0
+              ? 'Inspect delivery log'
+              : 'All delivered'
+          }
+          onClick={() => navigate('/app/notifications')}
+        />
+      </section>
+
+      {/* REVIEW QUEUE + RECENT ACTIVITY */}
+      <div className="grid-2">
+        <ReviewQueue
+          listings={pendingReq.data ?? []}
+          loading={pendingReq.loading}
+          busyId={busyId}
+          onApprove={handleApprove}
+          onReject={(l) => setRejecting(l)}
+          onViewAll={() => navigate('/app/moderation')}
+        />
+        <ActivityTimeline
+          data={auditReq.data?.data ?? []}
+          loading={auditReq.loading}
+          onViewAll={() => navigate('/app/audit')}
+        />
+      </div>
+
+      {/* CATALOGUE CHART + COLLECTION RING */}
+      <div className="grid-2">
+        <CatalogueChart data={data} />
+        <CollectionRing data={data} />
+      </div>
+
+      {/* CONTRACTS BY STATUS */}
+      <ContractBreakdown data={data} />
+
+      <DestructiveConfirmDialog
+        open={rejecting !== null}
+        onClose={() => {
+          if (!submittingReject) setRejecting(null);
+        }}
+        onConfirm={handleReject}
+        title="Reject listing"
+        description={
+          rejecting ? `Tell the landlord why “${rejecting.title}” was rejected.` : undefined
+        }
+        confirmLabel="Reject listing"
+        loading={submittingReject}
+        reasonField={{
+          label: 'Reason for rejection',
+          placeholder: 'Explain what needs to change…',
+          required: true,
+        }}
+      />
     </div>
   );
 }
-

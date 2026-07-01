@@ -50,6 +50,8 @@ class AdminDashboardTest extends TestCase
                     'active_listings',
                     'total_listings',
                     'active_contracts',
+                    'pending_verifications',
+                    'active_users',
                 ],
                 'contracts' => [
                     'draft',
@@ -61,7 +63,11 @@ class AdminDashboardTest extends TestCase
                 'ledger' => [
                     'outstanding_cents',
                     'overdue_cents',
+                    'overdue_entries',
                     'collected_this_month_cents',
+                ],
+                'notifications' => [
+                    'failed_deliveries',
                 ],
                 'listings_by_status' => [
                     'draft',
@@ -104,6 +110,57 @@ class AdminDashboardTest extends TestCase
         // And those platform totals are non-trivial / wired through.
         $this->assertGreaterThanOrEqual(9, $response->json('statistics.landlords'));
         $this->assertGreaterThanOrEqual(9, $response->json('statistics.units'));
+    }
+
+    public function test_operational_attention_signals_are_accurate(): void
+    {
+        $tenant = User::factory()->create(['is_active' => true]);
+
+        // Verification queue: PENDING + UNDER_REVIEW are admin-actionable;
+        // NEEDS_MORE_INFORMATION waits on the user and must NOT be counted.
+        \App\Models\VerificationRequest::create([
+            'user_id' => $tenant->id,
+            'status' => 'pending',
+            'submitted_at' => now(),
+        ]);
+        \App\Models\VerificationRequest::create([
+            'user_id' => User::factory()->create()->id,
+            'status' => 'under_review',
+            'submitted_at' => now(),
+        ]);
+        \App\Models\VerificationRequest::create([
+            'user_id' => User::factory()->create()->id,
+            'status' => 'needs_more_information',
+            'submitted_at' => now(),
+        ]);
+
+        // Unresolved delivery failures across channels (2 distinct rows).
+        \App\Models\Notification::factory()->create([
+            'user_id' => $tenant->id,
+            'delivery_failed_at' => now(),
+        ]);
+        \App\Models\Notification::factory()->create([
+            'user_id' => $tenant->id,
+            'sms_failed_at' => now(),
+        ]);
+        \App\Models\Notification::factory()->create([
+            'user_id' => $tenant->id,
+            'delivered_at' => now(),
+        ]);
+
+        Sanctum::actingAs($this->admin, [], 'sanctum');
+
+        $response = $this->getJson('/api/admin/dashboard');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('statistics.pending_verifications', 2)
+            ->assertJsonPath('notifications.failed_deliveries', 2);
+
+        // active_users reflects only in-good-standing accounts.
+        $this->assertSame(
+            User::where('is_active', true)->count(),
+            $response->json('statistics.active_users'),
+        );
     }
 
     public function test_contract_distribution_counts_by_status(): void

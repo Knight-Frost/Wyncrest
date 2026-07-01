@@ -5,12 +5,13 @@ import { normalizeError } from '@/lib/api';
 import { formatDate, humanize, formatCents } from '@/lib/format';
 import { useToast } from '@/components/ui/toast';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Table, THead, TH, TBody, TR, TD } from '@/components/ui/Table';
-import { Modal } from '@/components/ui/Modal';
-import { Field, Input, Select, Textarea } from '@/components/ui/Field';
+import { RecordList, RecordCard, RecordRelated } from '@/components/ui/RecordCard';
+import { DetailDrawer } from '@/components/ui/Drawer';
+import { DestructiveConfirmDialog } from '@/components/ui/DestructiveConfirmDialog';
+import { Field, Input, Select } from '@/components/ui/Field';
 import { Spinner } from '@/components/ui/Spinner';
+import { Avatar } from '@/components/ui/Avatar';
 import {
   LoadingState,
   ErrorState,
@@ -26,6 +27,8 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconSearch,
+  IconShield,
+  IconMail,
 } from '@/components/ui/icons';
 import {
   SemanticBadge,
@@ -33,6 +36,7 @@ import {
   getApplicationVariant,
   getContractVariant,
 } from '@/components/cards';
+import { ActionMenu } from '@/components/landlord/primitives';
 import type {
   AdminUserSummary,
   AdminUserDetail,
@@ -67,35 +71,48 @@ function initials(user: { first_name?: string; last_name?: string; email: string
   return (a + b || user.email[0] || '?').toUpperCase();
 }
 
-/* ---- Skeleton rows ------------------------------------------------------- */
-function SkeletonRows() {
+/* ---- Avatar circle — photo when available, else info teal for landlords /
+   neutral for tenants initials ------------------------------------------- */
+function AvatarCircle({ user }: { user: AdminUserSummary }) {
   return (
-    <>
+    <Avatar
+      name={user.full_name ?? user.email}
+      src={user.avatar_url}
+      fallback={initials(user)}
+      className={[
+        'flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-bold select-none',
+        user.user_type === 'landlord' ? 'bg-info-50 text-info-600' : 'bg-ink-100 text-ink-600',
+      ].join(' ')}
+    />
+  );
+}
+
+/* ---- Skeleton cards ------------------------------------------------------ */
+function SkeletonCards() {
+  return (
+    <RecordList>
       {Array.from({ length: 6 }).map((_, i) => (
-        <TR key={i}>
-          <TD first>
-            <div className="flex items-center gap-2.5">
-              <Skeleton className="h-8 w-8 rounded-full" />
-              <Skeleton className="h-4 w-32" />
-            </div>
-          </TD>
-          <TD><Skeleton className="h-4 w-40" /></TD>
-          <TD><Skeleton className="h-5 w-16 rounded-full" /></TD>
-          <TD><Skeleton className="h-5 w-16 rounded-full" /></TD>
-          <TD><Skeleton className="h-5 w-16 rounded-full" /></TD>
-          <TD><Skeleton className="h-4 w-24" /></TD>
-          <TD><Skeleton className="h-4 w-16" /></TD>
-          <TD><Skeleton className="h-8 w-28" /></TD>
-        </TR>
+        <div
+          key={i}
+          className="flex items-center gap-4 rounded-2xl border border-ink-200 bg-surface px-4 py-4 shadow-sm sm:px-5"
+        >
+          <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-3 w-56" />
+          </div>
+          <Skeleton className="hidden h-5 w-20 rounded-full lg:block" />
+          <Skeleton className="h-8 w-16" />
+        </div>
       ))}
-    </>
+    </RecordList>
   );
 }
 
 /* ========================================================================== */
-/* Detail modal — fetches the full user record when opened                    */
+/* Detail drawer — fetches the full user record when opened                   */
 /* ========================================================================== */
-function UserDetailModal({
+function UserDetailDrawer({
   userId,
   onClose,
 }: {
@@ -111,7 +128,13 @@ function UserDetailModal({
   const title = user ? user.full_name : 'User detail';
 
   return (
-    <Modal open onClose={onClose} title={title} size="lg">
+    <DetailDrawer
+      open
+      onClose={onClose}
+      eyebrow="USER"
+      title={title}
+      description={user ? user.email : undefined}
+    >
       {loading ? (
         <div className="py-10">
           <LoadingState label="Loading user…" />
@@ -122,9 +145,12 @@ function UserDetailModal({
         <div className="space-y-6">
           {/* Identity row */}
           <div className="flex items-center gap-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-info-50 text-sm font-bold text-info-600">
-              {user.initials || initials(user)}
-            </span>
+            <Avatar
+              name={user.full_name}
+              src={user.avatar_url}
+              fallback={user.initials || initials(user)}
+              className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-info-50 text-sm font-bold text-info-600"
+            />
             <div className="min-w-0">
               <p className="font-display text-lg font-semibold text-ink-900 leading-tight">
                 {user.full_name}
@@ -221,7 +247,7 @@ function UserDetailModal({
           </section>
         </div>
       ) : null}
-    </Modal>
+    </DetailDrawer>
   );
 }
 
@@ -252,80 +278,6 @@ function EmptyRow({ text }: { text: string }) {
   );
 }
 
-/* ========================================================================== */
-/* Suspend modal — requires a reason                                          */
-/* ========================================================================== */
-function SuspendModal({
-  user,
-  onClose,
-  onDone,
-}: {
-  user: AdminUserSummary;
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  const { toast } = useToast();
-  const [reason, setReason] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [fieldError, setFieldError] = useState<string | undefined>();
-
-  async function handleSubmit() {
-    const trimmed = reason.trim();
-    if (trimmed.length < 3) {
-      setFieldError('Please provide a brief reason.');
-      return;
-    }
-    setSubmitting(true);
-    setFieldError(undefined);
-    try {
-      await adminApi.suspendUser(user.id, trimmed);
-      toast(`${user.full_name} suspended.`, 'success');
-      onDone();
-    } catch (err) {
-      const e = normalizeError(err) as ApiError;
-      if (e.status === 422) {
-        toast(e.message || 'This account is already suspended.', 'error');
-        onDone();
-      } else {
-        toast(e.message || 'Could not suspend this account.', 'error');
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <Modal
-      open
-      onClose={submitting ? () => {} : onClose}
-      title="Suspend account"
-      description={`${user.full_name} will lose access until reinstated.`}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose} disabled={submitting}>
-            Cancel
-          </Button>
-          <Button variant="danger" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? 'Suspending…' : 'Suspend account'}
-          </Button>
-        </>
-      }
-    >
-      <Field label="Reason for suspension" required error={fieldError}>
-        {(id, invalid) => (
-          <Textarea
-            id={id}
-            invalid={invalid}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="e.g. Reported fraudulent listings; pending investigation."
-            autoFocus
-          />
-        )}
-      </Field>
-    </Modal>
-  );
-}
 
 /* ========================================================================== */
 /* Main page                                                                  */
@@ -362,6 +314,7 @@ export function UsersPage() {
   const [actingId, setActingId] = useState<number | null>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [suspendTarget, setSuspendTarget] = useState<AdminUserSummary | null>(null);
+  const [suspending, setSuspending] = useState(false);
 
   const users = data?.data ?? [];
   const currentPage = data?.current_page ?? 1;
@@ -385,6 +338,28 @@ export function UsersPage() {
       if (e.status === 422) reload();
     } finally {
       setActingId(null);
+    }
+  }
+
+  async function handleSuspend(reason?: string) {
+    if (!suspendTarget || !reason) return;
+    setSuspending(true);
+    try {
+      await adminApi.suspendUser(suspendTarget.id, reason);
+      toast(`${suspendTarget.full_name} suspended.`, 'success');
+      setSuspendTarget(null);
+      reload();
+    } catch (err) {
+      const e = normalizeError(err) as ApiError;
+      if (e.status === 422) {
+        toast(e.message || 'This account is already suspended.', 'info');
+        setSuspendTarget(null);
+        reload();
+      } else {
+        toast(e.message || 'Could not suspend this account.', 'error');
+      }
+    } finally {
+      setSuspending(false);
     }
   }
 
@@ -486,129 +461,103 @@ export function UsersPage() {
         />
       ) : (
         <>
-          <Card>
-            <CardBody className="p-0">
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>Name</TH>
-                    <TH>Email</TH>
-                    <TH>Role</TH>
-                    <TH>Verified</TH>
-                    <TH>Status</TH>
-                    <TH>Joined</TH>
-                    <TH>Portfolio</TH>
-                    <TH>{/* actions */}</TH>
-                  </TR>
-                </THead>
-                <TBody>
-                  {loading ? (
-                    <SkeletonRows />
-                  ) : (
-                    users.map((user) => {
-                      const suspended = isSuspended(user);
-                      const busy = actingId === user.id;
-                      return (
-                        <TR key={user.id}>
-                          <TD first>
-                            <div className="flex items-center gap-2.5">
-                              {/* Avatar ring: info teal for landlords, neutral for tenants */}
-                              <span
-                                className={[
-                                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold',
-                                  user.user_type === 'landlord'
-                                    ? 'bg-info-50 text-info-600'
-                                    : 'bg-ink-100 text-ink-600',
-                                ].join(' ')}
-                              >
-                                {initials(user)}
-                              </span>
-                              <span className="font-medium text-ink-900">{user.full_name}</span>
-                            </div>
-                          </TD>
-                          <TD className="text-ink-500 text-xs">{user.email}</TD>
-                          <TD>
-                            {/* Role: landlord = info (teal), tenant = neutral */}
-                            <SemanticBadge
-                              role={user.user_type === 'landlord' ? 'info' : 'neutral'}
-                              dot={false}
-                            >
-                              {humanize(user.user_type)}
-                            </SemanticBadge>
-                          </TD>
-                          <TD>
-                            {user.identity_verified ? (
-                              <SemanticBadge role="success">Verified</SemanticBadge>
-                            ) : (
-                              <SemanticBadge role="warning">Unverified</SemanticBadge>
-                            )}
-                          </TD>
-                          <TD>
-                            {suspended ? (
-                              <SemanticBadge role="danger">Suspended</SemanticBadge>
-                            ) : (
-                              <SemanticBadge role="success">Active</SemanticBadge>
-                            )}
-                          </TD>
-                          <TD className="whitespace-nowrap text-ink-500 text-xs">
-                            {formatDate(user.created_at)}
-                          </TD>
-                          <TD className="whitespace-nowrap text-ink-600 text-xs">
-                            {user.user_type === 'landlord' ? (
-                              <span>
-                                {user.properties_count} {user.properties_count === 1 ? 'property' : 'properties'}
-                                {' · '}
-                                {user.listings_count} {user.listings_count === 1 ? 'listing' : 'listings'}
-                              </span>
-                            ) : (
-                              <span>
-                                {user.applications_count} {user.applications_count === 1 ? 'application' : 'applications'}
-                              </span>
-                            )}
-                          </TD>
-                          <TD>
-                            <div className="flex items-center justify-end gap-1.5">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                leftIcon={<IconEye size={14} />}
-                                onClick={() => setDetailId(user.id)}
-                              >
-                                View
-                              </Button>
-                              {suspended ? (
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  leftIcon={<IconUnlock size={14} />}
-                                  disabled={busy}
-                                  onClick={() => handleReinstate(user)}
-                                >
-                                  {busy ? 'Working…' : 'Reinstate'}
-                                </Button>
-                              ) : (
-                                <Button
-                                  variant="danger"
-                                  size="sm"
-                                  leftIcon={<IconLock size={14} />}
-                                  disabled={busy}
-                                  onClick={() => setSuspendTarget(user)}
-                                >
-                                  Suspend
-                                </Button>
-                              )}
-                            </div>
-                          </TD>
-                        </TR>
-                      );
-                    })
-                  )}
-                </TBody>
-              </Table>
-            </CardBody>
-          </Card>
+          {/* Record list — one standalone card per user. No table shell, no
+              horizontal scroll: identity + role + verified/status + portfolio +
+              actions stay visible (stacking on mobile, inline columns on desktop). */}
+          {loading ? (
+            <SkeletonCards />
+          ) : (
+            <RecordList>
+              {users.map((user) => {
+                const suspended = isSuspended(user);
+                const busy = actingId === user.id;
+                const portfolio =
+                  user.user_type === 'landlord'
+                    ? `${user.properties_count} ${user.properties_count === 1 ? 'property' : 'properties'} · ${user.listings_count} ${user.listings_count === 1 ? 'listing' : 'listings'}`
+                    : `${user.applications_count} ${user.applications_count === 1 ? 'application' : 'applications'}`;
 
-          {/* Pagination */}
+                return (
+                  <RecordCard
+                    key={user.id}
+                    onClick={() => setDetailId(user.id)}
+                    leading={<AvatarCircle user={user} />}
+                    title={user.full_name}
+                    titleMeta={
+                      user.identity_verified ? (
+                        <IconShield
+                          size={13}
+                          className="text-success-500"
+                          title="Identity verified"
+                        />
+                      ) : undefined
+                    }
+                    subtitle={
+                      <>
+                        <span className="flex items-center gap-1 text-ink-500">
+                          <IconMail size={11} className="shrink-0" />
+                          {user.email}
+                        </span>
+                      </>
+                    }
+                    related={
+                      <RecordRelated
+                        title={humanize(user.user_type)}
+                        lines={[
+                          portfolio,
+                          user.identity_verified ? 'Identity verified' : 'Unverified',
+                        ]}
+                      />
+                    }
+                    status={
+                      suspended ? (
+                        <SemanticBadge role="danger">Suspended</SemanticBadge>
+                      ) : (
+                        <SemanticBadge role="success">Active</SemanticBadge>
+                      )
+                    }
+                    timestamp={<>Joined {formatDate(user.created_at)}</>}
+                    primaryAction={
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={<IconEye size={14} />}
+                        onClick={() => setDetailId(user.id)}
+                      >
+                        View
+                      </Button>
+                    }
+                    menu={
+                      <ActionMenu
+                        label={`Actions for ${user.full_name}`}
+                        items={
+                          suspended
+                            ? [
+                                {
+                                  label: 'Reinstate',
+                                  icon: <IconUnlock size={14} />,
+                                  onClick: () => handleReinstate(user),
+                                  disabled: busy,
+                                },
+                              ]
+                            : [
+                                {
+                                  label: 'Suspend',
+                                  icon: <IconLock size={14} />,
+                                  onClick: () => setSuspendTarget(user),
+                                  danger: true,
+                                  disabled: busy,
+                                },
+                              ]
+                        }
+                      />
+                    }
+                  />
+                );
+              })}
+            </RecordList>
+          )}
+
+          {/* Pagination — sits below the record list, never inside a table shell. */}
           <div className="flex items-center justify-between gap-4">
             <p className="text-xs text-ink-500">
               {loading ? (
@@ -648,22 +597,30 @@ export function UsersPage() {
         </>
       )}
 
-      {/* Detail modal */}
+      {/* Detail drawer */}
       {detailId !== null && (
-        <UserDetailModal userId={detailId} onClose={() => setDetailId(null)} />
+        <UserDetailDrawer userId={detailId} onClose={() => setDetailId(null)} />
       )}
 
-      {/* Suspend modal */}
-      {suspendTarget && (
-        <SuspendModal
-          user={suspendTarget}
-          onClose={() => setSuspendTarget(null)}
-          onDone={() => {
-            setSuspendTarget(null);
-            reload();
-          }}
-        />
-      )}
+      {/* Suspend confirm */}
+      <DestructiveConfirmDialog
+        open={suspendTarget !== null}
+        onClose={() => { if (!suspending) setSuspendTarget(null); }}
+        onConfirm={handleSuspend}
+        title="Suspend account"
+        description={
+          suspendTarget
+            ? `${suspendTarget.full_name} will lose access until reinstated.`
+            : undefined
+        }
+        confirmLabel="Suspend account"
+        loading={suspending}
+        reasonField={{
+          label: 'Reason for suspension',
+          placeholder: 'e.g. Reported fraudulent listings; pending investigation.',
+          required: true,
+        }}
+      />
     </div>
   );
 }

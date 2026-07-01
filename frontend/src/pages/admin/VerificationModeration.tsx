@@ -6,11 +6,10 @@ import { formatDate } from '@/lib/format';
 import { useToast } from '@/components/ui/toast';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
+import { Avatar } from '@/components/ui/Avatar';
 import { Drawer, DrawerHeader, DrawerBody, DrawerFooter } from '@/components/ui/Drawer';
 import { Field, Textarea } from '@/components/ui/Field';
-import { Card, CardBody } from '@/components/ui/Card';
-import { Table, THead, TH, TBody, TR, TD } from '@/components/ui/Table';
+import { RecordList, RecordCard } from '@/components/ui/RecordCard';
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/states';
 import { Spinner } from '@/components/ui/Spinner';
 import {
@@ -33,7 +32,7 @@ import type {
   AdminVerificationRequest,
   AdminVerificationDetail,
   ApiError,
-  VerificationStatus,
+  VerificationRequestStatus,
 } from '@/lib/types';
 
 /* ---- Helpers ---------------------------------------------------------------- */
@@ -48,10 +47,10 @@ const FILTER_TABS: { key: FilterKey; label: string }[] = [
   { key: 'all',       label: 'All' },
 ];
 
-function filterToApiStatus(key: FilterKey): VerificationStatus | undefined {
+function filterToApiStatus(key: FilterKey): VerificationRequestStatus | undefined {
   switch (key) {
     case 'queue':     return undefined; // fetched as pending + under_review via no filter, we filter client-side
-    case 'approved':  return 'verified';
+    case 'approved':  return 'approved';
     case 'rejected':  return 'rejected';
     case 'needs_info': return 'needs_more_information';
     case 'all':       return undefined;
@@ -59,26 +58,25 @@ function filterToApiStatus(key: FilterKey): VerificationStatus | undefined {
 }
 
 function verificationStatusBadgeRole(
-  status: VerificationStatus,
+  status: VerificationRequestStatus,
 ): 'warning' | 'info' | 'success' | 'danger' | 'neutral' {
   switch (status) {
     case 'pending':                 return 'warning';
     case 'under_review':            return 'info';
-    case 'verified':                return 'success';
+    case 'approved':                return 'success';
     case 'rejected':                return 'danger';
     case 'needs_more_information':  return 'warning';
     default:                        return 'neutral';
   }
 }
 
-function verificationStatusLabel(status: VerificationStatus): string {
+function verificationStatusLabel(status: VerificationRequestStatus): string {
   switch (status) {
     case 'pending':                 return 'Pending';
     case 'under_review':            return 'Under review';
-    case 'verified':                return 'Approved';
+    case 'approved':                return 'Approved';
     case 'rejected':                return 'Rejected';
     case 'needs_more_information':  return 'Needs info';
-    case 'unverified':              return 'Unverified';
     default:                        return status;
   }
 }
@@ -102,144 +100,36 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function isQueueStatus(status: VerificationStatus): boolean {
+function isQueueStatus(status: VerificationRequestStatus): boolean {
   return status === 'pending' || status === 'under_review';
 }
 
-/* ---- Action modal types ----------------------------------------------------- */
+/* ---- Avatar (photo when available, else initials) ------------------------- */
 
-type ActionKind = 'approve' | 'reject' | 'request_info';
-
-interface ActionModalState {
-  kind: ActionKind;
-  id: string;
-  userName: string;
-}
-
-/* ---- Action modal ----------------------------------------------------------- */
-
-function ActionModal({
-  state,
-  onClose,
-  onDone,
-}: {
-  state: ActionModalState;
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  const { toast } = useToast();
-  const [text, setText] = useState('');
-  const [fieldError, setFieldError] = useState<string | undefined>();
-  const [submitting, setSubmitting] = useState(false);
-
-  const { kind, id, userName } = state;
-  const isApprove = kind === 'approve';
-  const isReject = kind === 'reject';
-
-  const title = isApprove
-    ? 'Approve verification'
-    : isReject
-    ? 'Reject verification'
-    : 'Request more information';
-
-  const description = isApprove
-    ? `Approve ${userName}'s identity verification request.`
-    : isReject
-    ? `Tell ${userName} why their request was rejected.`
-    : `Ask ${userName} to provide additional information.`;
-
-  const fieldLabel = isApprove
-    ? 'Reason (optional)'
-    : isReject
-    ? 'Reason for rejection'
-    : 'Note to applicant';
-
-  const required = !isApprove;
-
-  async function handleSubmit() {
-    const trimmed = text.trim();
-    if (required && trimmed.length < 5) {
-      setFieldError('Please provide at least 5 characters.');
-      return;
-    }
-    setSubmitting(true);
-    setFieldError(undefined);
-    try {
-      if (isApprove) {
-        await adminApi.approveVerification(id, trimmed || undefined);
-        toast(`${userName}'s verification approved.`, 'success');
-      } else if (isReject) {
-        await adminApi.rejectVerification(id, trimmed);
-        toast(`${userName}'s verification rejected.`, 'success');
-      } else {
-        await adminApi.requestInfoVerification(id, trimmed);
-        toast(`Information request sent to ${userName}.`, 'success');
-      }
-      onDone();
-    } catch (err) {
-      const e = normalizeError(err) as ApiError;
-      toast(e.message || 'Action failed. Please try again.', 'error');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
+function AvatarCircle({ name, src }: { name: string; src?: string | null }) {
   return (
-    <Modal
-      open
-      onClose={submitting ? () => {} : onClose}
-      title={title}
-      description={description}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose} disabled={submitting}>
-            Cancel
-          </Button>
-          <Button
-            variant={isReject ? 'danger' : 'primary'}
-            onClick={handleSubmit}
-            loading={submitting}
-          >
-            {isApprove ? 'Approve' : isReject ? 'Reject' : 'Send request'}
-          </Button>
-        </>
-      }
-    >
-      <Field label={fieldLabel} required={required} error={fieldError}>
-        {(id, invalid) => (
-          <Textarea
-            id={id}
-            invalid={invalid}
-            value={text}
-            onChange={(e) => {
-              setText(e.target.value);
-              if (fieldError) setFieldError(undefined);
-            }}
-            placeholder={
-              isApprove
-                ? 'Optionally note why this was approved…'
-                : isReject
-                ? 'Explain what was wrong with the submission…'
-                : 'Describe what additional documents or information are needed…'
-            }
-            autoFocus
-          />
-        )}
-      </Field>
-    </Modal>
+    <Avatar
+      name={name}
+      src={src}
+      className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-100 text-sm font-semibold text-brand-700 select-none"
+    />
   );
 }
 
-/* ---- Detail drawer inner (child component so useApi runs conditionally) ----- */
+/* ---- Inline action kinds --------------------------------------------------- */
+
+type ActionKind = 'approve' | 'reject' | 'request_info';
+
+/* ---- Detail drawer with inline action handling ----------------------------- */
 
 function VerificationDetailDrawer({
   id,
   onClose,
-  onAction,
+  onDone,
 }: {
   id: string;
   onClose: () => void;
-  onAction: (kind: ActionKind) => void;
+  onDone: () => void;
 }) {
   const { data, loading, error, reload } = useApi<AdminVerificationDetail>(
     () => adminApi.verification(id),
@@ -247,6 +137,12 @@ function VerificationDetailDrawer({
   );
   const { toast } = useToast();
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+
+  // Inline action state (replaces the separate ActionModal)
+  const [activeKind, setActiveKind] = useState<ActionKind | null>(null);
+  const [actionText, setActionText] = useState('');
+  const [actionError, setActionError] = useState<string | undefined>();
+  const [actionSubmitting, setActionSubmitting] = useState(false);
 
   const vr = data;
   const user = vr?.user;
@@ -263,6 +159,66 @@ function VerificationDetailDrawer({
       setDownloadingId(null);
     }
   }
+
+  function selectAction(kind: ActionKind) {
+    setActiveKind(kind);
+    setActionText('');
+    setActionError(undefined);
+  }
+
+  function cancelAction() {
+    setActiveKind(null);
+    setActionText('');
+    setActionError(undefined);
+  }
+
+  async function submitAction() {
+    if (!activeKind) return;
+    const trimmed = actionText.trim();
+    const isApprove = activeKind === 'approve';
+    const required = !isApprove;
+    if (required && trimmed.length < 5) {
+      setActionError('Please provide at least 5 characters.');
+      return;
+    }
+    setActionSubmitting(true);
+    setActionError(undefined);
+    try {
+      if (isApprove) {
+        await adminApi.approveVerification(id, trimmed || undefined);
+        toast(`${userName}'s verification approved.`, 'success');
+      } else if (activeKind === 'reject') {
+        await adminApi.rejectVerification(id, trimmed);
+        toast(`${userName}'s verification rejected.`, 'success');
+      } else {
+        await adminApi.requestInfoVerification(id, trimmed);
+        toast(`Information request sent to ${userName}.`, 'success');
+      }
+      onDone();
+    } catch (err) {
+      const e = normalizeError(err) as ApiError;
+      toast(e.message || 'Action failed. Please try again.', 'error');
+    } finally {
+      setActionSubmitting(false);
+    }
+  }
+
+  const actionable = vr ? isQueueStatus(vr.status) : false;
+  const isApproveSelected = activeKind === 'approve';
+  const isRejectSelected = activeKind === 'reject';
+  const required = activeKind !== null && !isApproveSelected;
+
+  const actionFieldLabel = isApproveSelected
+    ? 'Reason (optional)'
+    : isRejectSelected
+    ? 'Reason for rejection'
+    : 'Note to applicant';
+
+  const actionFieldPlaceholder = isApproveSelected
+    ? 'Optionally note why this was approved…'
+    : isRejectSelected
+    ? 'Explain what was wrong with the submission…'
+    : 'Describe what additional documents or information are needed…';
 
   return (
     <>
@@ -308,10 +264,10 @@ function VerificationDetailDrawer({
               <h3 className="eyebrow text-ink-400 mb-3">Status</h3>
               <div className="flex items-center gap-3">
                 <SemanticBadge
-                  role={verificationStatusBadgeRole(vr.status as VerificationStatus)}
+                  role={verificationStatusBadgeRole(vr.status)}
                   dot={false}
                 >
-                  {verificationStatusLabel(vr.status as VerificationStatus)}
+                  {verificationStatusLabel(vr.status)}
                 </SemanticBadge>
                 {vr.reviewed_at && (
                   <span className="text-xs text-ink-500">
@@ -382,37 +338,96 @@ function VerificationDetailDrawer({
                 </ul>
               )}
             </section>
+
+            {/* Inline action section — visible when an action is selected */}
+            {actionable && activeKind !== null && (
+              <section className="border-t border-ink-200 pt-6">
+                <h3 className="eyebrow text-ink-400 mb-3">
+                  {isApproveSelected
+                    ? 'Approve verification'
+                    : isRejectSelected
+                    ? 'Reject verification'
+                    : 'Request more information'}
+                </h3>
+                <Field
+                  label={actionFieldLabel}
+                  required={required}
+                  error={actionError}
+                >
+                  {(fid, invalid) => (
+                    <Textarea
+                      id={fid}
+                      invalid={invalid}
+                      value={actionText}
+                      onChange={(e) => {
+                        setActionText(e.target.value);
+                        if (actionError) setActionError(undefined);
+                      }}
+                      placeholder={actionFieldPlaceholder}
+                      autoFocus
+                    />
+                  )}
+                </Field>
+              </section>
+            )}
           </div>
         ) : null}
       </DrawerBody>
 
-      {/* Footer: action buttons (only for actionable statuses) */}
-      {vr && isQueueStatus(vr.status as VerificationStatus) && (
+      {/* Footer: action picker when request is actionable */}
+      {vr && actionable && (
         <DrawerFooter>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              variant="secondary"
-              leftIcon={<IconInfo size={14} />}
-              onClick={() => onAction('request_info')}
-            >
-              Request Info
-            </Button>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="danger"
-              leftIcon={<IconX size={14} />}
-              onClick={() => onAction('reject')}
-            >
-              Reject
-            </Button>
-            <Button
-              leftIcon={<IconCheck size={14} />}
-              onClick={() => onAction('approve')}
-            >
-              Approve
-            </Button>
-          </div>
+          {activeKind === null ? (
+            /* Action picker mode — choose which decision to make */
+            <>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="secondary"
+                  leftIcon={<IconInfo size={14} />}
+                  onClick={() => selectAction('request_info')}
+                >
+                  Request Info
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="danger"
+                  leftIcon={<IconX size={14} />}
+                  onClick={() => selectAction('reject')}
+                >
+                  Reject
+                </Button>
+                <Button
+                  leftIcon={<IconCheck size={14} />}
+                  onClick={() => selectAction('approve')}
+                >
+                  Approve
+                </Button>
+              </div>
+            </>
+          ) : (
+            /* Submit mode — confirm the selected action */
+            <>
+              <Button
+                variant="secondary"
+                onClick={cancelAction}
+                disabled={actionSubmitting}
+              >
+                Back
+              </Button>
+              <Button
+                variant={isRejectSelected ? 'danger' : 'primary'}
+                onClick={submitAction}
+                loading={actionSubmitting}
+              >
+                {isApproveSelected
+                  ? 'Approve'
+                  : isRejectSelected
+                  ? 'Reject'
+                  : 'Send request'}
+              </Button>
+            </>
+          )}
         </DrawerFooter>
       )}
     </>
@@ -425,7 +440,6 @@ export function VerificationModeration() {
   const [filter, setFilter] = useState<FilterKey>('queue');
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [pendingAction, setPendingAction] = useState<ActionModalState | null>(null);
 
   // For 'queue' filter we pull the full pending list; for others we send the
   // matching status param. The API returns paginated results either way.
@@ -438,7 +452,7 @@ export function VerificationModeration() {
   );
 
   const items = (data?.data ?? []).filter((v) => {
-    if (filter === 'queue') return isQueueStatus(v.status as VerificationStatus);
+    if (filter === 'queue') return isQueueStatus(v.status);
     return true;
   });
 
@@ -448,34 +462,10 @@ export function VerificationModeration() {
 
   const queueCount = filter === 'queue' ? items.length : undefined;
 
-  function openDrawer(id: string) {
-    setSelectedId(id);
-  }
-
-  function closeDrawer() {
-    setSelectedId(null);
-    setPendingAction(null);
-  }
-
-  function handleAction(kind: ActionKind) {
-    if (!selectedId) return;
-    const vr = data?.data.find((v) => v.id === selectedId);
-    const userName = vr?.user?.full_name ?? `User #${vr?.user_id ?? selectedId}`;
-    setPendingAction({ kind, id: selectedId, userName });
-  }
-
-  function afterAction() {
-    setPendingAction(null);
-    setSelectedId(null);
-    reload();
-  }
-
   function changeFilter(key: FilterKey) {
     setFilter(key);
     setPage(1);
   }
-
-  const drawerOpen = selectedId !== null && pendingAction === null;
 
   return (
     <div className="animate-rise space-y-8">
@@ -501,10 +491,12 @@ export function VerificationModeration() {
       )}
 
       {/* Filter tabs */}
-      <div className="mb-5 flex gap-0 border-b border-ink-200">
+      <div className="mb-5 flex gap-0 border-b border-ink-200" role="tablist" aria-label="Filter verification requests">
         {FILTER_TABS.map((tab) => (
           <button
             key={tab.key}
+            type="button"
+            role="tab"
             onClick={() => changeFilter(tab.key)}
             aria-selected={filter === tab.key}
             className={[
@@ -536,68 +528,53 @@ export function VerificationModeration() {
         />
       ) : (
         <>
-          <Card>
-            <CardBody className="p-0">
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>Applicant</TH>
-                    <TH>Role</TH>
-                    <TH>Submitted</TH>
-                    <TH>Status</TH>
-                    <TH>{/* actions */}</TH>
-                  </TR>
-                </THead>
-                <TBody>
-                  {items.map((vr: AdminVerificationRequest) => {
-                    const userName = vr.user?.full_name ?? `User #${vr.user_id}`;
-                    return (
-                      <TR key={vr.id}>
-                        <TD first>
-                          <div>
-                            <p className="font-medium text-ink-900">{userName}</p>
-                            {vr.user?.email && (
-                              <p className="text-xs text-ink-500">{vr.user.email}</p>
-                            )}
-                          </div>
-                        </TD>
-                        <TD>
-                          <SemanticBadge
-                            role={vr.user?.user_type === 'landlord' ? 'info' : 'neutral'}
-                            dot={false}
-                          >
-                            {vr.user?.user_type === 'landlord' ? 'Landlord' : 'Tenant'}
-                          </SemanticBadge>
-                        </TD>
-                        <TD className="whitespace-nowrap text-xs text-ink-500">
-                          {vr.submitted_at ? formatDate(vr.submitted_at) : formatDate(vr.created_at)}
-                        </TD>
-                        <TD>
-                          <SemanticBadge
-                            role={verificationStatusBadgeRole(vr.status as VerificationStatus)}
-                            dot={false}
-                          >
-                            {verificationStatusLabel(vr.status as VerificationStatus)}
-                          </SemanticBadge>
-                        </TD>
-                        <TD>
-                          <div className="flex justify-end">
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => openDrawer(vr.id)}
-                            >
-                              Review
-                            </Button>
-                          </div>
-                        </TD>
-                      </TR>
-                    );
-                  })}
-                </TBody>
-              </Table>
-            </CardBody>
-          </Card>
+          <RecordList>
+            {items.map((vr: AdminVerificationRequest) => {
+              const userName = vr.user?.full_name ?? `User #${vr.user_id}`;
+              const isLandlord = vr.user?.user_type === 'landlord';
+              return (
+                <RecordCard
+                  key={vr.id}
+                  leading={<AvatarCircle name={userName} src={vr.user?.avatar_url} />}
+                  title={userName}
+                  subtitle={
+                    vr.user?.email ? <span>{vr.user.email}</span> : undefined
+                  }
+                  related={
+                    <SemanticBadge
+                      role={isLandlord ? 'info' : 'neutral'}
+                      dot={false}
+                    >
+                      {isLandlord ? 'Landlord' : 'Tenant'}
+                    </SemanticBadge>
+                  }
+                  status={
+                    <SemanticBadge
+                      role={verificationStatusBadgeRole(vr.status)}
+                      dot={false}
+                    >
+                      {verificationStatusLabel(vr.status)}
+                    </SemanticBadge>
+                  }
+                  timestamp={
+                    vr.submitted_at
+                      ? formatDate(vr.submitted_at)
+                      : formatDate(vr.created_at)
+                  }
+                  primaryAction={
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setSelectedId(vr.id)}
+                    >
+                      Review
+                    </Button>
+                  }
+                  onClick={() => setSelectedId(vr.id)}
+                />
+              );
+            })}
+          </RecordList>
 
           {/* Pagination */}
           <div className="flex items-center justify-between gap-4">
@@ -639,30 +616,23 @@ export function VerificationModeration() {
         </>
       )}
 
-      {/* Detail Drawer — mounted only when a row is selected and no modal is open */}
+      {/* Detail Drawer — action controls are now inline within the drawer */}
       <Drawer
-        open={drawerOpen}
-        onOpenChange={(open) => { if (!open) closeDrawer(); }}
+        open={selectedId !== null}
+        onOpenChange={(open) => { if (!open) setSelectedId(null); }}
         widthClass="sm:max-w-[700px]"
-        blockInteractions={pendingAction !== null}
       >
         {selectedId && (
           <VerificationDetailDrawer
             id={selectedId}
-            onClose={closeDrawer}
-            onAction={handleAction}
+            onClose={() => setSelectedId(null)}
+            onDone={() => {
+              setSelectedId(null);
+              reload();
+            }}
           />
         )}
       </Drawer>
-
-      {/* Action modal */}
-      {pendingAction && (
-        <ActionModal
-          state={pendingAction}
-          onClose={() => setPendingAction(null)}
-          onDone={afterAction}
-        />
-      )}
     </div>
   );
 }

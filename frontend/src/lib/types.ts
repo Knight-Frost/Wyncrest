@@ -771,6 +771,10 @@ export interface AdminDashboard {
     active_listings: number;
     total_listings: number;
     active_contracts: number;
+    /** Verification requests awaiting an admin decision. */
+    pending_verifications: number;
+    /** Users currently in the active account state. */
+    active_users: number;
   };
   contracts: {
     draft: number;
@@ -782,7 +786,13 @@ export interface AdminDashboard {
   ledger: {
     outstanding_cents: number;
     overdue_cents: number;
+    /** Count of ledger entries currently overdue (not the money amount). */
+    overdue_entries: number;
     collected_this_month_cents: number;
+  };
+  notifications: {
+    /** Email/SMS deliveries that failed across the platform. */
+    failed_deliveries: number;
   };
   listings_by_status: {
     draft: number;
@@ -830,6 +840,10 @@ export interface AdminNotificationDeliveriesResponse {
 }
 
 /* ---- Verification -------------------------------------------------------- */
+/**
+ * A *user's* identity state (`users.verification_status`). The terminal
+ * approved state here is `verified`.
+ */
 export type VerificationStatus =
   | 'unverified'
   | 'pending'
@@ -838,10 +852,23 @@ export type VerificationStatus =
   | 'rejected'
   | 'needs_more_information';
 
+/**
+ * A verification *request record's* lifecycle (`verification_requests.status`).
+ * Distinct vocabulary from {@link VerificationStatus}: the approved terminal
+ * state is `approved` (never `verified`/`unverified`). The admin moderation
+ * filters and badges speak this vocabulary.
+ */
+export type VerificationRequestStatus =
+  | 'pending'
+  | 'under_review'
+  | 'approved'
+  | 'rejected'
+  | 'needs_more_information';
+
 export interface VerificationRequest {
   id: string; // UUID
   user_id: number;
-  status: VerificationStatus;
+  status: VerificationRequestStatus;
   note: string | null;
   decision_reason: string | null;
   reviewed_by_admin_id: number | null;

@@ -6,13 +6,12 @@ import { formatDate } from '@/lib/format';
 import { useToast } from '@/components/ui/toast';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
+import { DetailDrawer } from '@/components/ui/Drawer';
 import { Field, Textarea } from '@/components/ui/Field';
-import { Card, CardBody } from '@/components/ui/Card';
-import { Table, THead, TH, TBody, TR, TD } from '@/components/ui/Table';
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/states';
 import { Spinner } from '@/components/ui/Spinner';
 import { StarRating } from '@/components/ui/StarRating';
+import { RecordList, RecordCard } from '@/components/ui/RecordCard';
 import {
   IconStar,
   IconAlertTriangle,
@@ -83,7 +82,7 @@ function isQueueStatus(status: ReviewStatus): boolean {
 
 type ModerationAction = 'approve' | 'reject' | 'hide' | 'flag';
 
-interface ModerationModalProps {
+interface ModerationDrawerProps {
   review: AdminReview;
   onClose: () => void;
   onDone: () => void;
@@ -107,7 +106,7 @@ function actionButtonVariant(action: ModerationAction): 'primary' | 'secondary' 
   }
 }
 
-function ModerationModal({ review, onClose, onDone }: ModerationModalProps) {
+function ModerationDrawer({ review, onClose, onDone }: ModerationDrawerProps) {
   const { toast } = useToast();
   const [selectedAction, setSelectedAction] = useState<ModerationAction | null>(null);
   const [reason, setReason] = useState('');
@@ -139,12 +138,13 @@ function ModerationModal({ review, onClose, onDone }: ModerationModalProps) {
   const ACTIONS: ModerationAction[] = ['approve', 'reject', 'hide', 'flag'];
 
   return (
-    <Modal
+    <DetailDrawer
       open
       onClose={submitting ? () => {} : onClose}
-      title="Moderate review"
-      description={`By ${reviewerName} on ${propertyTitle}`}
-      size="lg"
+      eyebrow="REVIEW"
+      title={propertyTitle}
+      description={`By ${reviewerName}`}
+      dismissibleOnOutside={!submitting}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={submitting}>
@@ -166,8 +166,8 @@ function ModerationModal({ review, onClose, onDone }: ModerationModalProps) {
         <div className="rounded-xl border border-ink-200 bg-ink-50/40 px-4 py-4 space-y-2">
           <div className="flex items-center gap-3 flex-wrap">
             <StarRating value={review.rating} readOnly size={18} />
-            <SemanticBadge role={reviewStatusBadgeRole(review.status)} dot={false}>
-              {reviewStatusLabel(review.status)}
+            <SemanticBadge role={reviewStatusBadgeRole(review.status as ReviewStatus)} dot={false}>
+              {reviewStatusLabel(review.status as ReviewStatus)}
             </SemanticBadge>
           </div>
           {review.title && (
@@ -231,7 +231,7 @@ function ModerationModal({ review, onClose, onDone }: ModerationModalProps) {
           )}
         </Field>
       </div>
-    </Modal>
+    </DetailDrawer>
   );
 }
 
@@ -290,10 +290,12 @@ export function ReviewModeration() {
       )}
 
       {/* Filter tabs */}
-      <div className="mb-5 flex gap-0 border-b border-ink-200">
+      <div className="mb-5 flex gap-0 border-b border-ink-200" role="tablist" aria-label="Filter reviews">
         {FILTER_TABS.map((tab) => (
           <button
             key={tab.key}
+            type="button"
+            role="tab"
             onClick={() => changeFilter(tab.key)}
             aria-selected={filter === tab.key}
             className={[
@@ -325,81 +327,50 @@ export function ReviewModeration() {
         />
       ) : (
         <>
-          <Card>
-            <CardBody className="p-0">
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>Property</TH>
-                    <TH>Reviewer</TH>
-                    <TH>Rating</TH>
-                    <TH>Status</TH>
-                    <TH>Review</TH>
-                    <TH>Moderated by</TH>
-                    <TH>{/* actions */}</TH>
-                  </TR>
-                </THead>
-                <TBody>
-                  {items.map((review: AdminReview) => {
-                    const reviewerName =
-                      review.reviewer?.full_name ?? `User #${review.reviewer_user_id}`;
-                    const propertyTitle =
-                      review.property?.name ?? `Property #${review.property_id}`;
+          <RecordList>
+            {items.map((review: AdminReview) => {
+              const reviewerName =
+                review.reviewer?.full_name ?? `User #${review.reviewer_user_id}`;
+              const propertyTitle =
+                review.property?.name ?? `Property #${review.property_id}`;
 
-                    return (
-                      <TR key={review.id}>
-                        <TD first>
-                          <p className="font-medium text-ink-900 truncate max-w-[160px]">
-                            {propertyTitle}
-                          </p>
-                        </TD>
-                        <TD>
-                          <p className="text-sm text-ink-800">{reviewerName}</p>
-                        </TD>
-                        <TD>
-                          <StarRating value={review.rating} readOnly size={15} />
-                        </TD>
-                        <TD>
-                          <SemanticBadge
-                            role={reviewStatusBadgeRole(review.status as ReviewStatus)}
-                            dot={false}
-                          >
-                            {reviewStatusLabel(review.status as ReviewStatus)}
-                          </SemanticBadge>
-                        </TD>
-                        <TD className="max-w-[220px]">
-                          {review.title && (
-                            <p className="text-xs font-semibold text-ink-700 truncate mb-0.5">
-                              {review.title}
-                            </p>
-                          )}
-                          <p className="text-xs text-ink-500 line-clamp-2">{review.body}</p>
-                        </TD>
-                        <TD className="text-xs text-ink-500 whitespace-nowrap">
-                          {review.moderator
-                            ? review.moderator.name
-                            : review.moderation_reason
-                            ? 'Admin'
-                            : '—'}
-                        </TD>
-                        <TD>
-                          <div className="flex justify-end">
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => setModerating(review)}
-                            >
-                              Moderate
-                            </Button>
-                          </div>
-                        </TD>
-                      </TR>
-                    );
-                  })}
-                </TBody>
-              </Table>
-            </CardBody>
-          </Card>
+              return (
+                <RecordCard
+                  key={review.id}
+                  title={propertyTitle}
+                  subtitle={reviewerName}
+                  indicator={<StarRating value={review.rating} readOnly size={15} />}
+                  related={
+                    review.body ? (
+                      <p className="text-xs text-ink-500 line-clamp-2">{review.body}</p>
+                    ) : undefined
+                  }
+                  status={
+                    <SemanticBadge
+                      role={reviewStatusBadgeRole(review.status as ReviewStatus)}
+                      dot={false}
+                    >
+                      {reviewStatusLabel(review.status as ReviewStatus)}
+                    </SemanticBadge>
+                  }
+                  timestamp={
+                    review.moderator
+                      ? `By ${review.moderator.name}`
+                      : formatDate(review.created_at)
+                  }
+                  primaryAction={
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setModerating(review)}
+                    >
+                      Moderate
+                    </Button>
+                  }
+                />
+              );
+            })}
+          </RecordList>
 
           {/* Pagination */}
           <div className="flex items-center justify-between gap-4">
@@ -441,9 +412,9 @@ export function ReviewModeration() {
         </>
       )}
 
-      {/* Moderation modal */}
+      {/* Moderation drawer */}
       {moderating && (
-        <ModerationModal
+        <ModerationDrawer
           review={moderating}
           onClose={() => setModerating(null)}
           onDone={() => {

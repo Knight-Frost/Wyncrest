@@ -4,8 +4,7 @@ import { adminApi } from '@/lib/endpoints';
 import { formatDate, formatCedisDecimal } from '@/lib/format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
-import { Field, Textarea } from '@/components/ui/Field';
+import { DestructiveConfirmDialog } from '@/components/ui/DestructiveConfirmDialog';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { IconShield, IconCheck, IconX, IconAlertTriangle } from '@/components/ui/icons';
 import {
@@ -53,8 +52,6 @@ export function Moderation() {
 
   const [filter, setFilter] = useState<FilterKey>('pending');
   const [rejecting, setRejecting] = useState<Listing | null>(null);
-  const [reason, setReason] = useState('');
-  const [reasonError, setReasonError] = useState<string | undefined>();
   const [busyId, setBusyId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [localOverrides, setLocalOverrides] = useState<Record<number, Listing['status']>>({});
@@ -79,25 +76,13 @@ export function Moderation() {
 
   function openReject(listing: Listing) {
     setRejecting(listing);
-    setReason('');
-    setReasonError(undefined);
   }
 
-  function closeReject() {
-    if (submitting) return;
-    setRejecting(null);
-  }
-
-  async function submitReject() {
-    if (!rejecting) return;
-    const trimmed = reason.trim();
-    if (!trimmed) {
-      setReasonError('A reason is required.');
-      return;
-    }
+  async function handleReject(reason?: string) {
+    if (!rejecting || !reason) return;
     setSubmitting(true);
     try {
-      await adminApi.rejectListing(rejecting.id, trimmed);
+      await adminApi.rejectListing(rejecting.id, reason);
       setLocalOverrides((prev) => ({ ...prev, [rejecting.id]: 'rejected' }));
       setRejecting(null);
     } catch {
@@ -130,7 +115,7 @@ export function Moderation() {
 
       {/* Filter tabs */}
       <DashboardSection eyebrow="Queue" title="All listings">
-        <div className="mb-5 flex gap-0 border-b border-ink-200">
+        <div className="mb-5 flex gap-0 border-b border-ink-200" role="tablist" aria-label="Filter listings">
           {FILTER_TABS.map((tab) => {
             const count =
               tab.key === 'pending'
@@ -144,6 +129,8 @@ export function Moderation() {
             return (
               <button
                 key={tab.key}
+                type="button"
+                role="tab"
                 onClick={() => setFilter(tab.key)}
                 aria-selected={filter === tab.key}
                 className={[
@@ -262,39 +249,22 @@ export function Moderation() {
         )}
       </DashboardSection>
 
-      <Modal
+      <DestructiveConfirmDialog
         open={rejecting !== null}
-        onClose={closeReject}
+        onClose={() => { if (!submitting) setRejecting(null); }}
+        onConfirm={handleReject}
         title="Reject listing"
         description={
           rejecting ? `Tell the landlord why "${rejecting.title}" was rejected.` : undefined
         }
-        footer={
-          <>
-            <Button variant="secondary" onClick={closeReject} disabled={submitting}>
-              Cancel
-            </Button>
-            <Button variant="danger" onClick={submitReject} loading={submitting}>
-              Reject listing
-            </Button>
-          </>
-        }
-      >
-        <Field label="Reason" required error={reasonError}>
-          {(id, invalid) => (
-            <Textarea
-              id={id}
-              invalid={invalid}
-              value={reason}
-              onChange={(e) => {
-                setReason(e.target.value);
-                if (reasonError) setReasonError(undefined);
-              }}
-              placeholder="Explain what needs to change…"
-            />
-          )}
-        </Field>
-      </Modal>
+        confirmLabel="Reject listing"
+        loading={submitting}
+        reasonField={{
+          label: 'Reason for rejection',
+          placeholder: 'Explain what needs to change…',
+          required: true,
+        }}
+      />
     </div>
   );
 }
