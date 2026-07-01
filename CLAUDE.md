@@ -1,4 +1,4 @@
-# CLAUDE.md — Nexus Project Memory
+# CLAUDE.md: Nexus Project Memory
 
 > Permanent project memory for AI sessions and human maintainers. Read this first.
 > Keep it up to date when architecture, conventions, or status change.
@@ -7,50 +7,52 @@
 
 ## 0. Extended Project Knowledge System
 
-**Before doing any Nexus work, read `Claude_Project_Knowledge/README.md` first.**
+**Before doing any Nexus work, read `.internal/Claude_Project_Knowledge/README.md` first.**
 
-A dedicated knowledge system lives in `Claude_Project_Knowledge/`. It was built by
-studying six learning archives and contains:
+A dedicated knowledge system lives in `.internal/Claude_Project_Knowledge/` (moved
+under `.internal/` during the repo cleanup pass so AI working notes don't sit
+beside application source). It was built by studying six learning archives and
+contains:
 
-- `DESIGN.md` — Nexus visual identity in design token format (colors, typography, components)
-- `nexus_design_memory.md` — Design direction, visual rules, role-specific UX
-- `ui_ux_quality_bar.md` — What "good UI" means for Nexus specifically
-- `frontend_implementation_rules.md` — TypeScript/React rules
-- `backend_implementation_rules.md` — Laravel/PHP rules
-- `claude_behavior_rules.md` — How Claude must behave in this project
-- `reporting_style.md` — Required format for every completion report
-- `lessons_to_apply.md` — Lessons extracted from study materials
-- `lessons_to_ignore.md` — What was studied but does not apply to Nexus
-- `study_index.md` — Proof of what was inspected and when
-- `agent_workflow.md` — When and how to use multi-agent patterns
-- `memory_workflow.md` — How to use and update this knowledge system
+- `DESIGN.md`: Nexus visual identity in design token format (colors, typography, components)
+- `nexus_design_memory.md`: Design direction, visual rules, role-specific UX
+- `ui_ux_quality_bar.md`: What "good UI" means for Nexus specifically
+- `frontend_implementation_rules.md`: TypeScript/React rules
+- `backend_implementation_rules.md`: Laravel/PHP rules
+- `claude_behavior_rules.md`: How Claude must behave in this project
+- `reporting_style.md`: Required format for every completion report
+- `lessons_to_apply.md`: Lessons extracted from study materials
+- `lessons_to_ignore.md`: What was studied but does not apply to Nexus
+- `study_index.md`: Proof of what was inspected and when
+- `agent_workflow.md`: When and how to use multi-agent patterns
+- `memory_workflow.md`: How to use and update this knowledge system
 
 **The `Claude_Study_Guide/` folder contains the original zip archives.**
 It is read-only. Never modify, rename, or delete files inside it.
 
 ### Mandatory Behavior for All Claude Sessions
 
-- Read `Claude_Project_Knowledge/README.md` before doing Nexus work
+- Read `.internal/Claude_Project_Knowledge/README.md` before doing Nexus work
 - Read design files before making any UI or frontend changes
-- Format all money as GH₵ using the format utility — always, no exceptions
-- Avoid cramped layouts — minimum 24px card padding, 40px section spacing
-- Use a display font with personality for headings — not Inter alone
+- Format all money as GH₵ using the format utility, always, no exceptions
+- Avoid cramped layouts: minimum 24px card padding, 40px section spacing
+- Use a display font with personality for headings, not Inter alone
 - Prefer spacious, personalized, role-specific interfaces
 - Never produce a generic SaaS dashboard look
 - Report completions using the format in `reporting_style.md`
-- Keep `Claude_Project_Knowledge/` updated when new lessons are learned
+- Keep `.internal/Claude_Project_Knowledge/` updated when new lessons are learned
 - Project memory lives in the repository, not just in this chat
 
-### Approved Visual Direction — White Liquid Glass (Confirmed June 2026, Homecrest rebrand)
+### Approved Visual Direction: White Liquid Glass (Confirmed June 2026, Homecrest rebrand)
 
-> **SUPERSEDES "Warm Paper & Oxblood."** During the Nexus→Homecrest rebrand the user reviewed the warm-paper editorial direction and **chose to pivot** to a **white background + liquid-glass** identity: open, airy, premium, enterprise-grade. This reverses the earlier warm-paper approval *intentionally and explicitly* — do NOT "correct" the codebase back to warm paper. Warm paper, gold, and obsidian/mint are all **dead directions** now. The token set is being migrated in `Claude_Project_Knowledge/DESIGN.md`.
+> **SUPERSEDES "Warm Paper & Oxblood."** During the Nexus→Homecrest rebrand the user reviewed the warm-paper editorial direction and **chose to pivot** to a **white background + liquid-glass** identity: open, airy, premium, enterprise-grade. This reverses the earlier warm-paper approval *intentionally and explicitly*: do NOT "correct" the codebase back to warm paper. Warm paper, gold, and obsidian/mint are all **dead directions** now. The token set is being migrated in `.internal/Claude_Project_Knowledge/DESIGN.md`.
 
 | Decision | Status |
 |----------|--------|
 | Page background: **cool white** `#FFFFFF` / `#FBFCFD` (architectural light, never warm paper) | **APPROVED** |
-| Cards / surfaces: **liquid glass** — `rgba(255,255,255,0.6)` + `backdrop-blur`, hairline `rgba(15,23,42,0.08)`, soft shadow `0 8px 32px rgba(15,23,42,0.06)` | **APPROVED** |
+| Cards / surfaces: **liquid glass**: `rgba(255,255,255,0.6)` + `backdrop-blur`, hairline `rgba(15,23,42,0.08)`, soft shadow `0 8px 32px rgba(15,23,42,0.06)` | **APPROVED** |
 | Accent: **ink-teal** primary, **oxblood** rationed (danger/punctuation only) | **APPROVED** |
-| Display font: **Fraunces** (serif, characterful) — headings, hero, numerals | **KEPT** |
+| Display font: **Fraunces** (serif, characterful), headings, hero, numerals | **KEPT** |
 | Body font: **Hanken Grotesque** · Mono (eyebrows/labels): **IBM Plex Mono** | **KEPT** |
 | Money: **ink-teal** (`#075865`), never gold/brown | **KEPT** |
 | User-selectable **accent color** (curated palette, per-user, accessible) | **PLANNED (Phase 14)** |
@@ -58,21 +60,21 @@ It is read-only. Never modify, rename, or delete files inside it.
 | Gold / bronze / brown / mustard · mint / jade / obsidian-dark sidebar | **HARD REJECTED** |
 | Purple / violet / lavender · generic SaaS blue · AI gradient blobs · low-contrast gray soup | **HARD REJECTED** |
 
-**The look is glass over white architectural light, not SaaS sludge:** translucent layered surfaces, soft borders, gentle blur where performant, strong text contrast, precise spacing, subtle motion that respects `prefers-reduced-motion`. Tasteful — never an overdone blurry mess. Implement tokens in DESIGN.md.
+**The look is glass over white architectural light, not SaaS sludge:** translucent layered surfaces, soft borders, gentle blur where performant, strong text contrast, precise spacing, subtle motion that respects `prefers-reduced-motion`. Tasteful, never an overdone blurry mess. Implement tokens in DESIGN.md.
 
-> **Brand is now CONFIG-DRIVEN — current name: "Wyncrest" (June 2026).** The product
+> **Brand is now CONFIG-DRIVEN, current name: "Wyncrest" (June 2026).** The product
 > was Nexus → Homecrest → **Wyncrest**, and the name may change again. There is a **centralized
 > brand layer** so future renames are a config/env change, NOT a code sweep:
 > - **Frontend:** `frontend/src/config/brand.ts` (`brand.*` + `pageTitle()`), reads `VITE_*` env with
 >   safe defaults. The W-crest logo (`components/brand/Logo.tsx`) takes its initial from `brand.brandInitial`.
 >   `index.html` title/meta use `%BRAND_*%` placeholders injected by a vite plugin in `vite.config.js`.
 > - **Backend:** `config/brand.php` (`config('brand.display_name'|'short_name'|...)`), reads `BRAND_*` env.
->   All mailables/Blade emails/SMS/console output read brand from config — never hardcode the app name.
+>   All mailables/Blade emails/SMS/console output read brand from config, never hardcode the app name.
 > - To rename: change env (or the defaults in those two files) + optionally the logo asset. See README "Branding".
 > **Do NOT hardcode the app name in pages, emails, or notifications.** Internal technical identifiers
 > (`nexus.*` localStorage/cache keys, `nexus_` Sanctum prefix, `NexusCard`, `nvx-`/`nx-`/`--nexus-*` CSS,
 > `nexus-frontend` package) are deliberately retained to avoid breakage. Remaining "Nexus/Homecrest" in
-> code COMMENTS only — not user-facing.
+> code COMMENTS only, not user-facing.
 >
 > **Other stale facts corrected:** `Conversation`/`Message` messaging is **fully built** (endpoints +
 > `MessagesPage.tsx`), not "schema only". Backend baseline is **596 green** (deterministic).
@@ -91,19 +93,19 @@ financial ledger, Stripe-backed rent payments, multi-channel notifications
 
 A single, trustworthy system of record for landlords, tenants, and platform
 administrators. Financial correctness, auditability, and least-privilege access
-are first-class concerns — the ledger is **immutable by design** and every
+are first-class concerns; the ledger is **immutable by design** and every
 privileged action is written to an append-only audit log.
 
 ## 3. Current Project Status
 
 | Area | Status |
 |------|--------|
-| Backend (Laravel 12) | **Mature & passing** — 598 tests green (deterministic), full domain implemented |
+| Backend (Laravel 12) | **Mature & passing**: 598 tests green (deterministic), full domain implemented |
 | RBAC / Auth | Implemented + proven (Sanctum tokens, dual User/Admin model, middleware + policies, IDOR/escalation test suite) |
 | Payments / Webhooks | Implemented (Stripe PaymentIntents + signature-verified webhook, idempotent) |
 | Notifications | Implemented (in-app, email, SMS, digests, preferences) |
 | Analytics / Caching | Implemented (scoped, selectively invalidated, async jobs) |
-| Frontend (`frontend/`) | **Built & truthful** — React 18 + TS + Vite + Tailwind v4 SPA, role-aware, integrated with the API (tsc + eslint + build clean). **All three portals (tenant/landlord/admin) now run on 100% real backend data — no mock files remain.** |
+| Frontend (`frontend/`) | **Built & truthful**: React 18 + TS + Vite + Tailwind v4 SPA, role-aware, integrated with the API (tsc + eslint + build clean). **All three portals (tenant/landlord/admin) now run on 100% real backend data, no mock files remain.** |
 | Security | OWASP audit complete (no high/critical); CSP + HSTS added; `docs/SECURITY.md` |
 | Docs | README, `CLAUDE.md`, `docs/{API_REFERENCE,SECURITY,EXECUTION_PLAN,ARCHITECTURE,DEPLOYMENT}.md` |
 
@@ -145,20 +147,20 @@ Route (middleware: auth:sanctum + role guard + rate limit)
 - Standalone **SPA in `frontend/`** (NOT the Laravel `resources/` Blade layer,
   which only serves a welcome page).
 - Talks to the backend over the JSON API using **Bearer tokens stored client-side**
-  (token-based Sanctum, not cookie/SPA mode — see `bootstrap/app.php:31-35`).
+  (token-based Sanctum, not cookie/SPA mode; see `bootstrap/app.php:31-35`).
 - Structure (target): `src/{api,components,context,hooks,pages,routes,lib,types}`.
 - Role-aware routing: public, tenant, landlord, and admin areas guarded by an
-  auth context + route guards. **UI authorization is cosmetic only — the API is
+  auth context + route guards. **UI authorization is cosmetic only; the API is
   the source of truth.**
 
 ## 7. Database Overview
 
 25 migrations in `database/migrations` (run in filename order). Highlights:
 
-- **Money is stored in integer cents** (`amount_cents`, `rent_amount`) — never floats.
+- **Money is stored in integer cents** (`amount_cents`, `rent_amount`), never floats.
 - **`contracts` and `ledger_entries` use UUID primary keys** (prevents ID
   enumeration / IDOR on financial records).
-- **`ledger_entries` is immutable** — `update()`/`delete()` throw; status changes
+- **`ledger_entries` is immutable**: `update()`/`delete()` throw; status changes
   only via `transitionStatus()`; corrections are compensating entries.
 - **`audit_logs` is append-only** (`UPDATED_AT = null`).
 - Soft deletes on user-facing models (users, properties, units, listings).
@@ -170,7 +172,7 @@ Route (middleware: auth:sanctum + role guard + rate limit)
 
 | Path | Contents |
 |------|----------|
-| `app/Models` | Eloquent models (one class per file — PSR-4) |
+| `app/Models` | Eloquent models (one class per file, PSR-4) |
 | `app/Http/Controllers/{Admin,Landlord,Tenant,Analytics,Public}` | Thin controllers grouped by audience |
 | `app/Http/Requests` | FormRequest validation classes |
 | `app/Http/Middleware` | Role guards, rate limiting, security headers, metrics |
@@ -229,19 +231,19 @@ super-admins in the current phase).
 | Area | Public | Tenant | Landlord | Admin |
 |------|:------:|:------:|:--------:|:-----:|
 | Browse listings | ✅ | ✅ | ✅ | ✅ |
-| Save listings | — | ✅ | — | — |
-| Manage properties/units/listings | — | — | ✅ (own) | — |
-| Listing moderation (approve/reject) | — | — | — | ✅ |
-| Create/send contracts | — | — | ✅ (own) | — |
-| Accept contracts | — | ✅ (own) | — | — |
-| Terminate contracts | — | ✅ (own) | ✅ (own) | ✅ (any) |
-| View ledger | — | ✅ (own) | ✅ (own) | ✅ (all) |
-| Initiate payment | — | ✅ (own) | — | — |
-| Generate late fees | — | — | — | ✅ |
-| Feature flags per landlord | — | — | — | ✅ |
-| Audit logs | — | — | — | ✅ |
-| Analytics | — | scoped | scoped | platform-wide |
-| Metrics | — | — | ✅ | ✅ |
+| Save listings | - | ✅ | - | - |
+| Manage properties/units/listings | - | - | ✅ (own) | - |
+| Listing moderation (approve/reject) | - | - | - | ✅ |
+| Create/send contracts | - | - | ✅ (own) | - |
+| Accept contracts | - | ✅ (own) | - | - |
+| Terminate contracts | - | ✅ (own) | ✅ (own) | ✅ (any) |
+| View ledger | - | ✅ (own) | ✅ (own) | ✅ (all) |
+| Initiate payment | - | ✅ (own) | - | - |
+| Generate late fees | - | - | - | ✅ |
+| Feature flags per landlord | - | - | - | ✅ |
+| Audit logs | - | - | - | ✅ |
+| Analytics | - | scoped | scoped | platform-wide |
+| Metrics | - | - | ✅ | ✅ |
 
 ## 13. API Structure
 
@@ -250,8 +252,8 @@ super-admins in the current phase).
   notifications, analytics, metrics, webhooks), plus `api_contracts.php` and
   `api_ledger.php` for contract/ledger sub-domains.
 - Guards: `auth:sanctum` + a role middleware + `rate.limit.role`.
-- Webhook: `POST /webhooks/stripe` — **no auth**, verified by Stripe signature.
-- **Response convention:** JSON. (Completion work standardizes the envelope —
+- Webhook: `POST /webhooks/stripe`: **no auth**, verified by Stripe signature.
+- **Response convention:** JSON. (Completion work standardizes the envelope,
   see §15 / Known Work.)
 
 ## 14. Security Rules (OWASP-aligned)
@@ -259,7 +261,7 @@ super-admins in the current phase).
 - **Never trust the client.** All authorization is enforced server-side.
 - Validation on every write via FormRequests; **mass assignment** controlled by
   explicit `$fillable` whitelists.
-- **SQL injection:** use Eloquent / query bindings only — no raw interpolation.
+- **SQL injection:** use Eloquent / query bindings only, no raw interpolation.
 - **XSS:** API returns JSON; the SPA must escape output (React does by default).
 - **Secrets** live in `.env` only (git-ignored). Never commit `.env`, keys, or
   `auth.json`.
@@ -282,7 +284,7 @@ super-admins in the current phase).
 
 - Analytics responses are cached with **scoped keys** (`app/Support/Cache`).
 - **Selective invalidation:** a write only invalidates cache entries whose
-  metadata overlaps (same tenant/property/date range) — see
+  metadata overlaps (same tenant/property/date range); see
   `AnalyticsCacheInvalidator`.
 - Large invalidations (>100 keys) are **dispatched to a queue**
   (`InvalidateAnalyticsCacheJob`, queue `analytics-invalidation`, tries=3).
@@ -301,7 +303,7 @@ super-admins in the current phase).
 - `tests/Feature` covers auth, RBAC/policies, contract & ledger workflows,
   payments, notifications (in-app/email/SMS/digest), analytics, caching, rate
   limiting, metrics. `tests/Load` holds k6 scripts.
-- Run: `php artisan test` (or `composer test`). **Keep the suite green** —
+- Run: `php artisan test` (or `composer test`). **Keep the suite green**:
   never commit with failing tests.
 - Coverage focus areas for completion: payments/webhook edge cases, admin
   authorization, IDOR/privilege-escalation negatives.
@@ -341,21 +343,21 @@ One-shot dev (server + queue + logs + vite): `composer run dev`.
 ### 21a. Live EC2 Demo Deployment (set up June 2026)
 
 A **demo/staging** instance is live. This is a showcase box, **not** hardened production
-(see caveats below) — do not treat it as the production environment.
+(see caveats below); do not treat it as the production environment.
 
-- **URL:** http://18.216.245.190 — **HTTP only, no domain/TLS.** (So Stripe webhooks
+- **URL:** http://18.216.245.190; **HTTP only, no domain/TLS.** (So Stripe webhooks
   and secure cookies do NOT work; auth is Bearer-token so login works fine.)
 - **Host:** `ec2-user@18.216.245.190` · region us-east-2 (Ohio) · instance
   `i-0f4e0733ca1f463bc` · t3.micro (912 MB RAM) · Amazon Linux 2023.
   SSH key: `~/Downloads/Wyncrest.pem` (must be `chmod 600`). Ports 22 + 80 open in the SG.
 - **App dir:** `/var/www/wyncrest` (owner `ec2-user:apache`; `storage/`,
-  `bootstrap/cache/`, `database/` are `775` group-writable so php-fpm — user `apache` — can write).
+  `bootstrap/cache/`, `database/` are `775` group-writable so php-fpm, user `apache`, can write).
 - **Stack:** PHP 8.3 + php-fpm (socket `/run/php-fpm/www.sock`,
   `listen.acl_users=apache,nginx`) · nginx (`/etc/nginx/conf.d/wyncrest.conf`) · composer.
   A **2 GB swapfile** (`/swapfile`) was added so `composer install` doesn't OOM on 912 MB.
   Both services run under **systemd** (`enable --now`), so they survive reboots and are
   independent of any SSH session (closing your laptop terminal does NOT stop the site).
-- **Serving model — single origin:** nginx serves the SPA build (`frontend/dist`) at `/`
+- **Serving model, single origin:** nginx serves the SPA build (`frontend/dist`) at `/`
   with an `index.html` fallback, and proxies the backend prefixes **`/api`, `/sanctum`,
   `/storage`, `/up`** to Laravel's `public/index.php`. Because it's same-origin, the SPA
   needs **no** API-URL env (`lib/api.ts` defaults `baseURL` to `/api`) and there's no CORS.
@@ -364,7 +366,7 @@ A **demo/staging** instance is live. This is a showcase box, **not** hardened pr
   `APP_ENV=production`, `APP_DEBUG=false`.
 - **Demo data:** the dev demo graph is seeded **in a production env** via
   `NEXUS_SEED_MODE=development` + `NEXUS_ALLOW_DEV_SEED_IN_PROD=true` in `.env`.
-  ⚠️ The demo seeders depend on **faker (a `require-dev` package)** — `composer install
+  ⚠️ The demo seeders depend on **faker (a `require-dev` package)**: `composer install
   --no-dev` breaks seeding with `Call to undefined function fake()`, so the **full**
   dependency set is installed on this box. A genuine production deploy would keep
   `--no-dev` and seed only the safe baseline (`NEXUS_SEED_MODE=production`).
@@ -378,18 +380,18 @@ A **demo/staging** instance is live. This is a showcase box, **not** hardened pr
   → `sudo systemctl reload php-fpm nginx`.
 - **Cost note:** a running instance bills per hour regardless of traffic. Use EC2 console
   **Stop** to pause compute cost (keeps the EBS disk + setup); restarting yields a **new
-  public IP** unless an Elastic IP is attached. Local AWS CLI is **not** configured —
+  public IP** unless an Elastic IP is attached. Local AWS CLI is **not** configured;
   security-group / instance changes must be done in the AWS console.
-- **Caveats (not done — this is a demo):** no TLS/domain, no real Stripe/Twilio/Google
+- **Caveats (not done: this is a demo):** no TLS/domain, no real Stripe/Twilio/Google
   creds (those features stay gated off), no queue worker or scheduler cron, dev
   dependencies present, SQLite rather than MySQL/Postgres.
 
 ## 22. Known Risks
 
 - All admins are super-admins (granular admin RBAC is a future phase).
-- SQLite is the default — production should use MySQL/Postgres + Redis.
+- SQLite is the default; production should use MySQL/Postgres + Redis.
 - ~~`Conversation`/`Message` exist as schema only~~ **Correction:** messaging is fully built
-  (endpoints + `MessagesPage.tsx`) — this old note was stale.
+  (endpoints + `MessagesPage.tsx`); this old note was stale.
 - Sensitive PII is not field-encrypted at rest.
 
 ## 23. Known Unfinished Work (live punch list)
@@ -402,7 +404,7 @@ Landlord and Admin portals to 100% real data using the shared design system.
 Deleted all frontend mock (`lib/mockData.ts`, `pages/admin/adminMockData.ts`, dead
 admin components). Removed invented Admin "Disputes"/"Risk" stubs. New backend:
 `GET /landlord/dashboard`, `GET /admin/users` (+ show/suspend/activate, audited),
-and extended `GET /admin/dashboard` with real platform aggregates — all tested
+and extended `GET /admin/dashboard` with real platform aggregates, all tested
 (suite now **400 tests**). Wired previously-dead landlord screens (Applicants→real
 applications/decide; Tenants→derived from contracts+ledger; Maintenance & Analytics
 built on existing endpoints; Properties/Listings dead buttons fixed; fake 76%
@@ -410,15 +412,15 @@ occupancy replaced with real unit statuses).
 
 Remaining / future work:
 - [ ] Standardize the API response envelope across controllers. *Deliberately
-  deferred* — the SPA is the only consumer and the typed client already adapts
+  deferred*: the SPA is the only consumer and the typed client already adapts
   per-endpoint; refactoring would churn the green suite for little gain. Revisit
   if a second/external consumer appears.
 - [x] ~~Wire remaining notification types (late fee added, contract signed/terminated).~~ **DONE (Phase 2, Homecrest pass):** contract signed/terminated, account suspended/reactivated, late-fee, and listing approved/rejected now create real in-app notifications; the 4 dispatched-but-orphaned listing/user events are registered; `UserCreated` fires on registration. Notification money is now GH₵ (was `$`).
-- [~] Media storage + upload: **backend DONE (Phase 3)** — new `media_assets` (UUID PK,
+- [~] Media storage + upload: **backend DONE (Phase 3)**: new `media_assets` (UUID PK,
   polymorphic, public/private disks, checksum, sort/alt/caption, soft-delete), `MediaService`,
   `MediaAssetPolicy`, upload/stream/reorder/delete routes for property/unit/listing galleries +
   avatars, S3/R2-ready via `config/media.php`. Coexists with legacy `ListingPhoto` (consolidation
-  later). **Frontend upload UI still pending** — wired in the liquid-glass redesign phase.
+  later). **Frontend upload UI still pending**: wired in the liquid-glass redesign phase.
 - [x] ~~Real account verification~~ **DONE (Phase 4):** `verification_requests` (UUID) +
   `VerificationStatus` enum + `VerificationService` (submit/approve/reject/needs-info),
   admin review queue, document-backed, notifications + `IdentityVerified` wired. **Hard gating**
@@ -427,15 +429,15 @@ Remaining / future work:
   archived); admin block/archive (+ existing suspend/activate) with reason+audit+notify; middleware
   + login reject blocked/archived; **frontend self-delete removed** (no self-delete endpoint exists).
 - [x] ~~Google sign-in + auth hardening~~ **DONE (Phase 6):** env-gated Socialite Google OAuth
-  (admin-email refusal, safe email linking), password reset (broker, no-leak), email verification —
+  (admin-email refusal, safe email linking), password reset (broker, no-leak), email verification,
   all SPA-friendly + tested. Frontend: Google button (config-gated), forgot/reset/verify pages.
 - [x] ~~Rating/review system~~ **DONE (Phase 8):** `reviews` table, governed eligibility (tenant must
   have an active/terminated/expired Contract on the property; 1 review per contract), admin moderation,
-  landlord response, **approved-only aggregates** (pending reviews never affect averages — tested).
+  landlord response, **approved-only aggregates** (pending reviews never affect averages, tested).
   Backend complete; review UI lands with the portal/redesign phase.
 - [x] ~~Application lifecycle notifications~~ **DONE (Phase 7):** submit→landlord, decide→tenant.
 - Fixed a **pre-existing flaky suite** (Carbon::setTestNow leak from LedgerAutomationTest) via a
-  global `tearDown` reset in `tests/TestCase.php` — suite is now deterministic (596 green, 6/6 runs).
+  global `tearDown` reset in `tests/TestCase.php`: suite is now deterministic (596 green, 6/6 runs).
 - [ ] Granular admin RBAC (all admins are super-admins today).
 - [ ] `Conversation`/`Message` messaging feature (schema only).
 - [x] ~~Feature UIs for media/verification/reviews~~ **DONE (Wyncrest rebuild):** tenant
@@ -443,9 +445,9 @@ Remaining / future work:
   + review responses; admin verification & review moderation + audited doc download; **accent-color
   picker** (16 curated, localStorage, brand/action ramps only); **audit-log investigation redesign**
   (filters + detail drawer with real before/after, never fabricated). All wired to real endpoints.
-- [ ] Per-page glass polish — a few existing pages still need cosmetic white-glass refinement
+- [ ] Per-page glass polish: a few existing pages still need cosmetic white-glass refinement
   (Listing detail, Browse, some landlord sub-pages); they already render real data on tokens.
-- [ ] Frontend automated tests (Vitest/RTL) — currently validated via tsc + lint
+- [ ] Frontend automated tests (Vitest/RTL): currently validated via tsc + lint
   + build + live smoke test.
 - [x] ~~Known backend nit: `GET /admin/contracts` validates `landlord_id`/`tenant_id`
   filters as `uuid`, but those FKs are bigint.~~ **FIXED (Phase 2):** admin contract & ledger
@@ -455,7 +457,7 @@ Remaining / future work:
 
 - **PHP:** PSR-12 via **Laravel Pint** (`./vendor/bin/pint`). One class per file,
   PSR-4 paths. Thin controllers, fat services. Enums for domain constants.
-  No business data hardcoded — use config/`.env`.
+  No business data hardcoded: use config/`.env`.
 - **TypeScript/React:** ESLint clean, typed props/responses, function components +
   hooks, no `any` for API payloads, components small and composable.
 - **Naming:** descriptive and consistent with the surrounding file's idiom.
@@ -464,7 +466,7 @@ Remaining / future work:
 
 - Keep this file, `README.md`, and `docs/*` in sync with reality.
 - Document any deliberate hardcoded value or deviation inline with a `// why:`.
-- API changes update `docs/API_EXAMPLES.md`.
+- API changes update `docs/API_REFERENCE.md`.
 
 ## 26. Git & Branch Rules
 
@@ -478,7 +480,7 @@ Remaining / future work:
 1. Read this file. Run `php artisan test` to confirm the baseline is green.
 2. Pick the next item from §23. Prefer the highest item that blocks build/run/
    test/security.
-3. Verify in the codebase before assuming — this file summarizes, the code rules.
+3. Verify in the codebase before assuming; this file summarizes, the code rules.
 4. Add/update tests for any behavior you change. Run Pint. Keep docs in sync.
 
 ## 28. What Must NOT Change Without Explicit Approval

@@ -16,7 +16,7 @@ php artisan migrate:fresh --seed
 # Explicit development mode
 NEXUS_SEED_MODE=development php artisan migrate:fresh --seed
 
-# Production-safe baseline ONLY (idempotent — safe to re-run)
+# Production-safe baseline ONLY (idempotent, safe to re-run)
 NEXUS_SEED_MODE=production php artisan db:seed
 
 # Verify the development graph + ledger consistency
@@ -40,10 +40,10 @@ php artisan nexus:seed:verify
 | `NEXUS_DEMO_TENANTS` | `20` | Number of demo tenants. |
 | `NEXUS_DEMO_LANDLORDS` | `10` | Number of demo landlords. |
 | `NEXUS_DEMO_CURRENCY` | `GHS` | Currency for demo money (presented as GH₵). |
-| `NEXUS_BOOTSTRAP_ADMIN_EMAIL` | — | Production super-admin email (optional). |
-| `NEXUS_BOOTSTRAP_ADMIN_NAME` | — | Production super-admin name (optional). |
-| `NEXUS_BOOTSTRAP_ADMIN_PASSWORD` | — | Production super-admin password (optional). |
-| `NEXUS_ALLOW_DEV_SEED_IN_PROD` | `false` | Safety latch — must be `true` to run the dev seeder under `APP_ENV=production`. |
+| `NEXUS_BOOTSTRAP_ADMIN_EMAIL` | - | Production super-admin email (optional). |
+| `NEXUS_BOOTSTRAP_ADMIN_NAME` | - | Production super-admin name (optional). |
+| `NEXUS_BOOTSTRAP_ADMIN_PASSWORD` | - | Production super-admin password (optional). |
+| `NEXUS_ALLOW_DEV_SEED_IN_PROD` | `false` | Safety latch: must be `true` to run the dev seeder under `APP_ENV=production`. |
 
 > Production seeding **never** creates demo data and **never** invents admin
 > credentials. If the three `NEXUS_BOOTSTRAP_ADMIN_*` vars are not all present,
@@ -75,18 +75,18 @@ for the complete, deterministic catalog.
 
 ## What the development seed creates
 
-- **30 users** (20 tenants, 10 landlords) + 2 admins — verification and
+- **30 users** (20 tenants, 10 landlords) + 2 admins, verification and
   account-status variety, incl. suspended/blocked accounts.
 - **10 properties** across Accra, Tema, Kumasi & Takoradi.
 - **20 rental units**, each a **distinct type** (studio → penthouse → family
-  compound — no clones).
+  compound, no clones).
 - **20 listings** spanning every status (draft, pending_review, active,
   inactive, rejected, archived).
 - **Applications** across every status (submitted, in_review, landlord_review,
   approved, rejected, withdrawn).
 - **9 contracts** across the full lifecycle (draft, pending_tenant, active,
   terminated, expired).
-- **An immutable, mathematically-consistent ledger** — paid history, overdue,
+- **An immutable, mathematically-consistent ledger**: paid history, overdue,
   late fees, partial payments, and current pending charges. Payments are stored
   as negative entries so balances stay derivable
   (`PaymentService::getTenantBalance`).
@@ -101,7 +101,7 @@ for the complete, deterministic catalog.
 ```
 DatabaseSeeder            ← entry point; resolves mode
 ├── ProductionSeeder      ← reference data + optional env super admin (idempotent)
-│   └── ReferenceDataSeeder   (feature definitions — shared, idempotent)
+│   └── ReferenceDataSeeder   (feature definitions, shared, idempotent)
 └── DevelopmentSeeder     ← orchestrates the demo graph (refuses to run in prod)
     ├── ReferenceDataSeeder
     └── Dev\…  UserSeeder, VerificationSeeder, FeatureGateSeeder, PropertySeeder,
@@ -119,14 +119,14 @@ the demo dataset is `database/seeders/Dev/SeedCatalog.php`.
 - **Development:** `php artisan migrate:fresh --seed` drops and rebuilds
   everything. Order is deterministic and safe.
 - **Production:** never run destructive resets. `ProductionSeeder` is fully
-  idempotent (`updateOrCreate` / `firstOrCreate`) — re-running it never
+  idempotent (`updateOrCreate` / `firstOrCreate`), re-running it never
   duplicates rows or overwrites existing data.
 
 ## Known limitations
 
 - **Media binaries are not seeded.** `EngagementSeeder` creates `media_assets`
   **metadata** rows (so galleries, counts and admin media views are populated),
-  but the underlying image files do not exist — streaming a seeded asset will
+  but the underlying image files do not exist, streaming a seeded asset will
   404. Upload real files through the gallery UI to back them.
 - **No real Stripe/Twilio calls.** Payment entries use clearly-fake
   `pi_demo_seed_*` intent ids; no external services are contacted during seeding.
