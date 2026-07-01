@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ACCENTS,
   DEFAULT_ACCENT_KEY,
   applyAccent,
-  clearAccentOverrides,
   findAccent,
   getStoredAccentKey,
   storeAccentKey,
@@ -27,22 +25,14 @@ export function AccentProvider({ children }: { children: React.ReactNode }) {
 
   const accent = useMemo(() => findAccent(accentKey), [accentKey]);
 
-  // Re-apply whenever accent key changes or on mount.
-  // We also watch for theme changes by subscribing to the data-theme attribute
-  // so dark-mode accent vars get applied if darkVars exist.
+  // Re-apply whenever the accent key changes, on mount, AND whenever the
+  // resolved theme flips — so the accent's light/dark ramp is always correct.
+  // The accent is ALWAYS applied (incl. the default), which is what makes the
+  // accent the single source of truth for brand/action colour in both modes.
   useEffect(() => {
     function apply() {
-      const themeChoice = getStoredChoice();
-      const resolved = resolveChoice(themeChoice);
-      if (accentKey === DEFAULT_ACCENT_KEY) {
-        // Default accent — clear any inline overrides so the stylesheet values win.
-        // Find all known accent var keys across ALL accents and remove them.
-        for (const a of ACCENTS) {
-          clearAccentOverrides(a);
-        }
-      } else {
-        applyAccent(accent, resolved);
-      }
+      const resolved = resolveChoice(getStoredChoice());
+      applyAccent(accent, resolved);
     }
 
     apply();
