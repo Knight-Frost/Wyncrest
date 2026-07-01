@@ -10,7 +10,7 @@ import { SemanticBadge } from '@/components/cards/SemanticBadge';
 import { getContractVariant } from '@/components/cards/variants';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { Field, Textarea } from '@/components/ui/Field';
+import { DestructiveConfirmDialog } from '@/components/ui/DestructiveConfirmDialog';
 import { ErrorState, LoadingState } from '@/components/ui/states';
 import {
   IconCalendar,
@@ -75,8 +75,6 @@ export function ContractDetail() {
 
   const [confirmSend, setConfirmSend] = useState(false);
   const [terminateOpen, setTerminateOpen] = useState(false);
-  const [reason, setReason] = useState('');
-  const [reasonError, setReasonError] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
   const [actionResult, setActionResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -109,12 +107,9 @@ export function ContractDetail() {
     }
   }
 
-  async function handleTerminate() {
-    const trimmed = reason.trim();
-    if (!trimmed) {
-      setReasonError('A reason is required.');
-      return;
-    }
+  async function handleTerminate(reason?: string) {
+    const trimmed = (reason ?? '').trim();
+    if (!trimmed) return; // DestructiveConfirmDialog required guard covers this
     setSubmitting(true);
     setActionResult(null);
     try {
@@ -125,19 +120,12 @@ export function ContractDetail() {
       }
       setActionResult({ type: 'success', message: 'Contract terminated.' });
       setTerminateOpen(false);
-      setReason('');
       reload();
     } catch (err) {
       setActionResult({ type: 'error', message: err instanceof Error ? err.message : 'Failed to terminate contract.' });
     } finally {
       setSubmitting(false);
     }
-  }
-
-  function openTerminate() {
-    setReason('');
-    setReasonError(undefined);
-    setTerminateOpen(true);
   }
 
   const backLink = (
@@ -196,14 +184,14 @@ export function ContractDetail() {
       <Button key="accept" onClick={handleAccept} loading={submitting} leftIcon={<IconCheck size={15} />}>
         Accept Contract
       </Button>,
-      <Button key="decline" variant="danger" onClick={openTerminate} disabled={submitting}>
+      <Button key="decline" variant="danger" onClick={() => setTerminateOpen(true)} disabled={submitting}>
         Decline
       </Button>,
     );
   }
   if (role === 'tenant' && contract.status === 'active') {
     actions.push(
-      <Button key="terminate" variant="danger" onClick={openTerminate} disabled={submitting}>
+      <Button key="terminate" variant="danger" onClick={() => setTerminateOpen(true)} disabled={submitting}>
         Terminate
       </Button>,
     );
@@ -217,14 +205,14 @@ export function ContractDetail() {
   }
   if (role === 'landlord' && contract.status === 'active') {
     actions.push(
-      <Button key="terminate" variant="danger" onClick={openTerminate} disabled={submitting}>
+      <Button key="terminate" variant="danger" onClick={() => setTerminateOpen(true)} disabled={submitting}>
         Terminate
       </Button>,
     );
   }
   if (role === 'admin' && contract.status === 'active') {
     actions.push(
-      <Button key="terminate" variant="danger" onClick={openTerminate} disabled={submitting}>
+      <Button key="terminate" variant="danger" onClick={() => setTerminateOpen(true)} disabled={submitting}>
         Terminate
       </Button>,
     );
@@ -425,42 +413,21 @@ export function ContractDetail() {
         }
       />
 
-      {/* Terminate modal */}
-      <Modal
+      {/* Terminate / Decline — destructive confirm with required reason */}
+      <DestructiveConfirmDialog
         open={terminateOpen}
         onClose={() => !submitting && setTerminateOpen(false)}
+        onConfirm={handleTerminate}
         title={
           role === 'tenant' && contract.status === 'pending_tenant'
             ? 'Decline contract'
             : 'Terminate contract'
         }
-        description="Provide a reason. This action cannot be undone."
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setTerminateOpen(false)} disabled={submitting}>
-              Cancel
-            </Button>
-            <Button variant="danger" onClick={handleTerminate} loading={submitting}>
-              Confirm
-            </Button>
-          </>
-        }
-      >
-        <Field label="Reason" required error={reasonError}>
-          {(fieldId, invalid) => (
-            <Textarea
-              id={fieldId}
-              invalid={invalid}
-              value={reason}
-              onChange={(e) => {
-                setReason(e.target.value);
-                if (reasonError) setReasonError(undefined);
-              }}
-              placeholder="Explain why…"
-            />
-          )}
-        </Field>
-      </Modal>
+        description="This action cannot be undone."
+        confirmLabel="Confirm"
+        loading={submitting}
+        reasonField={{ label: 'Reason', placeholder: 'Explain why…', required: true }}
+      />
     </div>
   );
 }
