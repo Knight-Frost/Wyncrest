@@ -273,6 +273,98 @@ class AdminAuditLogTest extends TestCase
         $this->assertSame('account_suspended', $response->json('data.0.action'));
     }
 
+    // =========================================================================
+    // Timezone-aware date filtering (Finding A regression coverage)
+    //
+    // Audit timestamps are stored in UTC. A local evening in a negative-offset
+    // zone is stored as the NEXT UTC calendar day. The date filter must resolve
+    // the client's calendar day in the client's timezone so such events are not
+    // silently hidden — and the list must agree with the summary.
+    // =========================================================================
+
+    public function test_evening_local_event_stored_next_utc_day_is_included_in_local_range(): void
+    {
+        // 2026-06-30 23:30 in New York == 2026-07-01 03:30 UTC (stored next day).
+        $eveningUtc = \Carbon\Carbon::parse('2026-07-01 03:30:00', 'UTC');
+        AuditLog::factory()->create(['created_at' => $eveningUtc]);
+
+        Sanctum::actingAs($this->admin, [], 'sanctum');
+
+        // The admin, in New York, filters for "June 30" (their local day).
+        $tz = 'America/New_York';
+        $response = $this->getJson("/api/admin/audit-logs?from_date=2026-06-30&to_date=2026-06-30&tz={$tz}");
+        $response->assertStatus(200);
+        $this->assertSame(1, $response->json('total'), 'Evening-local event must appear in its local day range.');
+
+        // Sanity: interpreting the same range as UTC (no tz) would wrongly drop it.
+        $utcResponse = $this->getJson('/api/admin/audit-logs?from_date=2026-06-30&to_date=2026-06-30');
+        $this->assertSame(0, $utcResponse->json('total'));
+    }
+
+    public function test_summary_and_list_agree_on_todays_events_in_client_tz(): void
+    {
+        // Freeze "now" to a local evening (New York) that is the next UTC day.
+        \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-07-01 03:30:00', 'UTC'));
+        $tz = 'America/New_York';
+
+        // One event "now" (today in NY) and one two days ago (not today).
+        AuditLog::factory()->create(['created_at' => now()]);
+        AuditLog::factory()->create(['created_at' => now()->subDays(2)]);
+
+        Sanctum::actingAs($this->admin, [], 'sanctum');
+
+        // Summary counts "today" in the client timezone.
+        $summary = $this->getJson("/api/admin/audit-logs/summary?tz={$tz}");
+        $summary->assertStatus(200);
+        $todayCount = $summary->json('metrics.user_activity.value');
+        $this->assertSame(1, $todayCount);
+
+        // The list, filtered to that same local "today", must return the same count.
+        $list = $this->getJson("/api/admin/audit-logs?from_date=2026-06-30&to_date=2026-06-30&tz={$tz}");
+        $list->assertStatus(200);
+        $this->assertSame($todayCount, $list->json('total'), 'Summary and list must agree on today.');
+    }
+
+    public function test_last_7_days_range_includes_boundary_evening_event(): void
+    {
+        \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-07-01 03:30:00', 'UTC'));
+        $tz = 'America/New_York';
+
+        // Evening-of-today event (stored next UTC day) + one 3 days ago.
+        AuditLog::factory()->create(['created_at' => now()]);
+        AuditLog::factory()->create(['created_at' => now()->subDays(3)]);
+        // One clearly outside the 7-day window.
+        AuditLog::factory()->create(['created_at' => now()->subDays(30)]);
+
+        Sanctum::actingAs($this->admin, [], 'sanctum');
+
+        // "Last 7 days" as the SPA computes it in local time: 2026-06-24..2026-06-30.
+        $response = $this->getJson("/api/admin/audit-logs?from_date=2026-06-24&to_date=2026-06-30&tz={$tz}");
+        $response->assertStatus(200);
+        $this->assertSame(2, $response->json('total'));
+    }
+
+    public function test_no_date_filters_returns_all_events(): void
+    {
+        AuditLog::factory()->count(4)->create();
+        Sanctum::actingAs($this->admin, [], 'sanctum');
+
+        $response = $this->getJson('/api/admin/audit-logs');
+        $response->assertStatus(200);
+        $this->assertSame(4, $response->json('total'));
+    }
+
+    public function test_invalid_timezone_falls_back_gracefully(): void
+    {
+        AuditLog::factory()->create(['created_at' => now()]);
+        Sanctum::actingAs($this->admin, [], 'sanctum');
+
+        // A bogus tz must not error — it falls back to the app timezone.
+        $response = $this->getJson('/api/admin/audit-logs?tz=Not/AZone');
+        $response->assertStatus(200);
+        $this->assertSame(1, $response->json('total'));
+    }
+
     public function test_filter_search_by_ip_address(): void
     {
         AuditLog::factory()->create(['ip_address' => '192.168.99.1']);

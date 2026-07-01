@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Feature;
 use App\Models\LandlordFeature;
 use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Collection;
 
 /**
@@ -47,12 +48,21 @@ class FeatureGatingService
     }
 
     /**
-     * Require feature or throw exception
+     * Require a feature to be enabled, or deny access.
+     *
+     * A missing feature is an AUTHORIZATION denial, not a server fault: it
+     * throws AuthorizationException (rendered as HTTP 403 by Laravel), matching
+     * the ownership-denial pattern in ReviewService. The message is safe and
+     * user-facing — it names only the feature, never internal state.
+     *
+     * @throws AuthorizationException when the landlord lacks the feature
      */
     public function requireFeature(User $landlord, string $featureKey): void
     {
         if (! $this->hasFeature($landlord, $featureKey)) {
-            throw new \Exception("Feature '{$featureKey}' is not enabled for this account");
+            throw new AuthorizationException(
+                "The '{$featureKey}' feature is not enabled for your account."
+            );
         }
     }
 

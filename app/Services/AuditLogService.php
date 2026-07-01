@@ -41,17 +41,61 @@ class AuditLogService
     }
 
     /**
+     * Resolve a valid IANA timezone from (untrusted) client input, falling back
+     * to the app timezone and finally UTC. This is the single place client
+     * timezone intent enters the audit query layer.
+     */
+    public function resolveTimezone(?string $tz): string
+    {
+        if ($tz !== null && $tz !== '' && in_array($tz, timezone_identifiers_list(), true)) {
+            return $tz;
+        }
+
+        return config('app.timezone') ?: 'UTC';
+    }
+
+    /**
+     * Convert calendar-day date filters — which the client expresses in its own
+     * timezone — into INCLUSIVE UTC timestamp bounds against the UTC-stored
+     * created_at column.
+     *
+     * This is the shared source of truth for audit date filtering so the list
+     * and the summary can never drift on timezone handling: a local "to_date"
+     * of today (whose end-of-day is the next UTC day for negative-offset zones)
+     * correctly includes evening events stored under the next UTC date.
+     *
+     * @return array{0: ?Carbon, 1: ?Carbon} [startUtc, endUtc]
+     */
+    public function dateBoundsUtc(array $filters, string $tz): array
+    {
+        $start = ! empty($filters['from_date'])
+            ? Carbon::parse($filters['from_date'], $tz)->startOfDay()->utc()
+            : null;
+
+        $end = ! empty($filters['to_date'])
+            ? Carbon::parse($filters['to_date'], $tz)->endOfDay()->utc()
+            : null;
+
+        return [$start, $end];
+    }
+
+    /**
      * Compute real summary metrics from the DB.
      * All counts are today vs yesterday for trend analysis.
      *
      * @return array<string, mixed>
      */
-    public function summary(): array
+    public function summary(?string $tz = null): array
     {
-        $tz = config('app.timezone', 'UTC');
+        // Use the SAME timezone resolution as the list query so "today" here and
+        // a to_date=today range in the list are computed on one clock and can
+        // never disagree about whether an event belongs to today.
+        $tz = $this->resolveTimezone($tz);
 
-        $todayStart = Carbon::today($tz);
-        $yesterdayStart = Carbon::yesterday($tz);
+        // Convert the tz-local day boundaries to UTC instants for comparison
+        // against the UTC-stored created_at column.
+        $todayStart = Carbon::today($tz)->utc();
+        $yesterdayStart = Carbon::yesterday($tz)->utc();
 
         // -----------------------------------------------------------------------
         // Raw counts
@@ -277,12 +321,15 @@ class AuditLogService
             }
         }
 
-        // Date bounds
-        if (! empty($filters['from_date'])) {
-            $query->where('created_at', '>=', $filters['from_date']);
+        // Date bounds — normalized to inclusive UTC instants in the client's
+        // timezone via the shared helper (see dateBoundsUtc). Never naive.
+        $tz = $this->resolveTimezone($filters['tz'] ?? null);
+        [$from, $to] = $this->dateBoundsUtc($filters, $tz);
+        if ($from !== null) {
+            $query->where('created_at', '>=', $from);
         }
-        if (! empty($filters['to_date'])) {
-            $query->where('created_at', '<=', $filters['to_date'].' 23:59:59');
+        if ($to !== null) {
+            $query->where('created_at', '<=', $to);
         }
 
         // Search — wrapped in a closure so AND filters are not broken

@@ -33,6 +33,9 @@ class AdminAuditController extends Controller
             'sort' => ['nullable', 'in:newest,oldest'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            // Client IANA timezone so calendar-day filters resolve on the user's
+            // clock (validated against the tz list inside the service).
+            'tz' => ['nullable', 'string', 'max:64'],
         ]);
 
         $paginator = $this->service->paginate($filters);
@@ -63,7 +66,11 @@ class AdminAuditController extends Controller
      */
     public function summary(Request $request): JsonResponse
     {
-        return response()->json($this->service->summary());
+        $validated = $request->validate([
+            'tz' => ['nullable', 'string', 'max:64'],
+        ]);
+
+        return response()->json($this->service->summary($validated['tz'] ?? null));
     }
 
     /**
@@ -79,6 +86,7 @@ class AdminAuditController extends Controller
             'to_date' => ['nullable', 'date', 'after_or_equal:from_date'],
             'search' => ['nullable', 'string', 'max:255'],
             'sort' => ['nullable', 'in:newest,oldest'],
+            'tz' => ['nullable', 'string', 'max:64'],
         ]);
 
         return $this->service->export($filters);

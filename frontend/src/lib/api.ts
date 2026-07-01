@@ -71,6 +71,13 @@ export const portalHttp: Record<Portal, AxiosInstance> = {
 // ---- Error helpers -------------------------------------------------------
 
 export function normalizeError(error: unknown): ApiError {
+  // Idempotent: the axios response interceptors already reject with a normalized
+  // ApiError, so callers (useApi, page submit handlers) frequently pass one back
+  // in. Return it unchanged instead of collapsing a real 403/422 message down to
+  // the generic fallback below.
+  if (isApiError(error)) {
+    return error;
+  }
   if (axios.isAxiosError(error)) {
     const status = error.response?.status ?? 0;
     const data = error.response?.data as
@@ -87,6 +94,17 @@ export function normalizeError(error: unknown): ApiError {
     };
   }
   return { status: 0, message: 'An unexpected error occurred.' };
+}
+
+/** Type guard: an already-normalized ApiError (not a raw AxiosError). */
+function isApiError(error: unknown): error is ApiError {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    !axios.isAxiosError(error) &&
+    typeof (error as ApiError).status === 'number' &&
+    typeof (error as ApiError).message === 'string'
+  );
 }
 
 /** Best-effort flat list of field errors for inline form display. */

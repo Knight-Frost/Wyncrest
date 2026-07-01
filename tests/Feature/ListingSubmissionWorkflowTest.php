@@ -208,7 +208,8 @@ class ListingSubmissionWorkflowTest extends TestCase
                 'pets_allowed' => false,
             ]);
 
-        $response->assertStatus(500); // Feature gating throws exception
+        // A missing feature is an authorization denial, not a server fault.
+        $response->assertStatus(403);
     }
 
     public function test_tenant_cannot_access_landlord_routes()
