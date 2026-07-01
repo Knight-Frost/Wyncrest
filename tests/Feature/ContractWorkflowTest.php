@@ -120,6 +120,60 @@ class ContractWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_landlord_can_create_contract_by_tenant_email()
+    {
+        // The UI identifies the tenant by email; the backend resolves it to a
+        // real tenant id (tenant_id is no longer required from the client).
+        $response = $this->actingAs($this->landlord, 'sanctum')
+            ->postJson('/api/landlord/contracts', [
+                'listing_id' => $this->listing->id,
+                'tenant_email' => $this->tenant->email,
+                'rent_amount' => 250000,
+                'payment_day' => 1,
+                'start_date' => now()->addDays(7)->format('Y-m-d'),
+                'end_date' => now()->addYear()->format('Y-m-d'),
+            ]);
+
+        $response->assertStatus(201);
+
+        $this->assertDatabaseHas('contracts', [
+            'id' => $response->json('contract.id'),
+            'tenant_id' => $this->tenant->id,
+            'listing_id' => $this->listing->id,
+        ]);
+    }
+
+    public function test_create_contract_with_unknown_email_returns_clear_error()
+    {
+        $response = $this->actingAs($this->landlord, 'sanctum')
+            ->postJson('/api/landlord/contracts', [
+                'listing_id' => $this->listing->id,
+                'tenant_email' => 'nobody@nowhere.test',
+                'rent_amount' => 250000,
+                'payment_day' => 1,
+                'start_date' => now()->addDays(7)->format('Y-m-d'),
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['tenant_email']);
+    }
+
+    public function test_create_contract_by_email_rejects_non_tenant_account()
+    {
+        // A landlord's email must not resolve to a tenant_id.
+        $response = $this->actingAs($this->landlord, 'sanctum')
+            ->postJson('/api/landlord/contracts', [
+                'listing_id' => $this->listing->id,
+                'tenant_email' => $this->landlord->email,
+                'rent_amount' => 250000,
+                'payment_day' => 1,
+                'start_date' => now()->addDays(7)->format('Y-m-d'),
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['tenant_email']);
+    }
+
     public function test_duplicate_listing_prevention()
     {
         // Create first contract
