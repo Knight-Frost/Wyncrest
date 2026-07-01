@@ -1,0 +1,338 @@
+/* ==========================================================================
+   Create Listing workspace — Wyncrest landlord portal
+   Route-based multi-step builder rendered inside the AppShell (sidebar stays).
+   All colours use semantic tokens so it adapts to light/dark/system, every dark
+   palette, and every accent. Class prefix: cl-
+   ========================================================================== */
+
+.cl-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 4px 2px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── Header card ─────────────────────────────────────────────────────────── */
+.cl-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-ink-200);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-sm);
+  padding: 26px 28px;
+}
+.cl-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-brand-600);
+  margin: 0 0 6px;
+}
+.cl-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(24px, 3vw, 30px);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--color-ink-950);
+  margin: 0;
+}
+.cl-subtitle {
+  font-size: 14px;
+  color: var(--color-ink-500);
+  margin: 8px 0 0;
+  max-width: 60ch;
+}
+.cl-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--color-ink-200);
+  background: var(--color-surface);
+  color: var(--color-ink-600);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.cl-close:hover { background: var(--color-ink-50); color: var(--color-ink-900); }
+.cl-close:focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+
+/* ── Body grid: stepper + form ───────────────────────────────────────────── */
+.cl-body {
+  display: grid;
+  grid-template-columns: 296px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+/* ── Stepper ─────────────────────────────────────────────────────────────── */
+.cl-stepper {
+  position: sticky;
+  top: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-ink-200);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-sm);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+}
+.cl-step {
+  position: relative;
+  display: flex;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 14px;
+  border-radius: 12px;
+  transition: background 0.15s;
+}
+.cl-step:disabled { cursor: not-allowed; }
+.cl-step:hover:not(:disabled):not(.is-active) { background: var(--color-ink-50); }
+.cl-step.is-active { background: var(--color-brand-50); }
+.cl-step:focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: -2px; }
+
+/* connector line down from each circle to the next */
+.cl-step:not(:last-child) .cl-step-num::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 30px;
+  transform: translateX(-50%);
+  width: 2px;
+  height: calc(100% + 4px);
+  background: var(--color-ink-200);
+}
+.cl-step-num {
+  position: relative;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  border: 2px solid var(--color-ink-300);
+  color: var(--color-ink-500);
+  background: var(--color-surface);
+  z-index: 1;
+}
+.cl-step.is-active .cl-step-num {
+  background: var(--color-brand-600);
+  border-color: var(--color-brand-600);
+  color: var(--color-on-brand);
+}
+.cl-step.is-done .cl-step-num {
+  background: var(--color-brand-600);
+  border-color: var(--color-brand-600);
+  color: var(--color-on-brand);
+}
+.cl-step.is-done:not(:last-child) .cl-step-num::after { background: var(--color-brand-300); }
+.cl-step-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cl-step-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink-800);
+  line-height: 1.2;
+}
+.cl-step.is-active .cl-step-name { color: var(--color-brand-700); }
+.cl-step-desc { font-size: 12px; color: var(--color-ink-500); line-height: 1.35; }
+
+/* ── Form panel ──────────────────────────────────────────────────────────── */
+.cl-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-ink-200);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  min-height: 520px;
+}
+.cl-panel-head { padding: 26px 28px 4px; }
+.cl-panel-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 21px;
+  letter-spacing: -0.01em;
+  color: var(--color-ink-950);
+  margin: 0;
+}
+.cl-panel-sub { font-size: 13.5px; color: var(--color-ink-500); margin: 6px 0 0; }
+.cl-panel-body { padding: 22px 28px 28px; display: flex; flex-direction: column; gap: 20px; flex: 1; }
+
+/* ── Fields ──────────────────────────────────────────────────────────────── */
+.cl-field { display: flex; flex-direction: column; gap: 7px; }
+.cl-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.cl-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-800);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.cl-req { color: var(--color-danger-500); font-weight: 700; }
+.cl-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.cl-counter { font-size: 12px; color: var(--color-ink-400); font-variant-numeric: tabular-nums; }
+
+.cl-input,
+.cl-select,
+.cl-textarea {
+  width: 100%;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-ink-300);
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-ink-900);
+  font-family: var(--font-sans);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.cl-input::placeholder,
+.cl-textarea::placeholder { color: var(--color-ink-400); font-weight: 400; }
+.cl-input:focus,
+.cl-select:focus,
+.cl-textarea:focus {
+  outline: none;
+  border-color: var(--color-brand-500);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand-500) 22%, transparent);
+}
+.cl-input:disabled,
+.cl-select:disabled { background: var(--color-ink-50); color: var(--color-ink-500); cursor: not-allowed; }
+.cl-input.is-invalid,
+.cl-select.is-invalid,
+.cl-textarea.is-invalid { border-color: var(--color-danger-500); }
+.cl-input.is-invalid:focus,
+.cl-textarea.is-invalid:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger-500) 18%, transparent); }
+
+.cl-select { appearance: none; -webkit-appearance: none; padding-right: 38px; cursor: pointer; }
+.cl-select-wrap { position: relative; }
+.cl-select-wrap > svg { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--color-ink-500); }
+.cl-input-wrap { position: relative; }
+.cl-input-suffix { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 13px; color: var(--color-ink-500); pointer-events: none; }
+.cl-input-prefix { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 14px; font-weight: 600; color: var(--color-ink-500); pointer-events: none; }
+.cl-input.has-prefix { padding-left: 40px; }
+.cl-input.has-suffix { padding-right: 52px; }
+
+.cl-textarea { resize: vertical; min-height: 120px; line-height: 1.55; }
+.cl-help { font-size: 12px; color: var(--color-ink-500); }
+.cl-error { font-size: 12px; color: var(--color-danger-500); font-weight: 500; }
+
+/* ── Amenity / checkbox chips ────────────────────────────────────────────── */
+.cl-chips { display: flex; flex-wrap: wrap; gap: 10px; }
+.cl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--color-ink-300);
+  background: var(--color-surface);
+  color: var(--color-ink-700);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  user-select: none;
+}
+.cl-chip:hover { border-color: var(--color-brand-400); }
+.cl-chip.on {
+  border-color: var(--color-brand-600);
+  background: var(--color-brand-50);
+  color: var(--color-brand-700);
+  font-weight: 600;
+}
+.cl-chip:focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+.cl-chip-check { width: 16px; height: 16px; display: grid; place-items: center; border-radius: 5px; border: 1.5px solid var(--color-ink-300); flex-shrink: 0; }
+.cl-chip.on .cl-chip-check { background: var(--color-brand-600); border-color: var(--color-brand-600); color: var(--color-on-brand); }
+
+/* Toggle (pets) */
+.cl-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border: 1.5px solid var(--color-ink-200); border-radius: 12px; }
+.cl-toggle { position: relative; width: 44px; height: 26px; border-radius: 999px; border: none; background: var(--color-ink-300); cursor: pointer; transition: background 0.15s; flex-shrink: 0; }
+.cl-toggle.on { background: var(--color-brand-600); }
+.cl-toggle::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
+.cl-toggle.on::after { transform: translateX(18px); }
+.cl-toggle:focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+
+/* ── Section sub-group label ─────────────────────────────────────────────── */
+.cl-group-label { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-ink-500); margin: 4px 0 -4px; }
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+.cl-footer {
+  border-top: 1px solid var(--color-ink-200);
+  padding: 18px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.cl-draft { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-ink-500); }
+.cl-draft.saving { color: var(--color-brand-600); }
+.cl-footer-actions { display: flex; align-items: center; gap: 10px; }
+
+/* ── Review step ─────────────────────────────────────────────────────────── */
+.cl-review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.cl-review-card { border: 1px solid var(--color-ink-200); border-radius: 14px; padding: 18px 20px; background: var(--color-ink-50); }
+.cl-review-card h4 { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-ink-500); margin: 0 0 12px; }
+.cl-review-row { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; font-size: 13.5px; }
+.cl-review-row dt { color: var(--color-ink-500); }
+.cl-review-row dd { color: var(--color-ink-900); font-weight: 600; margin: 0; text-align: right; }
+.cl-review-thumbs { display: flex; gap: 8px; flex-wrap: wrap; }
+.cl-review-thumb { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; border: 1px solid var(--color-ink-200); background: var(--color-ink-100); }
+
+/* Warning / info banners inside steps */
+.cl-banner { display: flex; gap: 12px; padding: 14px 16px; border-radius: 12px; font-size: 13.5px; line-height: 1.5; }
+.cl-banner svg { flex-shrink: 0; margin-top: 1px; }
+.cl-banner.warn { background: var(--color-warning-50); color: var(--color-warning-600); border: 1px solid color-mix(in srgb, var(--color-warning-500) 30%, transparent); }
+.cl-banner.info { background: var(--color-brand-50); color: var(--color-brand-700); border: 1px solid color-mix(in srgb, var(--color-brand-500) 28%, transparent); }
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+.cl-empty {
+  background: var(--color-surface);
+  border: 1px solid var(--color-ink-200);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-sm);
+  padding: 56px 32px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.cl-empty-ico { width: 64px; height: 64px; border-radius: 16px; display: grid; place-items: center; background: var(--color-brand-50); color: var(--color-brand-600); }
+.cl-empty h3 { font-family: var(--font-display); font-weight: 600; font-size: 20px; color: var(--color-ink-950); margin: 0; }
+.cl-empty p { font-size: 14px; color: var(--color-ink-500); max-width: 46ch; margin: 0; line-height: 1.55; }
+.cl-empty-actions { display: flex; gap: 10px; margin-top: 6px; flex-wrap: wrap; justify-content: center; }
+
+/* ── Loading skeleton ────────────────────────────────────────────────────── */
+.cl-skeleton { background: var(--color-surface); border: 1px solid var(--color-ink-200); border-radius: var(--radius-2xl); padding: 28px; }
+.cl-skel-bar { height: 14px; border-radius: 7px; background: var(--color-ink-100); margin-bottom: 12px; animation: cl-pulse 1.4s ease-in-out infinite; }
+@keyframes cl-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 880px) {
+  .cl-body { grid-template-columns: 1fr; }
+  .cl-stepper { position: static; flex-direction: row; overflow-x: auto; gap: 4px; }
+  .cl-stepper .cl-step { flex-direction: column; align-items: flex-start; min-width: 150px; }
+  .cl-step:not(:last-child) .cl-step-num::after { display: none; }
+  .cl-grid-2 { grid-template-columns: 1fr; }
+  .cl-review-grid { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-skel-bar, .cl-toggle::after, .cl-chip, .cl-step { transition: none; animation: none; }
+}

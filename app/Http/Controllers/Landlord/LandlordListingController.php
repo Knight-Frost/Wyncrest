@@ -57,10 +57,11 @@ class LandlordListingController extends Controller
         // Feature gating check
         $this->featureGatingService->requireFeature($request->user(), 'listings');
 
-        // Check if unit already has an active listing
-        if ($unit->activeListing) {
+        // Reject when the unit already has any in-flight listing (draft, pending_review, or active).
+        // why: the frontend treats all three statuses as blocking; the backend must match.
+        if ($unit->blockingListing) {
             return response()->json([
-                'message' => 'This unit already has an active listing',
+                'message' => 'This unit already has a listing in progress. Edit or remove it before creating another.',
             ], 422);
         }
 

@@ -15,7 +15,7 @@ import { useRef, useState } from 'react';
 import { landlordApi } from '@/lib/endpoints';
 import type { MediaAsset } from '@/lib/types';
 import { useToast } from '@/components/ui/toast';
-import { Modal } from '@/components/ui/Modal';
+import { DestructiveConfirmDialog } from '@/components/ui/DestructiveConfirmDialog';
 import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Field';
 import { LoadingState } from '@/components/ui/states';
@@ -24,6 +24,7 @@ import {
   IconUpload,
   IconImage,
   IconChevronRight,
+  IconX,
 } from '@/components/ui/icons';
 
 /* ── Types ────────────────────────────────────────────────────────────────── */
@@ -94,7 +95,7 @@ function DropZone({ onFiles, disabled }: DropZoneProps) {
       className={`gm-dropzone${dragOver ? ' gm-dropzone--active' : ''}${disabled ? ' gm-dropzone--disabled' : ''}`}
       role="button"
       tabIndex={disabled ? -1 : 0}
-      aria-label="Upload images — drag and drop or click to browse"
+      aria-label="Upload images by dragging and dropping, or click to browse"
       onClick={() => !disabled && inputRef.current?.click()}
       onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !disabled) inputRef.current?.click(); }}
       onDragOver={(e) => { e.preventDefault(); if (!disabled) setDragOver(true); }}
@@ -222,7 +223,7 @@ export function GalleryManager({
   function handleFiles(files: File[]) {
     const oversized = files.filter((f) => f.size > MAX_SIZE_BYTES);
     if (oversized.length > 0) {
-      toast(`${oversized.map((f) => f.name).join(', ')} exceed 10 MB — skipped.`, 'error');
+      toast(`${oversized.map((f) => f.name).join(', ')} exceed the 10 MB limit and were skipped.`, 'error');
     }
     const valid = files.filter((f) => f.size <= MAX_SIZE_BYTES);
     if (valid.length === 0) return;
@@ -300,10 +301,66 @@ export function GalleryManager({
 
       {/* Upload zone */}
       {!atMax && (
-        <DropZone onFiles={handleFiles} disabled={busy} />
+        <DropZone onFiles={handleFiles} disabled={busy || metaOpen} />
       )}
       {atMax && (
         <p className="gm-max-notice">Maximum of {maxImages} photos reached.</p>
+      )}
+
+      {/* Inline meta panel — appears below dropzone when files are queued */}
+      {metaOpen && pendingFiles.length > 0 && (
+        <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-4 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-medium text-ink-800">
+              {pendingFiles.length} photo{pendingFiles.length > 1 ? 's' : ''} ready to upload
+            </p>
+            <button
+              type="button"
+              aria-label="Cancel upload"
+              onClick={() => { setMetaOpen(false); setPendingFiles([]); }}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-400 transition-colors hover:bg-ink-100 hover:text-ink-700"
+            >
+              <IconX size={15} />
+            </button>
+          </div>
+          <p className="text-xs text-ink-500 truncate">
+            {pendingFiles.map((f) => f.name).join(', ')}
+          </p>
+          <Field label="Alt text" hint="Describe the image for screen readers.">
+            {(fid) => (
+              <Input
+                id={fid}
+                placeholder="e.g. Living room with natural light"
+                value={metaAlt}
+                onChange={(e) => setMetaAlt(e.target.value)}
+                maxLength={255}
+              />
+            )}
+          </Field>
+          <Field label="Caption" hint="Optional short caption displayed under the image.">
+            {(fid) => (
+              <Input
+                id={fid}
+                placeholder="e.g. Spacious open-plan kitchen"
+                value={metaCaption}
+                onChange={(e) => setMetaCaption(e.target.value)}
+                maxLength={255}
+              />
+            )}
+          </Field>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => { setMetaOpen(false); setPendingFiles([]); }}
+            >
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleUpload} leftIcon={<IconUpload size={15} />}>
+              Upload {pendingFiles.length > 1 ? `${pendingFiles.length} photos` : 'photo'}
+            </Button>
+          </div>
+        </div>
       )}
 
       {/* Upload in progress indicator */}
@@ -317,7 +374,7 @@ export function GalleryManager({
       {loading && !uploading && <LoadingState label="Loading photos…" />}
 
       {/* Gallery grid */}
-      {!loading && items.length === 0 && !uploading && (
+      {!loading && items.length === 0 && !uploading && !metaOpen && (
         <div className="gm-empty">
           <IconImage size={32} className="gm-empty-icon" />
           <p className="gm-empty-title">No photos yet</p>
@@ -342,72 +399,15 @@ export function GalleryManager({
         </div>
       )}
 
-      {/* Meta prompt modal */}
-      <Modal
-        open={metaOpen}
-        onClose={() => { setMetaOpen(false); setPendingFiles([]); }}
-        title={`Add ${pendingFiles.length} photo${pendingFiles.length > 1 ? 's' : ''}`}
-        description="Optionally add alt text and a caption for accessibility and search."
-        size="sm"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => { setMetaOpen(false); setPendingFiles([]); }}>
-              Cancel
-            </Button>
-            <Button onClick={handleUpload} leftIcon={<IconUpload size={15} />}>
-              Upload
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          {pendingFiles.length > 0 && (
-            <p className="text-sm text-ink-500">
-              {pendingFiles.map((f) => f.name).join(', ')}
-            </p>
-          )}
-          <Field label="Alt text" hint="Describe the image for screen readers.">
-            {(fid) => (
-              <Input
-                id={fid}
-                placeholder="e.g. Living room with natural light"
-                value={metaAlt}
-                onChange={(e) => setMetaAlt(e.target.value)}
-                maxLength={255}
-              />
-            )}
-          </Field>
-          <Field label="Caption" hint="Optional short caption displayed under the image.">
-            {(fid) => (
-              <Input
-                id={fid}
-                placeholder="e.g. Spacious open-plan kitchen"
-                value={metaCaption}
-                onChange={(e) => setMetaCaption(e.target.value)}
-                maxLength={255}
-              />
-            )}
-          </Field>
-        </div>
-      </Modal>
-
       {/* Delete confirmation */}
-      <Modal
+      <DestructiveConfirmDialog
         open={toDelete !== null}
         onClose={() => setToDelete(null)}
+        onConfirm={handleDelete}
         title="Delete photo"
         description={toDelete ? `Delete "${toDelete.original_filename}"? This cannot be undone.` : undefined}
-        size="sm"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setToDelete(null)} disabled={deleting}>
-              Cancel
-            </Button>
-            <Button variant="danger" onClick={handleDelete} loading={deleting}>
-              Delete
-            </Button>
-          </>
-        }
+        confirmLabel="Delete"
+        loading={deleting}
       />
     </div>
   );

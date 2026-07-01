@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ListingStatus;
 use App\Enums\UnitAvailabilityStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -128,6 +129,24 @@ class Unit extends Model
     public function activeListing()
     {
         return $this->hasOne(Listing::class)->where('status', 'active');
+    }
+
+    /**
+     * Listing that blocks creation of a new one.
+     *
+     * why: a unit may only have one listing in-flight at a time. Draft and
+     * pending_review listings are in-flight just as much as an active one —
+     * the frontend already enforces this; the backend must too. Soft-deleted
+     * listings are excluded automatically by SoftDeletes scoping.
+     * BLOCKING_STATUSES = ['draft', 'pending_review', 'active']
+     */
+    public function blockingListing()
+    {
+        return $this->hasOne(Listing::class)->whereIn('status', [
+            ListingStatus::DRAFT->value,
+            ListingStatus::PENDING_REVIEW->value,
+            ListingStatus::ACTIVE->value,
+        ]);
     }
 
     /**

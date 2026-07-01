@@ -31,6 +31,7 @@ const MyReviews         = lazy(() => import('@/pages/tenant/MyReviews').then((m)
 const Properties        = lazy(() => import('@/pages/landlord/Properties').then((m) => ({ default: m.Properties })));
 const PropertyDetail    = lazy(() => import('@/pages/landlord/PropertyDetail').then((m) => ({ default: m.PropertyDetail })));
 const LandlordListings  = lazy(() => import('@/pages/landlord/LandlordListings').then((m) => ({ default: m.LandlordListings })));
+const CreateListing     = lazy(() => import('@/pages/landlord/CreateListing').then((m) => ({ default: m.CreateListing })));
 const Applicants        = lazy(() => import('@/pages/landlord/Applicants').then((m) => ({ default: m.Applicants })));
 const TenantManagement  = lazy(() => import('@/pages/landlord/TenantManagement').then((m) => ({ default: m.TenantManagement })));
 const LandlordMaintenance = lazy(() => import('@/pages/landlord/LandlordMaintenance').then((m) => ({ default: m.LandlordMaintenance })));
@@ -262,6 +263,14 @@ export default function App() {
           element={
             <RequireRole roles={['landlord']}>
               <Lazy><LandlordListings /></Lazy>
+            </RequireRole>
+          }
+        />
+        <Route
+          path="listings/create"
+          element={
+            <RequireRole roles={['landlord']}>
+              <Lazy><CreateListing /></Lazy>
             </RequireRole>
           }
         />
