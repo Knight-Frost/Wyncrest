@@ -46,7 +46,8 @@ function Row({
   const preview = item.last_message_preview ?? item.preview ?? '';
   const timeStr = item.last_message_at ? relTime(item.last_message_at) : '';
   const title = item.title ?? participantName;
-  const thumbnailUrl = item.thumbnail_url;
+  // Prefer the other person's profile photo; fall back to the listing thumbnail.
+  const avatarSrc = item.other_participant?.avatar_url ?? item.thumbnail_url;
   const rawRole = item.other_participant?.role ?? null;
   const avatarRole: 'landlord' | 'tenant' | 'admin' | 'system' =
     rawRole === 'tenant' || rawRole === 'admin' || rawRole === 'system' ? rawRole : 'landlord';
@@ -62,15 +63,12 @@ function Row({
       aria-label={`Conversation with ${participantName}: ${title}`}
     >
       <span className="mx-conv-avatar-wrap">
-        {thumbnailUrl ? (
-          <Avatar name={participantInitials} role={avatarRole} src={thumbnailUrl} size={44} />
+        {avatarSrc ? (
+          <Avatar name={participantName} role={avatarRole} src={avatarSrc} size={44} />
         ) : (
-          <span className="mx-conv-avatar">
-            {participantInitials}
-            {unread && <span className="mx-conv-dot" aria-label="Unread" />}
-          </span>
+          <span className="mx-conv-avatar">{participantInitials}</span>
         )}
-        {thumbnailUrl && unread && <span className="mx-conv-dot" aria-label="Unread" />}
+        {unread && <span className="mx-conv-dot" aria-label="Unread" />}
       </span>
 
       <span className="mx-conv-body">

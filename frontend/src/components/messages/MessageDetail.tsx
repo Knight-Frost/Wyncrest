@@ -195,7 +195,8 @@ function ConversationHeader({ conversation, onBack }: HeaderProps) {
   const title = conversation.title ?? other?.name ?? 'Conversation';
   const name = other?.name ?? 'Landlord';
   const role = other?.role;
-  const thumbnail = conversation.thumbnail_url;
+  // Prefer the participant's profile photo; fall back to the listing thumbnail.
+  const avatarSrc = other?.avatar_url ?? conversation.thumbnail_url;
 
   return (
     <div className="mx-dt-bar">
@@ -210,9 +211,9 @@ function ConversationHeader({ conversation, onBack }: HeaderProps) {
         </button>
       )}
       <Avatar
-        name={title}
+        name={name}
         role="landlord"
-        src={thumbnail}
+        src={avatarSrc}
         size={40}
       />
       <div className="mx-dt-header-info">
@@ -268,7 +269,7 @@ function MessageBubble({ msg, isGroupHead, isGroupTail, senderName, role }: Bubb
       {/* Avatar — received only, shown at group head */}
       {!isMe && (
         <div className="mx-bubble-avatar-slot">
-          {isGroupHead && <Avatar name={senderName} role={role} />}
+          {isGroupHead && <Avatar name={senderName} role={role} src={msg.sender.avatar_url} />}
         </div>
       )}
 
