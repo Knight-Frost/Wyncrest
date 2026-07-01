@@ -29,7 +29,7 @@ class ListingSeeder extends DevSeeder
             $property = $unit->property;
             $attributes = [
                 'landlord_id' => $property->landlord_id,
-                'title' => $u['type'].' — '.$property->city,
+                'title' => $u['type'].', '.$property->city,
                 'description' => $this->describe($u, $property->city),
                 'status' => $status,
                 'pets_allowed' => in_array('Pet friendly', $u['amenities'], true),

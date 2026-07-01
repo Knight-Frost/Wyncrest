@@ -33,7 +33,7 @@ abstract class DevSeeder extends Seeder
         return config('seed.currency', 'GHS');
     }
 
-    /** Resolve a catalog user key (e.g. 'tenant.showcase') to its User. */
+    /** Resolve a catalog user key (e.g. 'tenant.owing') to its User. */
     protected function user(string $key): ?User
     {
         return User::where('email', SeedCatalog::email($key))->first();

@@ -22,7 +22,7 @@ class ReviewSeeder extends DevSeeder
 {
     /** Rating + status + optional landlord response, cycled across contracts. */
     private const TEMPLATES = [
-        ['rating' => 5, 'status' => ReviewStatus::APPROVED, 'title' => 'Excellent landlord and home', 'body' => 'Responsive landlord, spotless unit, and a quiet neighbourhood. Highly recommend.', 'response' => 'Thank you — it was a pleasure having you as a tenant!'],
+        ['rating' => 5, 'status' => ReviewStatus::APPROVED, 'title' => 'Excellent landlord and home', 'body' => 'Responsive landlord, spotless unit, and a quiet neighbourhood. Highly recommend.', 'response' => 'Thank you, it was a pleasure having you as a tenant!'],
         ['rating' => 4, 'status' => ReviewStatus::APPROVED, 'title' => 'Great place, minor delays', 'body' => 'Lovely apartment. Maintenance was good though occasionally a little slow.', 'response' => null],
         ['rating' => 5, 'status' => ReviewStatus::APPROVED, 'title' => 'Felt like home', 'body' => 'Secure, well-managed and great value for the location.', 'response' => 'Much appreciated, thank you for the kind words.'],
         ['rating' => 2, 'status' => ReviewStatus::PENDING, 'title' => 'Awaiting moderation', 'body' => 'Had some issues with the water supply during my stay.', 'response' => null],
@@ -35,11 +35,9 @@ class ReviewSeeder extends DevSeeder
         $adminId = $this->superAdmin()?->id;
 
         // Eligible contracts: a tenant may review an active/terminated/expired lease.
-        $contracts = Contract::whereIn('status', [
-            ContractStatus::ACTIVE->value,
-            ContractStatus::TERMINATED->value,
-            ContractStatus::EXPIRED->value,
-        ])->orderBy('created_at')->get();
+        // This world only uses active leases, so reviews come from current tenants.
+        $contracts = Contract::where('status', ContractStatus::ACTIVE->value)
+            ->orderBy('created_at')->get();
 
         $count = 0;
         foreach ($contracts as $i => $contract) {

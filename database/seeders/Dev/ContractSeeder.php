@@ -3,14 +3,13 @@
 namespace Database\Seeders\Dev;
 
 use App\Enums\ContractStatus;
-use App\Enums\TerminatedBy;
 use App\Models\Contract;
 
 /**
- * ContractSeeder — leases across the full lifecycle.
+ * ContractSeeder — the active leases behind the occupied units.
  *
- * Driven by the catalog's per-unit `contract` scenario:
- *   draft → pending_tenant → active → terminated → expired.
+ * This development world uses ACTIVE leases only (4 in good standing + 1 owing).
+ * Each occupied unit in the catalog gets one active contract on its listing.
  *
  * Active contracts are created ALREADY active on purpose: the ContractObserver
  * only auto-generates rent on the pending→active *transition*, not on insert, so
@@ -56,45 +55,22 @@ class ContractSeeder extends DevSeeder
     }
 
     /**
-     * Status + dated period for a lifecycle scenario.
+     * Status + dated period for an active lease that started $months ago.
+     *
+     * Starting the lease N whole months in the past gives LedgerSeeder N+1 monthly
+     * rent periods to bill (the oldest through the current month), which is what
+     * makes the paid history / single overdue month land on real, past-due dates.
      *
      * @return array<string,mixed>
      */
     protected function lifecycleFields(string $scenario, int $months): array
     {
-        return match ($scenario) {
-            'active' => [
-                'status' => ContractStatus::ACTIVE->value,
-                'start_date' => now()->subMonthsNoOverflow(max($months, 1))->startOfMonth(),
-                'end_date' => now()->subMonthsNoOverflow(max($months, 1))->startOfMonth()->addYear(),
-            ],
-            'pending_tenant' => [
-                'status' => ContractStatus::PENDING_TENANT->value,
-                'start_date' => now()->addDays(14),
-                'end_date' => now()->addDays(14)->addYear(),
-            ],
-            'draft' => [
-                'status' => ContractStatus::DRAFT->value,
-                'start_date' => now()->addMonth()->startOfMonth(),
-                'end_date' => null,
-            ],
-            'terminated' => [
-                'status' => ContractStatus::TERMINATED->value,
-                'start_date' => now()->subMonthsNoOverflow(5)->startOfMonth(),
-                'end_date' => now()->subMonthsNoOverflow(5)->startOfMonth()->addYear(),
-                'terminated_by' => TerminatedBy::TENANT->value,
-                'termination_reason' => 'Tenant relocated for work; lease ended by mutual agreement.',
-            ],
-            'expired' => [
-                'status' => ContractStatus::EXPIRED->value,
-                'start_date' => now()->subMonthsNoOverflow(13)->startOfMonth(),
-                'end_date' => now()->subMonthsNoOverflow(1)->startOfMonth(),
-            ],
-            default => [
-                'status' => ContractStatus::DRAFT->value,
-                'start_date' => now()->addMonth()->startOfMonth(),
-                'end_date' => null,
-            ],
-        };
+        $start = now()->subMonthsNoOverflow(max($months, 1))->startOfMonth();
+
+        return [
+            'status' => ContractStatus::ACTIVE->value,
+            'start_date' => $start,
+            'end_date' => $start->copy()->addYear(),
+        ];
     }
 }

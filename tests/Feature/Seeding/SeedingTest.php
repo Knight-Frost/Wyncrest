@@ -100,35 +100,36 @@ class SeedingTest extends TestCase
         }
     }
 
-    public function test_development_graph_is_complete_and_ledger_is_consistent(): void
+    public function test_development_world_has_exact_counts_and_consistent_ledger(): void
     {
         $this->seed(DevelopmentSeeder::class);
 
-        // Documented minimums.
-        $this->assertSame(20, User::where('user_type', UserType::TENANT->value)->count());
-        $this->assertSame(10, User::where('user_type', UserType::LANDLORD->value)->count());
-        $this->assertSame(20, Unit::count());
-        $this->assertSame(10, Property::count());
+        // Exact, controlled counts — 3 admins (1 super, 1 scoped, 1 pending
+        // invite), 5 landlords, 5 tenants.
+        $this->assertSame(3, Admin::count());
+        $this->assertSame(1, Admin::where('is_super_admin', true)->count());
+        $this->assertSame(1, Admin::whereNotNull('invited_at')->whereNull('invite_accepted_at')->count());
+        $this->assertSame(5, User::where('user_type', UserType::LANDLORD->value)->count());
+        $this->assertSame(5, User::where('user_type', UserType::TENANT->value)->count());
+        $this->assertSame(count(SeedCatalog::PROPERTIES), Property::count());
+        $this->assertSame(count(SeedCatalog::UNITS), Unit::count());
+        $this->assertSame(count(SeedCatalog::UNITS), Listing::count());
 
-        // 20 distinct unit types (no clones).
-        $this->assertSame(20, Unit::query()->distinct()->count('internal_name'));
+        // Exactly one active lease per occupied unit; every contract is active.
+        $leased = count(SeedCatalog::leasedUnits());
+        $this->assertSame($leased, Contract::count());
+        $this->assertSame($leased, Contract::where('status', ContractStatus::ACTIVE->value)->count());
 
-        // Every listing + contract lifecycle status is represented.
-        foreach (ListingStatus::cases() as $status) {
+        // The listing statuses this world deliberately includes are present.
+        foreach ([ListingStatus::ACTIVE, ListingStatus::PENDING_REVIEW, ListingStatus::DRAFT, ListingStatus::INACTIVE] as $status) {
             $this->assertTrue(
                 Listing::where('status', $status->value)->exists(),
                 "Expected a listing in status {$status->value}",
             );
         }
-        foreach (ContractStatus::cases() as $status) {
-            $this->assertTrue(
-                Contract::where('status', $status->value)->exists(),
-                "Expected a contract in status {$status->value}",
-            );
-        }
 
         $this->assertLedgerIsConsistent();
-        $this->assertShowcaseLedgerScenario();
+        $this->assertTenantStanding();
     }
 
     /** Payments are negative & linked; obligations positive; balances derivable. */
@@ -163,21 +164,45 @@ class SeedingTest extends TestCase
         }
     }
 
-    /** The showcase tenant must exhibit overdue + late fee + partial, summing to a known balance. */
-    protected function assertShowcaseLedgerScenario(): void
+    /**
+     * Exactly 4 tenants in good standing (balance 0) and exactly 1 owing tenant
+     * who owes EXACTLY one month of rent via a single overdue entry — and no late
+     * fee was invented by the seeder.
+     */
+    protected function assertTenantStanding(): void
     {
-        $showcase = User::where('email', SeedCatalog::email('tenant.showcase'))->first();
-        $this->assertNotNull($showcase);
+        $payments = app(PaymentService::class);
 
-        $this->assertTrue(
-            LedgerEntry::byTenant($showcase->id)->where('status', LedgerStatus::OVERDUE->value)->exists(),
-        );
-        $this->assertTrue(
-            LedgerEntry::byTenant($showcase->id)->where('type', LedgerType::LATE_FEE->value)->exists(),
-        );
+        $good = 0;
+        $owing = 0;
+        foreach (User::where('user_type', UserType::TENANT->value)->get() as $tenant) {
+            $balance = $payments->getTenantBalance($tenant);
+            if ($balance === 0) {
+                $good++;
+            } elseif ($balance > 0) {
+                $owing++;
+            }
+        }
 
-        // Rent GH₵1,800 (=180000 cents): m0,m1 paid; m2 overdue + 10% fee; m3 overdue w/ half paid; m4 pending.
-        // Balance = 180000(m2) + 18000(fee) + 90000(m3 remainder) + 180000(m4) = 468000.
-        $this->assertSame(468000, app(PaymentService::class)->getTenantBalance($showcase));
+        $this->assertSame(4, $good, 'Expected exactly 4 tenants in good standing (balance 0).');
+        $this->assertSame(1, $owing, 'Expected exactly 1 tenant owing money.');
+
+        // No late fees are ever invented by the seeder.
+        $this->assertSame(0, LedgerEntry::where('type', LedgerType::LATE_FEE->value)->count());
+
+        // The owing tenant owes exactly one month's rent, via one overdue entry.
+        $owingTenant = User::where('email', SeedCatalog::email('tenant.owing'))->first();
+        $this->assertNotNull($owingTenant);
+
+        $owingUnit = collect(SeedCatalog::leasedUnits())->firstWhere('standing', 'owing');
+        $expected = (int) round($owingUnit['rent'] * 100);
+        $this->assertSame($expected, $payments->getTenantBalance($owingTenant));
+
+        $this->assertSame(
+            1,
+            LedgerEntry::byTenant($owingTenant->id)
+                ->where('type', LedgerType::RENT->value)
+                ->where('status', LedgerStatus::OVERDUE->value)->count(),
+        );
     }
 }

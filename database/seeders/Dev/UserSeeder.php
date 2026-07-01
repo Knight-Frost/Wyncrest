@@ -3,19 +3,21 @@
 namespace Database\Seeders\Dev;
 
 use App\Enums\AccountStatus;
+use App\Enums\AdminCapability;
 use App\Enums\UserType;
 use App\Enums\VerificationStatus;
 use App\Models\Admin;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 /**
  * UserSeeder — demo identities.
  *
- * Creates:
- *   - 1 super admin + 1 support admin (separate `admins` table)
- *   - 10 landlords (verified / pending / unverified / suspended variety)
- *   - 20 tenants  (verification + account-status variety, incl. suspended/blocked)
+ * Creates exactly:
+ *   - 1 admin (separate `admins` table) — can log in and manage the whole system
+ *   - 5 landlords (all verified; 4 operating + 1 deliberate empty-state account)
+ *   - 5 tenants  (all verified; 4 in good standing + 1 who owes one month)
  *
  * Every account uses an @{test-domain} email and the shared demo password. Names
  * are fictional. Phone numbers use Ghana MTN-style prefixes; cities are real
@@ -27,26 +29,63 @@ class UserSeeder extends DevSeeder
     {
         $password = Hash::make($this->demoPassword());
 
-        $this->seedAdmins($password);
+        $this->seedAdmin($password);
         $this->seedRole(SeedCatalog::LANDLORDS, UserType::LANDLORD, $password);
         $this->seedRole(SeedCatalog::TENANTS, UserType::TENANT, $password);
 
         $this->command?->info(
-            '  ✓ Users: 2 admins, '.count(SeedCatalog::LANDLORDS).' landlords, '
+            '  ✓ Users: 3 admins (1 super, 1 scoped, 1 pending invite), '
+            .count(SeedCatalog::LANDLORDS).' landlords, '
             .count(SeedCatalog::TENANTS).' tenants.'
         );
     }
 
-    protected function seedAdmins(string $password): void
+    /**
+     * The admin team for the development world:
+     *   - 1 super admin (system operator — full authority)
+     *   - 1 scoped regular admin (limited capabilities) so the access page and
+     *     capability enforcement are visible/demonstrable
+     *   - 1 pending invite (never accepted) so the invite lifecycle is visible
+     */
+    protected function seedAdmin(string $password): void
     {
         Admin::updateOrCreate(
             ['email' => 'admin@'.$this->domain()],
-            ['name' => 'Wyncrest Super Admin', 'password' => $password, 'is_super_admin' => true, 'is_active' => true],
+            ['name' => 'Wyncrest Admin', 'password' => $password, 'is_super_admin' => true, 'is_active' => true],
         );
 
+        // Scoped regular admin — can moderate content & read the audit log, but
+        // cannot manage the team or touch finance (enforced server-side).
         Admin::updateOrCreate(
-            ['email' => 'support@'.$this->domain()],
-            ['name' => 'Wyncrest Support', 'password' => $password, 'is_super_admin' => true, 'is_active' => true],
+            ['email' => 'reviewer@'.$this->domain()],
+            [
+                'name' => 'Efua Reviewer',
+                'password' => $password,
+                'is_super_admin' => false,
+                'is_active' => true,
+                'capabilities' => [
+                    AdminCapability::REVIEW_VERIFICATIONS->value,
+                    AdminCapability::MODERATE_LISTINGS->value,
+                    AdminCapability::MODERATE_REVIEWS->value,
+                    AdminCapability::VIEW_AUDIT->value,
+                ],
+                'invited_at' => now()->subDays(14),
+                'invite_accepted_at' => now()->subDays(13),
+            ],
+        );
+
+        // Pending invite — created but never accepted (no usable password).
+        Admin::updateOrCreate(
+            ['email' => 'pending.admin@'.$this->domain()],
+            [
+                'name' => 'Kojo Pending',
+                'password' => Hash::make(Str::password(40)),
+                'is_super_admin' => false,
+                'is_active' => true,
+                'capabilities' => [AdminCapability::MANAGE_USERS->value],
+                'invited_at' => now()->subDays(1),
+                'invite_accepted_at' => null,
+            ],
         );
     }
 

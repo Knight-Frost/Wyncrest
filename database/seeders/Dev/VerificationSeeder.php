@@ -36,7 +36,7 @@ class VerificationSeeder extends DevSeeder
             $created++;
         }
 
-        $this->command?->info("  ✓ Verification: {$created} verification requests (incl. a live review queue).");
+        $this->command?->info("  ✓ Verification: {$created} approved verification requests (every demo account is verified).");
     }
 
     protected function createRequest(User $user, string $status, ?int $adminId): void
@@ -67,7 +67,7 @@ class VerificationSeeder extends DevSeeder
                 'status' => VerificationStatus::NEEDS_MORE_INFORMATION->value,
                 'reviewed_by_admin_id' => $adminId,
                 'reviewed_at' => $submittedAt->copy()->addDays(1),
-                'decision_reason' => 'Proof of address is unreadable — please upload a clearer copy.',
+                'decision_reason' => 'Proof of address is unreadable. Please upload a clearer copy.',
             ]),
             default => $attributes['status'] = VerificationStatus::PENDING->value, // awaiting review
         };

@@ -10,12 +10,13 @@ use App\Models\Contract;
 use App\Models\MaintenanceRequest;
 
 /**
- * MaintenanceSeeder — maintenance requests across every status.
+ * MaintenanceSeeder — one realistic maintenance request per active lease.
  *
- * Attaches realistic requests to active leases (and a couple to closed ones for
- * history) so both the tenant and landlord maintenance screens, plus resolution
- * analytics, have meaningful data. All foreign keys are resolved from the real
- * contract graph (tenant/landlord/property/unit) — no orphaned rows.
+ * Attaches a single request to each active lease, cycling through the issue bank
+ * so the tenant and landlord maintenance screens show a spread of statuses
+ * (open / acknowledged / in-progress / resolved / closed). All foreign keys are
+ * resolved from the real contract graph (tenant/landlord/property/unit) — no
+ * orphaned rows, nothing invented.
  */
 class MaintenanceSeeder extends DevSeeder
 {
@@ -31,11 +32,8 @@ class MaintenanceSeeder extends DevSeeder
 
     public function run(): void
     {
-        $contracts = Contract::whereIn('status', [
-            ContractStatus::ACTIVE->value,
-            ContractStatus::TERMINATED->value,
-            ContractStatus::EXPIRED->value,
-        ])->orderBy('created_at')->get();
+        $contracts = Contract::where('status', ContractStatus::ACTIVE->value)
+            ->orderBy('created_at')->get();
 
         $count = 0;
         foreach ($contracts as $i => $contract) {
@@ -44,16 +42,13 @@ class MaintenanceSeeder extends DevSeeder
                 continue;
             }
 
-            // 1–2 requests per contract, cycling through the issue bank/statuses.
-            $howMany = $contract->status === ContractStatus::ACTIVE ? 2 : 1;
-            for ($n = 0; $n < $howMany; $n++) {
-                $issue = self::ISSUES[($i + $n) % count(self::ISSUES)];
-                $this->createRequest($contract, $unit->property_id, $unit->id, $issue);
-                $count++;
-            }
+            // One request per active lease, cycling through the issue bank/statuses.
+            $issue = self::ISSUES[$i % count(self::ISSUES)];
+            $this->createRequest($contract, $unit->property_id, $unit->id, $issue);
+            $count++;
         }
 
-        $this->command?->info("  ✓ Maintenance: {$count} requests across open/in-progress/resolved/closed/cancelled.");
+        $this->command?->info("  ✓ Maintenance: {$count} requests across open/acknowledged/in-progress/resolved/closed.");
     }
 
     protected function createRequest(Contract $contract, int $propertyId, int $unitId, array $issue): void

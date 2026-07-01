@@ -30,7 +30,7 @@ class EngagementSeeder extends DevSeeder
         $this->command?->info("  ✓ Engagement: {$saved} saved listings, {$emails} email logs, {$media} media metadata rows.");
     }
 
-    /** Applicant tenants save a few of the active listings. */
+    /** A few tenants bookmark available listings they're interested in. */
     protected function seedSavedListings(): int
     {
         $active = Listing::where('status', ListingStatus::ACTIVE)->orderBy('id')->get();
@@ -38,8 +38,8 @@ class EngagementSeeder extends DevSeeder
             return 0;
         }
 
-        $tenantKeys = ['tenant.applicant', 'tenant10', 'tenant11', 'tenant12', 'tenant13', 'tenant14'];
-        $notes = ['Love the location!', 'Great value', 'Shortlisted for viewing', null];
+        $tenantKeys = ['tenant.good1', 'tenant.good2', 'tenant.good4'];
+        $notes = ['Love the location!', 'Great value', 'Shortlisted for viewing'];
 
         $count = 0;
         foreach ($tenantKeys as $i => $key) {
@@ -48,14 +48,12 @@ class EngagementSeeder extends DevSeeder
                 continue;
             }
 
-            // Save 2 listings each (deterministic, no duplicates via the unique pivot).
-            for ($n = 0; $n < 2; $n++) {
-                $listing = $active[($i + $n) % $active->count()];
-                $tenant->savedListings()->syncWithoutDetaching([
-                    $listing->id => ['notes' => $notes[($i + $n) % count($notes)]],
-                ]);
-                $count++;
-            }
+            // One saved listing each (deterministic, no duplicates via the unique pivot).
+            $listing = $active[$i % $active->count()];
+            $tenant->savedListings()->syncWithoutDetaching([
+                $listing->id => ['notes' => $notes[$i % count($notes)]],
+            ]);
+            $count++;
         }
 
         return $count;
@@ -70,13 +68,11 @@ class EngagementSeeder extends DevSeeder
         }
 
         $rows = [
-            ['tenant.active', 'Payment received — GH₵4,500', 'transaction', 'sent'],
-            ['tenant.showcase', 'Your rent is overdue', 'notification', 'sent'],
-            ['landlord.verified', 'Your listing is live', 'notification', 'sent'],
-            ['landlord.estate', 'New application received', 'notification', 'sent'],
-            ['tenant.pending', 'Verify your identity', 'verification', 'queued'],
-            ['tenant.applicant', 'Welcome to Wyncrest', 'account', 'failed'],
-            ['landlord.coastal', 'Listing rejected', 'notification', 'bounced'],
+            ['tenant.good1', 'Payment received: GH₵2,800', 'transaction', 'sent'],
+            ['tenant.owing', 'Your rent is overdue', 'notification', 'sent'],
+            ['landlord.1', 'Your listing is live', 'notification', 'sent'],
+            ['landlord.3', 'New application received', 'notification', 'sent'],
+            ['landlord.4', 'Your listing is live', 'notification', 'sent'],
         ];
 
         $count = 0;
@@ -110,8 +106,8 @@ class EngagementSeeder extends DevSeeder
     {
         $count = 0;
 
-        // 2 gallery images for each of the first few active listings.
-        $active = Listing::where('status', ListingStatus::ACTIVE)->orderBy('id')->limit(4)->get();
+        // 2 gallery images for each active listing.
+        $active = Listing::where('status', ListingStatus::ACTIVE)->orderBy('id')->get();
         foreach ($active as $listing) {
             for ($n = 1; $n <= 2; $n++) {
                 MediaAsset::create($this->mediaRow(
@@ -126,7 +122,7 @@ class EngagementSeeder extends DevSeeder
         }
 
         // Avatars for a few verified users.
-        foreach (['landlord.verified', 'tenant.active', 'tenant.luxury'] as $key) {
+        foreach (['landlord.1', 'tenant.good1', 'tenant.good3'] as $key) {
             $user = $this->user($key);
             if (! $user) {
                 continue;
@@ -168,7 +164,7 @@ class EngagementSeeder extends DevSeeder
             'visibility' => MediaVisibility::Public->value,
             'sort_order' => $index,
             'alt_text' => $alt,
-            'caption' => 'Demo media (metadata only — no binary seeded).',
+            'caption' => 'Demo media (metadata only, no binary seeded).',
             'status' => 'active',
         ];
     }

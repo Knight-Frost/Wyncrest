@@ -40,6 +40,6 @@ class FeatureGateSeeder extends DevSeeder
             }
         }
 
-        $this->command?->info("  ✓ Feature gates: {$enabled} landlord-feature grants (full/limited/none).");
+        $this->command?->info("  ✓ Feature gates: {$enabled} landlord-feature grants (full/limited).");
     }
 }

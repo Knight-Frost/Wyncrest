@@ -3,28 +3,31 @@
 namespace Database\Seeders\Dev;
 
 use App\Enums\ApplicationStatus;
-use App\Enums\ListingStatus;
 use App\Models\Application;
 use App\Models\Listing;
 
 /**
- * ApplicationSeeder — rental applications across every status.
+ * ApplicationSeeder — rental applications, all tied to real listings and tenants.
  *
- * Two coherent layers:
- *   1. Approved histories — every unit that ends up under contract has a prior
- *      approved (or landlord_review, for drafts) application from that tenant.
- *      This keeps the "applied → approved → signed" story truthful.
- *   2. Live pipeline — applicant tenants apply to the currently-active listings
- *      with a spread of submitted / in_review / landlord_review / rejected /
- *      withdrawn states so the landlord applicants screen and conversion
- *      analytics are meaningful.
+ * Two truthful layers (no filler):
+ *   1. Approved histories — every leased unit gets the prior APPROVED application
+ *      from the tenant who now lives there, so the "applied → approved → signed"
+ *      story is real for each active contract.
+ *   2. Live pipeline — a couple of CURRENT applications from existing tenants onto
+ *      other available units (realistic in-platform upsizing), so the landlord
+ *      "Applicants" screen has a genuine, decidable item. These only target active
+ *      listings owned by full-feature landlords (who actually have the
+ *      applications feature) — never the limited-feature landlord's listings.
  */
 class ApplicationSeeder extends DevSeeder
 {
-    /** Applicant pool for the live pipeline (tenants not already on a lease). */
-    private const APPLICANT_KEYS = [
-        'tenant.applicant', 'tenant10', 'tenant11', 'tenant12', 'tenant13',
-        'tenant14', 'tenant15', 'tenant16', 'tenant17',
+    /**
+     * Live applications: [tenant key, property key, unit number, status].
+     * The targets are available units owned by verified, full-feature landlords.
+     */
+    private const LIVE = [
+        ['tenant.good2', 'ridge-court', '1B-07', ApplicationStatus::IN_REVIEW],
+        ['tenant.good4', 'garden-villas', 'DX-B', ApplicationStatus::SUBMITTED],
     ];
 
     public function run(): void
@@ -32,34 +35,28 @@ class ApplicationSeeder extends DevSeeder
         $count = $this->seedApprovedHistories();
         $count += $this->seedLivePipeline();
 
-        $this->command?->info("  ✓ Applications: {$count} across submitted/in-review/approved/rejected/withdrawn.");
+        $this->command?->info("  ✓ Applications: {$count} ({$this->summary()}).");
     }
 
-    /** Approved (or landlord_review) application for each contracted unit. */
+    /** Approved application for each leased unit, from its current tenant. */
     protected function seedApprovedHistories(): int
     {
         $count = 0;
 
-        foreach (SeedCatalog::UNITS as $u) {
-            if (! $u['contract'] || ! $u['tenant']) {
-                continue;
-            }
-
+        foreach (SeedCatalog::leasedUnits() as $u) {
             $unit = $this->unitFromCatalog($u);
             $tenant = $this->user($u['tenant']);
             if (! $unit || ! $tenant || ! ($listing = $this->listingForUnit($unit))) {
                 continue;
             }
 
-            $isDraft = $u['contract'] === 'draft';
-
             $this->upsert($tenant->id, $listing, [
-                'status' => $isDraft ? ApplicationStatus::LANDLORD_REVIEW->value : ApplicationStatus::APPROVED->value,
+                'status' => ApplicationStatus::APPROVED->value,
                 'cover_note' => 'I would love to make this my home and can move in promptly.',
-                'submitted_at' => now()->subDays(40),
-                'reviewed_at' => now()->subDays(38),
-                'decided_at' => $isDraft ? null : now()->subDays(37),
-                'decision_reason' => $isDraft ? null : 'Strong application — references and income verified.',
+                'submitted_at' => now()->subMonthsNoOverflow((int) $u['months'])->subDays(10),
+                'reviewed_at' => now()->subMonthsNoOverflow((int) $u['months'])->subDays(8),
+                'decided_at' => now()->subMonthsNoOverflow((int) $u['months'])->subDays(7),
+                'decision_reason' => 'Strong application. References and income verified.',
             ]);
             $count++;
         }
@@ -67,38 +64,26 @@ class ApplicationSeeder extends DevSeeder
         return $count;
     }
 
-    /** A spread of live applications onto the active listings. */
+    /** A small set of live applications onto available, full-feature listings. */
     protected function seedLivePipeline(): int
     {
-        $activeListings = Listing::where('status', ListingStatus::ACTIVE)->orderBy('id')->get();
-        if ($activeListings->isEmpty()) {
-            return 0;
-        }
-
-        $states = [
-            ApplicationStatus::SUBMITTED,
-            ApplicationStatus::IN_REVIEW,
-            ApplicationStatus::LANDLORD_REVIEW,
-            ApplicationStatus::REJECTED,
-            ApplicationStatus::WITHDRAWN,
-            ApplicationStatus::SUBMITTED,
-        ];
-
         $count = 0;
-        foreach (self::APPLICANT_KEYS as $i => $key) {
-            $tenant = $this->user($key);
-            if (! $tenant) {
+
+        foreach (self::LIVE as [$tenantKey, $propertyKey, $unitNumber, $status]) {
+            $tenant = $this->user($tenantKey);
+            $property = $this->property($propertyKey);
+            if (! $tenant || ! $property) {
                 continue;
             }
 
-            // Each applicant applies to 1–2 listings, cycling through the states.
-            for ($n = 0; $n < 2; $n++) {
-                $listing = $activeListings[($i + $n) % $activeListings->count()];
-                $status = $states[($i + $n) % count($states)];
-
-                $this->upsert($tenant->id, $listing, $this->fieldsForStatus($status));
-                $count++;
+            $unit = $property->units()->where('unit_number', $unitNumber)->first();
+            $listing = $unit ? $this->listingForUnit($unit) : null;
+            if (! $listing) {
+                continue;
             }
+
+            $this->upsert($tenant->id, $listing, $this->fieldsForStatus($status));
+            $count++;
         }
 
         return $count;
@@ -111,22 +96,14 @@ class ApplicationSeeder extends DevSeeder
     {
         $base = [
             'status' => $status->value,
-            'cover_note' => 'Interested in viewing and applying for this unit.',
-            'submitted_at' => now()->subDays(rand(1, 14)),
+            'cover_note' => 'Currently renting with Wyncrest and interested in moving to this unit.',
+            'submitted_at' => now()->subDays(3),
         ];
 
         return match ($status) {
-            ApplicationStatus::IN_REVIEW, ApplicationStatus::LANDLORD_REVIEW => array_merge($base, [
-                'reviewed_at' => now()->subDays(1),
-                'landlord_notes' => 'Reviewing references — internal note (never shown to tenant).',
-            ]),
-            ApplicationStatus::REJECTED => array_merge($base, [
-                'reviewed_at' => now()->subDays(2),
-                'decided_at' => now()->subDays(2),
-                'decision_reason' => 'Another applicant was selected for this unit.',
-            ]),
-            ApplicationStatus::WITHDRAWN => array_merge($base, [
-                'withdrawn_at' => now()->subDay(),
+            ApplicationStatus::IN_REVIEW => array_merge($base, [
+                'reviewed_at' => now()->subDay(),
+                'landlord_notes' => 'Reviewing references. Internal note (never shown to tenant).',
             ]),
             default => $base,
         };
@@ -138,5 +115,12 @@ class ApplicationSeeder extends DevSeeder
             ['tenant_id' => $tenantId, 'listing_id' => $listing->id],
             array_merge(['landlord_id' => $listing->landlord_id], $attributes),
         );
+    }
+
+    protected function summary(): string
+    {
+        $histories = count(SeedCatalog::leasedUnits());
+
+        return "{$histories} approved histories, ".count(self::LIVE).' live applicants';
     }
 }

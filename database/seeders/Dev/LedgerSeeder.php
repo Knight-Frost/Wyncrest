@@ -12,23 +12,24 @@ use App\Services\LedgerService;
 /**
  * LedgerSeeder — the immutable financial ledger.
  *
- * Builds a mathematically consistent ledger for every contract that has billing
- * history, exercising the real money paths:
- *   - rent charges          (LedgerService::generateFirstRentEntry / generateNextRentEntry)
- *   - payments              (PAYMENT entry with NEGATIVE amount_cents, mirroring PaymentService)
- *   - overdue               (transitionStatus → OVERDUE)
- *   - late fees             (LedgerService::generateLateFee)
- *   - partial payment       (PAYMENT < rent, obligation left unpaid)
+ * Builds a mathematically consistent ledger for every active lease using the REAL
+ * money paths, so every balance the UI shows is derivable and true:
+ *   - rent charges  (LedgerService::generateFirstRentEntry / generateNextRentEntry)
+ *   - payments      (PAYMENT entry with NEGATIVE amount_cents, mirroring PaymentService)
+ *   - overdue       (transitionStatus → OVERDUE, the one unpaid month)
  *
- * Immutability is honoured throughout: entries are created once and status is
- * only ever changed via transitionStatus(). Payments are stored as negative
- * amounts so PaymentService::getTenantBalance() (Σ obligations + Σ payments)
- * stays correct and derivable.
+ * Immutability is honoured throughout: entries are created once and status is only
+ * ever changed via transitionStatus(). Payments are stored as negative amounts so
+ * PaymentService::getTenantBalance() (Σ obligations + Σ payments) stays correct.
  *
- * Scenarios per active contract come from the catalog:
- *   - 'showcase' (tenant.showcase): paid history + overdue + late fee + partial + current pending
- *   - 'standard'                  : paid history + a single current pending month
- * Terminated / expired contracts get a short, fully-paid history.
+ * Two scenarios, taken from the catalog's per-unit `standing`:
+ *   - 'good'  : every month (including the current one) is PAID → balance is 0.
+ *   - 'owing' : every prior month is PAID, the latest month is left OVERDUE and
+ *               unpaid → balance equals EXACTLY one month of rent.
+ *
+ * No late fee is invented for the owing tenant: late fees are produced by the real
+ * overdue-processing rules (LedgerService::generateLateFee, run by the scheduled
+ * mark-overdue command), not by the seeder. So the owing balance is one clean month.
  */
 class LedgerSeeder extends DevSeeder
 {
@@ -38,62 +39,57 @@ class LedgerSeeder extends DevSeeder
     {
         $this->ledger = app(LedgerService::class);
         $entriesBefore = LedgerEntry::count();
+        $paid = 0;
+        $owing = 0;
 
-        foreach (SeedCatalog::UNITS as $u) {
-            if (! $u['contract'] || ! $u['tenant']) {
-                continue;
-            }
-
+        foreach (SeedCatalog::leasedUnits() as $u) {
             $unit = $this->unitFromCatalog($u);
             $contract = $unit ? Contract::where('listing_id', $this->listingForUnit($unit)?->id)->first() : null;
-            if (! $contract) {
+
+            if (! $contract || $contract->status !== ContractStatus::ACTIVE) {
                 continue;
             }
 
-            match ($contract->status) {
-                ContractStatus::ACTIVE => $this->seedActive($contract, (int) $u['months'], $u['ledger']),
-                ContractStatus::TERMINATED => $this->seedClosedHistory($contract, 2),
-                ContractStatus::EXPIRED => $this->seedClosedHistory($contract, 3),
-                default => null, // draft / pending_tenant have no billing yet
-            };
+            if ($u['standing'] === 'owing') {
+                $this->seedOwing($contract, (int) $u['months']);
+                $owing++;
+            } else {
+                $this->seedGoodStanding($contract, (int) $u['months']);
+                $paid++;
+            }
         }
 
         $total = LedgerEntry::count() - $entriesBefore;
-        $this->command?->info("  ✓ Ledger: {$total} immutable entries (paid/overdue/late-fee/partial/pending).");
+        $this->command?->info("  ✓ Ledger: {$total} immutable entries — {$paid} fully-paid leases, {$owing} owing one month.");
     }
 
     /**
-     * Active lease: generate one rent entry per month from start to now, then
-     * settle history and leave the latest month outstanding.
+     * Good standing: generate one rent entry per month from lease start to now and
+     * settle every one of them. The tenant owes nothing (balance = 0).
      */
-    protected function seedActive(Contract $contract, int $months, string $scenario): void
+    protected function seedGoodStanding(Contract $contract, int $months): void
+    {
+        foreach ($this->generateMonthlyRent($contract, $months) as $entry) {
+            $this->settlePaid($entry);
+        }
+    }
+
+    /**
+     * Owing one month: settle every month except the most recent, then mark the
+     * latest (genuinely past-due) month OVERDUE and leave it unpaid. Balance ends
+     * up equal to exactly one month's rent — traceable to a single ledger entry.
+     */
+    protected function seedOwing(Contract $contract, int $months): void
     {
         $entries = $this->generateMonthlyRent($contract, $months);
         $last = count($entries) - 1;
 
-        if ($scenario === 'showcase' && count($entries) >= 5) {
-            // month0, month1 → paid; month2 → overdue + late fee; month3 → partial; latest → pending
-            $this->settlePaid($entries[0]);
-            $this->settlePaid($entries[1]);
-            $this->makeOverdueWithLateFee($entries[2]);
-            $this->makePartial($entries[3]);
-
-            return;
-        }
-
-        // Standard: every month paid except the most recent (current obligation).
         foreach ($entries as $i => $entry) {
-            if ($i !== $last) {
+            if ($i === $last) {
+                $entry->transitionStatus(LedgerStatus::OVERDUE); // unpaid, no late fee invented
+            } else {
                 $this->settlePaid($entry);
             }
-        }
-    }
-
-    /** Terminated/expired lease: a short, fully-paid history. */
-    protected function seedClosedHistory(Contract $contract, int $count): void
-    {
-        foreach ($this->generateMonthlyRent($contract, $count - 1) as $entry) {
-            $this->settlePaid($entry);
         }
     }
 
@@ -120,21 +116,6 @@ class LedgerSeeder extends DevSeeder
 
         $this->recordPayment($rent, $rent->amount_cents, $paymentIntentId);
         $rent->transitionStatus(LedgerStatus::PAID, $paymentIntentId);
-    }
-
-    /** Mark a rent entry overdue and attach a 10% late fee via the service. */
-    protected function makeOverdueWithLateFee(LedgerEntry $rent): void
-    {
-        $rent->transitionStatus(LedgerStatus::OVERDUE);
-        $this->ledger->generateLateFee($rent, (int) round($rent->amount_cents * 0.10));
-    }
-
-    /** A partial payment: half the rent paid, the obligation left overdue. */
-    protected function makePartial(LedgerEntry $rent): void
-    {
-        $rent->transitionStatus(LedgerStatus::OVERDUE);
-        $this->recordPayment($rent, (int) round($rent->amount_cents / 2), $this->demoIntentId($rent));
-        // Intentionally NOT transitioned to PAID — balance keeps the remainder.
     }
 
     /**

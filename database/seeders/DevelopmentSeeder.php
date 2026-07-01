@@ -25,14 +25,18 @@ use Database\Seeders\Dev\VerificationSeeder;
 use Illuminate\Database\Seeder;
 
 /**
- * DevelopmentSeeder — the rich, realistic demo graph.
+ * DevelopmentSeeder — the controlled Wyncrest development world.
  *
- * Builds the whole platform end-to-end so every dashboard, list and analytic is
- * meaningful immediately: users (20 tenants / 10 landlords / admins), properties,
- * 20 distinct units, listings across all statuses, applications, contracts across
- * the full lifecycle, an immutable & mathematically-consistent ledger (paid /
- * overdue / late fee / partial / pending), feature gates, verification records,
- * reviews, maintenance, multi-channel notifications and audit logs.
+ * Builds a SMALL, recognisable, fully-truthful platform so every dashboard, list
+ * and analytic is meaningful — without demo noise:
+ *   - 1 admin, 5 landlords (incl. 1 empty-state), 5 tenants (4 good + 1 owing)
+ *   - 4 properties / 10 units; listings across active / pending-review / draft /
+ *     inactive so browse, the moderation queue and occupied units are testable
+ *   - 5 active leases with an immutable, mathematically-consistent ledger: four
+ *     tenants paid to zero, one owing EXACTLY one month (no invented late fee)
+ *   - verification records, feature gates, a couple of live applications, one
+ *     maintenance request per lease, a few reviews, and notifications/audit rows
+ *     that every map back to a real seeded event
  *
  * All data is obviously demo (fictional names, @wyncrest.test emails, shared
  * password). Each focused sub-seeder owns one slice and reads its prerequisites
@@ -46,19 +50,19 @@ class DevelopmentSeeder extends Seeder
      */
     private const PIPELINE = [
         ReferenceDataSeeder::class,   // shared feature definitions
-        UserSeeder::class,            // admins, 10 landlords, 20 tenants
+        UserSeeder::class,            // 1 admin, 5 landlords, 5 tenants
         VerificationSeeder::class,    // identity verification requests + statuses
-        FeatureGateSeeder::class,     // per-landlord feature access (full/limited/none)
-        PropertySeeder::class,        // 10 properties + 20 distinct units
-        ListingSeeder::class,         // listings across every status
-        ApplicationSeeder::class,     // applications across every status
-        ContractSeeder::class,        // contracts across the full lifecycle
-        LedgerSeeder::class,          // immutable ledger: paid/overdue/late-fee/partial/pending
-        MaintenanceSeeder::class,     // maintenance requests across statuses
-        ReviewSeeder::class,          // reviews (pending/approved/rejected + responses)
-        NotificationSeeder::class,    // in-app + email/SMS delivery states
+        FeatureGateSeeder::class,     // per-landlord feature access (full/limited)
+        PropertySeeder::class,        // 4 properties + 10 units
+        ListingSeeder::class,         // listings: active/pending_review/draft/inactive
+        ApplicationSeeder::class,     // approved histories + a few live applicants
+        ContractSeeder::class,        // 5 active leases
+        LedgerSeeder::class,          // immutable ledger: 4 paid-to-zero, 1 owing one month
+        MaintenanceSeeder::class,     // one maintenance request per active lease
+        ReviewSeeder::class,          // reviews (approved/pending/rejected + responses)
+        NotificationSeeder::class,    // in-app notifications tied to real events
         EngagementSeeder::class,      // saved listings, email logs, media metadata
-        AuditSeeder::class,           // realistic audit-log activity
+        AuditSeeder::class,           // privileged audit activity tied to real state
     ];
 
     public function run(): void
@@ -73,22 +77,22 @@ class DevelopmentSeeder extends Seeder
     }
 
     /**
-     * Refuse to run the heavy demo seeder against a production database unless
-     * explicitly allowed. Prevents an accidental NEXUS_SEED_MODE=development from
-     * poisoning production with fake people and money.
+     * Refuse to run the demo seeder against a production database unless explicitly
+     * allowed. Prevents an accidental WYNCREST_SEED_MODE=development from poisoning
+     * production with fake people and money.
      */
     protected function guardAgainstProduction(): void
     {
         if (app()->environment('production') && ! config('seed.allow_dev_seed_in_production')) {
             throw new \RuntimeException(
-                'Refusing to run DevelopmentSeeder in production. This creates fake demo data. '
-                .'If you really intend this, set NEXUS_ALLOW_DEV_SEED_IN_PROD=true.'
+                'Refusing to run DevelopmentSeeder in production. This creates demo data. '
+                .'If you really intend this, set WYNCREST_ALLOW_DEV_SEED_IN_PROD=true.'
             );
         }
     }
 
     /**
-     * Print a concise demo-data summary + local-only login credentials.
+     * Print a concise summary of the seeded world + local-only login credentials.
      */
     protected function printSummary(): void
     {
@@ -98,11 +102,11 @@ class DevelopmentSeeder extends Seeder
         }
 
         $password = config('seed.development.password');
-        $domain = config('seed.development.email_domain');
 
         $counts = [
-            ['Tenants', User::where('user_type', 'tenant')->count()],
+            ['Admins', \App\Models\Admin::count()],
             ['Landlords', User::where('user_type', 'landlord')->count()],
+            ['Tenants', User::where('user_type', 'tenant')->count()],
             ['Properties', Property::count()],
             ['Units', Unit::count()],
             ['Listings', Listing::count()],
@@ -112,19 +116,26 @@ class DevelopmentSeeder extends Seeder
 
         $out->writeln('');
         $out->writeln('  <info>═══════════════════════════════════════════════════════</info>');
-        $out->writeln('  <info>  DEVELOPMENT SEED COMPLETE</info>');
+        $out->writeln('  <info>  WYNCREST DEVELOPMENT SEED COMPLETE</info>');
         $out->writeln('  <info>═══════════════════════════════════════════════════════</info>');
         $this->command->table(['Entity', 'Count'], $counts);
 
-        $out->writeln("  <comment>Demo logins</comment> — local development ONLY, password: <info>{$password}</info>");
-        $out->writeln("    Super admin   admin@{$domain}");
-        $out->writeln('    Landlord      '.SeedCatalog::email('landlord.verified').'   (verified, full features)');
-        $out->writeln('    Landlord      '.SeedCatalog::email('landlord.limited').'    (limited features)');
-        $out->writeln('    Landlord      '.SeedCatalog::email('landlord.pending').'    (verification pending)');
-        $out->writeln('    Tenant        '.SeedCatalog::email('tenant.showcase').'    (active lease, overdue + late fee + partial)');
-        $out->writeln('    Tenant        '.SeedCatalog::email('tenant.active').'      (active lease, up to date)');
-        $out->writeln('  <comment>Note:</comment> tenant.suspended / tenant.blocked & landlord.suspended demonstrate account governance (login refused).');
-        $out->writeln('  Verify the graph: <info>php artisan nexus:seed:verify</info>');
+        $out->writeln("  <comment>Demo logins</comment> (local development only), password: <info>{$password}</info>");
+        $out->writeln('  <comment>Admin</comment>');
+        $out->writeln('    '.SeedCatalog::email('admin').'   (system administrator)');
+
+        $out->writeln('  <comment>Landlords</comment>');
+        foreach (SeedCatalog::LANDLORDS as $l) {
+            $out->writeln('    '.str_pad(SeedCatalog::email($l['key']), 30).$l['purpose']);
+        }
+
+        $out->writeln('  <comment>Tenants</comment>');
+        foreach (SeedCatalog::TENANTS as $t) {
+            $status = $t['standing'] === 'owing' ? 'owes exactly one month' : 'good standing (paid up)';
+            $out->writeln('    '.str_pad(SeedCatalog::email($t['key']), 30).$status);
+        }
+
+        $out->writeln('  Verify the graph + ledger: <info>php artisan wyncrest:seed:verify</info>');
         $out->writeln('');
     }
 }

@@ -12,13 +12,13 @@ use Illuminate\Database\Seeder;
  *   - ProductionSeeder  : safe baseline (reference data + optional env admin)
  *
  * Mode resolution:
- *   1. config('seed.mode')  (NEXUS_SEED_MODE env), if set
+ *   1. config('seed.mode')  (WYNCREST_SEED_MODE env, NEXUS_SEED_MODE legacy), if set
  *   2. else: production APP_ENV => 'production', otherwise 'development'
  *
  * Switch modes without touching code:
- *   php artisan migrate:fresh --seed                         # auto (dev locally)
- *   NEXUS_SEED_MODE=development php artisan migrate:fresh --seed
- *   NEXUS_SEED_MODE=production  php artisan db:seed           # safe baseline
+ *   php artisan migrate:fresh --seed                            # auto (dev locally)
+ *   WYNCREST_SEED_MODE=development php artisan migrate:fresh --seed
+ *   WYNCREST_SEED_MODE=production  php artisan db:seed           # safe baseline
  */
 class DatabaseSeeder extends Seeder
 {
@@ -27,7 +27,7 @@ class DatabaseSeeder extends Seeder
         $mode = self::resolveMode();
 
         $this->command?->getOutput()->writeln(
-            "<info>Seeding in <comment>{$mode}</comment> mode</info> (set NEXUS_SEED_MODE to override)."
+            "<info>Seeding in <comment>{$mode}</comment> mode</info> (set WYNCREST_SEED_MODE to override)."
         );
 
         match ($mode) {
