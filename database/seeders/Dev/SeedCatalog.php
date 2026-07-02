@@ -13,7 +13,7 @@ namespace Database\Seeders\Dev;
  * stable graph that the developer can recognise account-by-account.
  *
  * The world it describes:
- *   - 1 admin (seeded in UserSeeder)
+ *   - 3 admins (seeded in UserSeeder): 1 super, 1 scoped, 1 pending invite
  *   - 5 landlords (4 operating + 1 deliberate empty-state account)
  *   - 5 tenants   (4 in good standing + 1 who owes exactly one month of rent)
  *   - 4 properties / 10 units, with listings spanning active / pending-review /

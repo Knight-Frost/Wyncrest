@@ -15,7 +15,8 @@ use Illuminate\Support\Str;
  * UserSeeder — demo identities.
  *
  * Creates exactly:
- *   - 1 admin (separate `admins` table) — can log in and manage the whole system
+ *   - 3 admins (separate `admins` table): 1 super admin + 1 scoped admin (both
+ *     active logins) + 1 pending invite (created but never accepted, cannot log in)
  *   - 5 landlords (all verified; 4 operating + 1 deliberate empty-state account)
  *   - 5 tenants  (all verified; 4 in good standing + 1 who owes one month)
  *

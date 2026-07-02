@@ -218,8 +218,10 @@ print_summary() {
     printf '   %s(Brand-new product — empty states are expected and intentional.)%s\n' "$c_dim" "$c_reset"
   else
     printf '   %sAccounts%s (password: %s)\n' "$c_yellow" "$c_reset" "$DEMO_PASSWORD"
-    printf '     %sAdmin%s\n' "$c_green" "$c_reset"
-    printf '       admin@wyncrest.test          system administrator\n'
+    printf '     %sAdmins%s (3 records: 2 active logins, 1 pending invite)\n' "$c_green" "$c_reset"
+    printf '       admin@wyncrest.test          super admin, full access\n'
+    printf '       reviewer@wyncrest.test       scoped admin (verifications, listings, reviews, audit log)\n'
+    printf '       pending.admin@wyncrest.test  pending invite, not an active login\n'
     printf '     %sLandlords%s\n' "$c_green" "$c_reset"
     printf '       landlord.1@wyncrest.test     established — 1 property, 2 tenants, an available listing\n'
     printf '       landlord.2@wyncrest.test     landlord of the owing tenant — listing in review\n'
@@ -234,7 +236,7 @@ print_summary() {
     printf '       tenant.owing@wyncrest.test   owes EXACTLY one month (GH₵2,500)\n'
     printf '\n'
     printf '   %sExpected counts%s\n' "$c_yellow" "$c_reset"
-    printf '     Admins: 1   Landlords: 5   Tenants: 5   Good-standing: 4   Owing: 1\n'
+    printf '     Admins: 3 (2 active logins, 1 pending invite)   Landlords: 5   Tenants: 5   Good-standing: 4   Owing: 1\n'
     printf '     Properties: 4   Units: 10   Listings: 10   Contracts: 5\n'
     printf '   %sVerify the world + ledger:%s php artisan wyncrest:seed:verify\n' "$c_dim" "$c_reset"
   fi

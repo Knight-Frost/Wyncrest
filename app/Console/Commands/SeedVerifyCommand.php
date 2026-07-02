@@ -26,7 +26,8 @@ use Illuminate\Console\Command;
  * wyncrest:seed:verify
  *
  * Verifies the controlled development world: the documented counts are exact
- * (1 admin / 5 landlords / 5 tenants), the lifecycle statuses that SHOULD exist
+ * (3 admins — 1 super, 1 scoped, 1 pending invite — / 5 landlords / 5 tenants),
+ * the lifecycle statuses that SHOULD exist
  * are present, and — most importantly — the immutable ledger is mathematically
  * consistent and matches the intended tenant standing:
  *   - exactly 4 tenants in good standing (balance == 0)

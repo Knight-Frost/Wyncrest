@@ -29,7 +29,8 @@ use Illuminate\Database\Seeder;
  *
  * Builds a SMALL, recognisable, fully-truthful platform so every dashboard, list
  * and analytic is meaningful — without demo noise:
- *   - 1 admin, 5 landlords (incl. 1 empty-state), 5 tenants (4 good + 1 owing)
+ *   - 3 admins (1 super, 1 scoped, 1 pending invite), 5 landlords (incl. 1
+ *     empty-state), 5 tenants (4 good + 1 owing)
  *   - 4 properties / 10 units; listings across active / pending-review / draft /
  *     inactive so browse, the moderation queue and occupied units are testable
  *   - 5 active leases with an immutable, mathematically-consistent ledger: four
@@ -50,7 +51,7 @@ class DevelopmentSeeder extends Seeder
      */
     private const PIPELINE = [
         ReferenceDataSeeder::class,   // shared feature definitions
-        UserSeeder::class,            // 1 admin, 5 landlords, 5 tenants
+        UserSeeder::class,            // 3 admins (super/scoped/pending), 5 landlords, 5 tenants
         VerificationSeeder::class,    // identity verification requests + statuses
         FeatureGateSeeder::class,     // per-landlord feature access (full/limited)
         PropertySeeder::class,        // 4 properties + 10 units
@@ -121,8 +122,10 @@ class DevelopmentSeeder extends Seeder
         $this->command->table(['Entity', 'Count'], $counts);
 
         $out->writeln("  <comment>Demo logins</comment> (local development only), password: <info>{$password}</info>");
-        $out->writeln('  <comment>Admin</comment>');
-        $out->writeln('    '.SeedCatalog::email('admin').'   (system administrator)');
+        $out->writeln('  <comment>Admins</comment> (3 records: 2 active logins, 1 pending invite)');
+        $out->writeln('    '.str_pad(SeedCatalog::email('admin'), 30).'super admin, full access');
+        $out->writeln('    '.str_pad(SeedCatalog::email('reviewer'), 30).'scoped admin (verifications, listings, reviews, audit log)');
+        $out->writeln('    '.str_pad(SeedCatalog::email('pending.admin'), 30).'pending invite, not an active login');
 
         $out->writeln('  <comment>Landlords</comment>');
         foreach (SeedCatalog::LANDLORDS as $l) {
