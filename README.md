@@ -115,6 +115,10 @@ Full detail, including how demo accounts are structured: [`docs/SEEDING.md`](doc
 
 Full security policy: [`SECURITY.md`](SECURITY.md). Full access-control model: [`docs/AUTHORIZATION.md`](docs/AUTHORIZATION.md).
 
+## Contributing
+
+Bug, feature, and documentation issues use structured templates, and every pull request runs the same checks a contributor would run locally: backend tests, frontend lint, and frontend build. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full ground rules.
+
 ## Documentation map
 
 | Doc | What it covers |
