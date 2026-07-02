@@ -1,128 +1,107 @@
 # Architecture
 
-How Wyncrest is put together: the layers, the data flow, and the decisions
-behind them. For product status and history, see the root `CLAUDE.md`.
+How Wyncrest is put together, and why it is built this way.
+
+Who this is for: developers joining the project, and anyone reviewing the codebase who wants to understand the shape of the system before reading code.
 
 ## System overview
 
-Wyncrest is a Laravel 12 API backend paired with a standalone React SPA. The
-two are separate deployables that talk over JSON. There is no server-rendered
-UI beyond a Laravel welcome page.
+Wyncrest is two separate applications that talk to each other over the network: a React frontend that runs in the browser, and a Laravel backend that owns all the data and all the rules. The frontend never talks to the database directly, and it never decides what a user is allowed to do. It only asks the backend, and the backend decides.
 
 ```mermaid
 flowchart LR
-    Browser[Browser] --> SPA[React SPA<br/>frontend/]
-    SPA -- Bearer token --> API[Laravel API<br/>routes/api*.php]
-    API --> MW[Auth guard + role + rate limit]
-    MW --> FR[FormRequest<br/>validation + authorize]
-    FR --> Ctrl[Controller<br/>thin, orchestration only]
-    Ctrl --> Svc[Service layer<br/>app/Services]
-    Svc --> Model[Eloquent models<br/>app/Models]
-    Model --> DB[(Database)]
-    Svc --> Ledger[(Immutable ledger)]
-    Svc --> Audit[(Append-only audit log)]
-    Svc --> Events[Events]
-    Events --> Listeners[Listeners]
-    Listeners --> Notify[Notifications<br/>in-app / email / SMS]
-    Svc --> Cache[Analytics cache<br/>scoped, selectively invalidated]
+    Browser[Browser] --> SPA[React frontend]
+    SPA -->|API calls with a login token| API[Laravel backend]
+    API --> Auth[Login and permission checks]
+    API --> Services[Business logic]
+    Services --> DB[(Database)]
+    Services --> Ledger[(Rent and payment ledger)]
+    Services --> Audit[(Audit log)]
+    Services --> Notify[Notifications: in-app, email, SMS]
+    Services --> Cache[Analytics cache]
 ```
 
-## Backend request lifecycle
+## Frontend responsibilities
 
-Every write follows the same layered path, enforced in three places at once:
-route middleware (coarse role gate), FormRequest/Policy (ownership and
-resource-level rules), and service-level checks for sensitive operations.
+The frontend's job is to present information clearly and to make requests on the user's behalf. It is responsible for:
 
-```
-Route (auth:sanctum + role guard + rate limit)
-  -> FormRequest (validation + authorize())
-    -> Controller (thin; orchestration only)
-      -> Service (business logic, transactions)   app/Services
-        -> Model (Eloquent; enums, scopes, invariants)   app/Models
-      -> Policy (per-model authorization)   app/Policies
-  -> Observer / Event / Listener (audit, notifications, cache invalidation)
-```
+- Showing the right screens for the logged-in user's role
+- Collecting and validating form input before sending it
+- Displaying the results of a request, including errors
+- Remembering visual preferences like light or dark mode
 
-Controllers never contain business rules. Validation never lives inline in a
-controller. Side effects (audit logging, notifications, cache invalidation)
-are wired through Observers, Events, and Listeners, not called directly from
-controllers.
+It is deliberately **not** responsible for deciding what is allowed. If the frontend hides a button, that is a convenience, not a security boundary. The backend always makes the real decision. Full detail on the design system: [`docs/UI_SYSTEM.md`](UI_SYSTEM.md).
 
-## Example flow: tenant pays rent
+## Backend responsibilities
+
+The backend is the single source of truth. Every request flows through the same layered path:
+
+1. **Route and role check.** Is the caller logged in, and does their role match this part of the API?
+2. **Validation and ownership check.** Is the request data valid, and does the caller actually own or have a right to the record involved?
+3. **Business logic.** The actual work happens here: creating a contract, generating a rent charge, approving a listing.
+4. **Side effects.** Anything that should happen afterward, like sending a notification or writing an audit log entry, happens automatically as a reaction to what just occurred, not as a manual extra step someone has to remember.
+
+This layering means a screen or a controller can never accidentally skip a security check. The check lives at the layer the request has to pass through no matter what.
+
+## Database responsibilities
+
+The database stores everything permanently: accounts, properties, listings, contracts, the ledger, notifications, and the audit log. Full detail on the main data areas and how they relate: [`docs/DATABASE.md`](DATABASE.md).
+
+Two areas of the database follow stricter rules than the rest:
+
+- The **ledger** (rent charges, payments, late fees) can only ever grow. Entries are never edited or deleted; corrections are new entries. See [`docs/LEDGER.md`](LEDGER.md).
+- The **audit log** works the same way: entries are permanent, and each one is cryptographically linked to the one before it, so tampering would be visible.
+
+## The service layer
+
+Business rules live in one place: the service layer, not scattered across screens or database code. A "controller" (the part of the backend that receives a request) stays thin: it checks permissions, hands the work to a service, and returns the result. The service does the actual work: calculating a balance, moving a contract from draft to sent, deciding whether a listing can be approved.
+
+Keeping business rules in one place means a rule only has to be written once, and it behaves the same way no matter which screen triggered it.
+
+## Authentication and authorization
+
+- Authentication answers "who is this?" Wyncrest uses token-based login: a user logs in once and gets a token, which is sent with every request afterward.
+- Authorization answers "what are they allowed to do?" Tenants, landlords, and admins each have their own rules, and admin access is further broken into granular capabilities that a super admin controls.
+
+Full detail: [`docs/AUTHORIZATION.md`](AUTHORIZATION.md).
+
+## Request lifecycle example: a tenant pays rent
 
 ```mermaid
 sequenceDiagram
-    participant T as Tenant (SPA)
-    participant API as Laravel API
+    participant Tenant
+    participant API as Backend
     participant Stripe
-    participant Ledger as LedgerEntry
-    participant Audit as AuditLog
-    participant N as Notifications
+    participant Ledger
+    participant Audit as Audit log
+    participant Notify as Notifications
 
-    T->>API: POST /tenant/ledger/{entry}/pay
-    API->>Stripe: Create PaymentIntent
-    Stripe-->>T: Client confirms payment
-    Stripe->>API: POST /webhooks/stripe (signed)
-    API->>API: Verify Stripe signature
-    API->>Ledger: transitionStatus(PAID) [idempotent on payment_intent_id]
-    Ledger-->>Audit: append-only entry written
-    Ledger-->>N: payment received notification queued
+    Tenant->>API: Start a rent payment
+    API->>Stripe: Create a payment request
+    Stripe-->>Tenant: Tenant confirms payment
+    Stripe->>API: Confirms the payment happened
+    API->>Ledger: Mark the rent charge as paid
+    Ledger-->>Audit: Payment is recorded permanently
+    Ledger-->>Notify: Both sides are notified
 ```
 
-The ledger has no `update()`/`delete()` path. Status changes only happen
-through `transitionStatus()`, and corrections are compensating entries, never
-edits. See `CLAUDE.md` section 7 for the full data model rationale.
+Notice that the payment is only ever marked paid after Stripe confirms it happened, and that confirmation is verified, not just trusted. This protects against someone faking a "payment succeeded" request.
 
-## Frontend architecture
+## Notifications
 
-The SPA lives entirely under `frontend/` (not the Laravel `resources/`
-directory, which only serves a welcome page). It authenticates with Bearer
-tokens (Sanctum personal access tokens, not cookie/SPA mode) and treats the
-API as the sole source of truth for authorization: role-based routing in the
-SPA is a convenience, never a security boundary.
+Notifications are never sent directly from the middle of a business action. Instead, an action announces that something happened, and a separate piece of code listens for that announcement and sends the notification. This keeps the business logic focused on the business rule, and means notification delivery (in-app, email, or SMS) can change without touching the logic that decided a notification was needed.
 
-```
-frontend/src/
-  api/         typed request functions per resource
-  components/  shared UI (cards, layout, drawers, tables)
-  context/     auth, theme, accent providers
-  hooks/       data-fetching and UI hooks
-  pages/       tenant/ landlord/ admin/ shared/ route screens
-  lib/         format helpers, storage, endpoints
-  types/       API response types
-```
+## Audit logging
 
-## Key architectural decisions
+The same pattern applies to audit logging. A privileged action does not have to remember to write its own audit entry; a listener does that automatically whenever the right kind of action happens. This makes it structurally hard to add a new privileged action and forget to log it.
 
-Decisions still in force today. Historical decisions that have since been
-reversed by later product work are not listed here (see `CLAUDE.md` for the
-live status of any feature).
+## Analytics and caching
 
-| Decision | Rationale |
-|---|---|
-| Separate `users` and `admins` tables with separate auth guards | Makes privilege escalation impossible by construction; no role-filtering query can accidentally treat a tenant as an admin. |
-| Feature gating via `features` / `landlord_features` tables, not `.env` flags | Feature availability is business data with an audit trail (who enabled what, when), not deployment config. |
-| All emails and notifications triggered by events, handled by queued listeners | Decouples business logic from delivery; a controller never calls `Mail::send()` directly. |
-| Audit logs are insert-only (no `updated_at`, no update path) | Guarantees the audit trail cannot be edited or backdated after the fact. |
-| Soft deletes on user-generated content (users, properties, units, listings, conversations, messages) | Preserves legal and financial history; nothing that could matter for a dispute disappears on delete. |
-| Ledger entries use UUID primary keys and are immutable | Prevents ID enumeration on financial records and makes tampering structurally impossible, not just policy-forbidden. |
-| Service layer owns all business logic (`app/Services`) | Controllers stay thin and testable without the HTTP layer; business rules are discoverable in one place instead of scattered across controllers. |
-| PHP enums for all state fields (statuses, types, cycles) | Type safety at the database boundary; invalid states cannot be assigned, and behavior methods (`isPublic()`, `canBeListed()`) live next to the states they describe. |
+Dashboards and analytics are backed by cached calculations so they load quickly, even as the amount of data grows. The cache is scoped (a landlord's cache never leaks another landlord's numbers) and is automatically cleared only for the specific slice of data that changed, not the whole cache at once.
 
-## Backend module map
+## Why this design matters
 
-| Path | Contents |
-|---|---|
-| `app/Models` | Eloquent models, one class per file |
-| `app/Http/Controllers/{Admin,Landlord,Tenant,Analytics,Public}` | Thin controllers grouped by audience |
-| `app/Http/Requests` | FormRequest validation classes |
-| `app/Http/Middleware` | Role guards, rate limiting, security headers |
-| `app/Policies` | Per-model authorization |
-| `app/Services` | Business logic: ledger, payments, listings, notifications, analytics, audit, features |
-| `app/Enums` | Type-safe domain values |
-| `app/Events` / `app/Listeners` / `app/Observers` | Side-effect wiring |
-| `app/Console/Commands` | Scheduled jobs (rent generation, overdue marking, digests) |
-| `app/Support/Cache` | Analytics cache keys and selective invalidation |
-
-For product scope, current status, and the full domain model, see the root
-`CLAUDE.md`.
+- **A security rule only has to be correct once.** Because permission checks live in one layer that every request passes through, there is no screen that can accidentally forget to check.
+- **The audit log and ledger cannot lie by omission.** Because writing to them happens automatically as a side effect, not as a manual step, there is no code path that does the real action but skips the record.
+- **The frontend can be redesigned freely.** Because it holds no business rules, changing how something looks or flows never risks changing what is actually allowed.
+- **New features are predictable to add.** A new feature follows the same route, check, service, side-effect shape as every existing one, so it is easy for a new contributor to find where something belongs.
