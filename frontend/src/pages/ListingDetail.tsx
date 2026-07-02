@@ -164,7 +164,7 @@ export function ListingDetail() {
   // Apply state
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState(false);
-  const [showApplyModal, setShowApplyModal] = useState(false);
+  const [showApplyPanel, setShowApplyPanel] = useState(false);
   const [coverNote, setCoverNote] = useState('');
   const applyInFlight = useRef(false);
 
@@ -197,7 +197,7 @@ export function ListingDetail() {
     try {
       await tenantApi.apply(listing.id, coverNote.trim() || undefined);
       setApplied(true);
-      setShowApplyModal(false);
+      setShowApplyPanel(false);
       setCoverNote('');
       toast('Application submitted', 'success');
     } catch (err) {
@@ -206,7 +206,7 @@ export function ListingDetail() {
       if (apiErr.status === 422) {
         toast(apiErr.message || 'You already have an active application for this listing.', 'info');
         setApplied(true); // treat as already applied
-        setShowApplyModal(false);
+        setShowApplyPanel(false);
       } else {
         toast(apiErr.message || 'Could not submit application. Please try again.', 'error');
       }
@@ -372,15 +372,55 @@ export function ListingDetail() {
 
               {isTenant && (
                 <>
-                  <Button
-                    className="w-full"
-                    variant={applied ? 'secondary' : 'primary'}
-                    loading={applying}
-                    disabled={applied}
-                    onClick={() => setShowApplyModal(true)}
-                  >
-                    {applied ? 'Application submitted' : 'Apply for this home'}
-                  </Button>
+                  {!showApplyPanel ? (
+                    <Button
+                      className="w-full"
+                      variant={applied ? 'secondary' : 'primary'}
+                      loading={applying}
+                      disabled={applied}
+                      onClick={() => setShowApplyPanel(true)}
+                    >
+                      {applied ? 'Application submitted' : 'Apply for this home'}
+                    </Button>
+                  ) : (
+                    <div className="space-y-3 rounded-xl border border-ink-200 bg-ink-50/40 p-4">
+                      <div>
+                        <label htmlFor="ld-cover-note" className="block text-sm font-medium text-ink-700 mb-1">
+                          Cover note <span className="text-ink-400 font-normal">(optional)</span>
+                        </label>
+                        <textarea
+                          id="ld-cover-note"
+                          className="glass-input w-full px-3 py-2.5 text-sm text-ink-900 placeholder:text-ink-400"
+                          rows={4}
+                          placeholder="Hi, I'm a working professional looking for a quiet home…"
+                          value={coverNote}
+                          onChange={(e) => setCoverNote(e.target.value)}
+                          maxLength={1000}
+                          disabled={applying}
+                          autoFocus
+                        />
+                        <p className="mt-1 text-right text-xs text-ink-400">{coverNote.length}/1000</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          className="flex-1"
+                          onClick={() => { setShowApplyPanel(false); setCoverNote(''); }}
+                          disabled={applying}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          variant="primary"
+                          className="flex-1"
+                          loading={applying}
+                          onClick={handleApply}
+                        >
+                          Submit
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                   <Button
                     className="w-full"
                     variant={saved ? 'secondary' : 'ghost'}
@@ -398,47 +438,6 @@ export function ListingDetail() {
         </div>
       </div>
 
-      {/* Apply modal — cover note is optional */}
-      {showApplyModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/40 p-4"
-          onClick={(e) => { if (e.target === e.currentTarget) setShowApplyModal(false); }}
-        >
-          <div className="glass-panel w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold text-ink-950">Apply for this home</h2>
-            <p className="mt-1 text-sm text-ink-500">
-              Optionally add a short cover note to introduce yourself to the landlord.
-            </p>
-            <textarea
-              className="glass-input mt-4 w-full px-3 py-2.5 text-sm text-ink-900 placeholder:text-ink-400"
-              rows={4}
-              placeholder="Hi, I'm a working professional looking for a quiet home…"
-              value={coverNote}
-              onChange={(e) => setCoverNote(e.target.value)}
-              maxLength={1000}
-            />
-            <p className="mt-1 text-right text-xs text-ink-400">{coverNote.length}/1000</p>
-            <div className="mt-4 flex gap-3">
-              <Button
-                variant="ghost"
-                className="flex-1"
-                onClick={() => { setShowApplyModal(false); setCoverNote(''); }}
-                disabled={applying}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                className="flex-1"
-                loading={applying}
-                onClick={handleApply}
-              >
-                Submit application
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
