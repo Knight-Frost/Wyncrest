@@ -106,8 +106,8 @@ privileged action is written to an append-only audit log.
 | Notifications | Implemented (in-app, email, SMS, digests, preferences) |
 | Analytics / Caching | Implemented (scoped, selectively invalidated, async jobs) |
 | Frontend (`frontend/`) | **Built & truthful**: React 18 + TS + Vite + Tailwind v4 SPA, role-aware, integrated with the API (tsc + eslint + build clean). **All three portals (tenant/landlord/admin) now run on 100% real backend data, no mock files remain.** |
-| Security | OWASP audit complete (no high/critical); CSP + HSTS added; `docs/SECURITY.md` |
-| Docs | README, `CLAUDE.md`, `docs/{API_REFERENCE,SECURITY,EXECUTION_PLAN,ARCHITECTURE,DEPLOYMENT}.md` |
+| Security | OWASP audit complete (no high/critical); CSP + HSTS added; `SECURITY.md` |
+| Docs | README, `CLAUDE.md`, `docs/{API_REFERENCE,AUTHORIZATION,ARCHITECTURE,DEPLOYMENT}.md` |
 
 See **Known Unfinished Work** (§22) for the live punch list.
 
