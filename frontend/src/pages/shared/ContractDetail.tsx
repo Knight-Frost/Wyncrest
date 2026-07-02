@@ -9,7 +9,6 @@ import { NexusCard } from '@/components/cards/NexusCard';
 import { SemanticBadge } from '@/components/cards/SemanticBadge';
 import { getContractVariant } from '@/components/cards/variants';
 import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
 import { DestructiveConfirmDialog } from '@/components/ui/DestructiveConfirmDialog';
 import { ErrorState, LoadingState } from '@/components/ui/states';
 import {
@@ -197,11 +196,25 @@ export function ContractDetail() {
     );
   }
   if (role === 'landlord' && contract.status === 'draft') {
-    actions.push(
-      <Button key="send" onClick={() => setConfirmSend(true)} disabled={submitting}>
-        Send to Tenant
-      </Button>,
-    );
+    if (confirmSend) {
+      actions.push(
+        <span key="confirm-q" className="text-sm font-medium text-ink-700">
+          Send this draft to the tenant?
+        </span>,
+        <Button key="cancel-send" variant="secondary" onClick={() => setConfirmSend(false)} disabled={submitting}>
+          Cancel
+        </Button>,
+        <Button key="confirm-send" onClick={handleSend} loading={submitting}>
+          Confirm
+        </Button>,
+      );
+    } else {
+      actions.push(
+        <Button key="send" onClick={() => setConfirmSend(true)} disabled={submitting}>
+          Send to Tenant
+        </Button>,
+      );
+    }
   }
   if (role === 'landlord' && contract.status === 'active') {
     actions.push(
@@ -394,24 +407,6 @@ export function ContractDetail() {
           </p>
         </div>
       </NexusCard>
-
-      {/* Send modal */}
-      <Modal
-        open={confirmSend}
-        onClose={() => !submitting && setConfirmSend(false)}
-        title="Send contract to tenant"
-        description="The tenant will be notified and asked to review and accept this contract."
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setConfirmSend(false)} disabled={submitting}>
-              Cancel
-            </Button>
-            <Button onClick={handleSend} loading={submitting}>
-              Send
-            </Button>
-          </>
-        }
-      />
 
       {/* Terminate / Decline — destructive confirm with required reason */}
       <DestructiveConfirmDialog
