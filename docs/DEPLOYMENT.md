@@ -1,8 +1,8 @@
 # Deployment
 
-This document covers two things: the general checklist for deploying Wyncrest
-anywhere, and the specifics of the live demo box, which is a real but
-intentionally minimal deployment, not a hardened production reference.
+How to deploy Wyncrest, and a real example of a live deployment.
+
+Who this is for: anyone deploying Wyncrest, or reviewing how the live demo box is set up.
 
 ## Environment configuration
 
@@ -10,101 +10,71 @@ Copy `.env.example` to `.env` and set at minimum:
 
 | Variable | Purpose |
 |---|---|
-| `APP_ENV` | `production` for any real deployment |
-| `APP_DEBUG` | Must be `false` in production (prevents stack traces in API responses) |
-| `APP_KEY` | Generate with `php artisan key:generate` |
-| `APP_URL` | The backend's real origin; used to build absolute storage/mail URLs |
-| `FRONTEND_URL` / `APP_FRONTEND_URL` | The SPA's real origin, for CORS and deep-links |
-| `SANCTUM_STATEFUL_DOMAINS` | Must include the SPA's production domain |
-| `CORS_ALLOWED_ORIGINS` | Must include the SPA's production domain |
-| `DB_CONNECTION` | `sqlite` by default; `mysql`/`pgsql` supported for production scale |
-| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Required for real payment capture; webhook signature is verified, never optional |
-| `TWILIO_SID` / `TWILIO_TOKEN` / `TWILIO_FROM` | Required for SMS notifications |
+| `APP_ENV` | Set to `production` for any real deployment |
+| `APP_DEBUG` | Must be `false` in production, so errors never show stack traces |
+| `APP_KEY` | Generated once with `php artisan key:generate` |
+| `APP_URL` | The backend's real address |
+| `FRONTEND_URL` | The frontend's real address |
+| `SANCTUM_STATEFUL_DOMAINS` | Must include the frontend's production address |
+| `CORS_ALLOWED_ORIGINS` | Must include the frontend's production address |
+| `DB_CONNECTION` | `sqlite` by default; `mysql` or `pgsql` for larger deployments |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Required for real rent payments |
+| `TWILIO_SID`, `TWILIO_TOKEN`, `TWILIO_FROM` | Required for SMS notifications |
 
-Brand strings (`BRAND_*` / `VITE_BRAND_*`) are documented separately in
-`.env.example` under `BRANDING`, and let you rename the product without
-touching source files (see `CLAUDE.md` section 0 for the config-driven brand
-layer).
+Brand strings (`BRAND_*`) let the product name be changed without touching source files. See `.env.example` for the full list.
 
 ## Production checklist
 
-- [ ] `APP_ENV=production`, `APP_DEBUG=false`, a real `APP_KEY`
-- [ ] HTTPS enforced at the web server, secure session cookies
-- [ ] Real Stripe and Twilio credentials (features stay gated off without them)
-- [ ] `php artisan config:cache route:cache` after any config or route change
-- [ ] A real queue worker running (`php artisan queue:work`) and the scheduler
-      cron (`php artisan schedule:run`) if you need rent generation, overdue
-      marking, and digest emails to actually fire
-- [ ] `CORS_ALLOWED_ORIGINS` and `SANCTUM_STATEFUL_DOMAINS` point at the
-      deployed SPA origin
-- [ ] Database credentials are least-privilege and not exposed publicly
-- [ ] Composer installed with `--no-dev --optimize-autoloader` (seeding a
-      genuine production environment uses `WYNCREST_SEED_MODE=production`,
-      which needs no `faker` and works fine under `--no-dev`; see
-      `docs/SEEDING.md`)
-- [ ] Backups configured for the database
-- [ ] Rate limiting confirmed active (`RateLimitByRole` middleware, already
-      wired; verify it is not bypassed by a proxy/CDN config)
-
-None of this is enforced by the framework. It is a checklist, not a gate.
-
-## The live demo deployment (EC2)
-
-A demo/staging instance is live at `http://18.216.245.190`. It is a
-showcase box, not a hardened production reference: HTTP only, no domain or
-TLS, so Stripe webhooks and secure cookies do not work (auth is Bearer-token
-based, so login works fine regardless).
-
-| Fact | Value |
+| Check | Why |
 |---|---|
-| Host | `ec2-user@18.216.245.190`, us-east-2, `i-0f4e0733ca1f463bc`, t3.micro (912 MB RAM), Amazon Linux 2023 |
-| App directory | `/var/www/wyncrest` (owner `ec2-user:apache`; `storage/`, `bootstrap/cache/`, `database/` are group-writable so php-fpm can write) |
-| Stack | PHP 8.3 + php-fpm (socket `/run/php-fpm/www.sock`), nginx, composer, a 2 GB swapfile so `composer install` does not OOM on 912 MB RAM |
-| Services | php-fpm and nginx run under systemd (`enable --now`), so they survive reboots independent of any SSH session |
-| Serving model | Single origin: nginx serves the built SPA (`frontend/dist`) at `/` with an `index.html` fallback, and proxies `/api`, `/sanctum`, `/storage`, `/up` to Laravel's `public/index.php`. Same-origin means no CORS and no API-URL env needed on the frontend. |
-| Data layer | SQLite at `/var/www/wyncrest/database/database.sqlite`; `QUEUE_CONNECTION=sync` (no worker needed); `CACHE`/`SESSION=database` |
-| Demo data | Seeded with `WYNCREST_SEED_MODE=development` plus `WYNCREST_ALLOW_DEV_SEED_IN_PROD=true`, which requires the full (non `--no-dev`) composer install because the demo seeders use `faker`. A genuine production deploy would instead keep `--no-dev` and use `WYNCREST_SEED_MODE=production`, which needs no faker. |
+| `APP_ENV=production`, `APP_DEBUG=false`, a real `APP_KEY` | Prevents debug information from leaking |
+| HTTPS enforced, secure session cookies | Protects login sessions in transit |
+| Real Stripe and Twilio credentials | Payments and SMS stay safely disabled without them |
+| Config and route caches rebuilt after any change | `php artisan config:cache route:cache` |
+| A real queue worker and scheduler running | Needed for rent generation, overdue marking, and digest emails |
+| CORS and Sanctum settings point only at the real frontend address | Prevents other sites from making authenticated requests |
+| Database credentials are least-privilege | Limits damage if credentials leak |
+| Backups configured | Protects against data loss |
+| Rate limiting confirmed active and not bypassed by a proxy | Protects against brute-force attempts |
+
+This is a checklist, not something the framework enforces automatically.
+
+## The live demo deployment
+
+A real demo box is running at a public address. It is an honest, working deployment, but a deliberately minimal one, not a hardened production reference. It runs over plain HTTP with no domain name, so secure-cookie based flows and Stripe webhooks do not work there. Login still works because it uses token-based authentication, not cookies.
+
+| Fact | Detail |
+|---|---|
+| Server | A small cloud instance running Amazon Linux |
+| Web stack | PHP with php-fpm, and nginx as the web server |
+| Serving model | nginx serves the built frontend directly, and forwards API requests to the backend, so there is one address and no cross-origin setup needed |
+| Database | SQLite, a single file on the server |
+| Background jobs | Run synchronously; no separate queue worker is needed for this small box |
+| Demo data | Development-mode seed data, clearly fictional, running with an explicit safety flag that allows demo data outside a strictly local environment |
 
 ### Redeploying after code changes
 
-```bash
-# 1. Build the frontend locally
-cd frontend && npm run build
+| Step | What happens |
+|---|---|
+| 1 | Build the frontend locally |
+| 2 | Copy the updated files to the server, excluding local-only files like `.env` and the database |
+| 3 | On the server, install any new dependencies, run pending database migrations, and rebuild the config and route caches |
+| 4 | Reload the web server so the new code takes effect |
 
-# 2. Sync the tree (excluding local-only paths)
-rsync -az --delete \
-  --exclude .git --exclude node_modules --exclude vendor \
-  --exclude .env --exclude '*.sqlite' \
-  --exclude Claude_Study_Guide --exclude .internal \
-  ./ ec2-user@18.216.245.190:/var/www/wyncrest
+### Known limitations of this demo box
 
-# 3. On the server
-ssh -i ~/Downloads/Wyncrest.pem ec2-user@18.216.245.190
-cd /var/www/wyncrest
-composer install                 # only if dependencies changed
-php artisan migrate              # or migrate:fresh --seed --force to reset demo data
-php artisan config:cache route:cache
-sudo systemctl reload php-fpm nginx
-```
+No TLS or custom domain, no real Stripe, Twilio, or Google credentials (so those features stay safely disabled), no background queue worker or scheduler, and SQLite instead of a production-grade database. It exists to demonstrate the product, not to model a hardened production environment.
 
-### Known limitations of this box
+## Security hardening
 
-No TLS or domain, no real Stripe/Twilio/Google credentials (those features
-stay gated off), no queue worker or scheduler cron, dev dependencies present,
-SQLite rather than MySQL/Postgres. It exists to demo the product, not to model
-a production deployment.
+The same hardening applies to any real deployment, not just the demo box:
 
-## Security hardening (applies to any deployment)
+- Rate limiting is role-aware and already implemented.
+- CORS is restricted to known addresses, never left open to everything.
+- All database access goes through safe, parameterized queries.
+- The API only ever returns JSON, and the frontend escapes what it displays by default.
+- The host should use a firewall and key-only SSH access.
+- Database backups should be regular and tested.
+- Confirm `APP_DEBUG=false` before anything goes live.
 
-- Rate limiting configured and role-aware (already implemented via
-  `RateLimitByRole`)
-- CORS restricted to known origins, never `*`
-- SQL injection: Eloquent/query bindings only, no raw interpolation, already
-  enforced by convention across the codebase
-- XSS: the API returns JSON only; the SPA escapes output by default (React)
-- Firewall and SSH key-only authentication at the host level
-- Regular, tested database backups
-- Errors never leak stack traces: confirm `APP_DEBUG=false` before going live
-
-See `docs/SECURITY.md` for the full security model, including the audit log
-and RBAC design.
+Full security model: [`../SECURITY.md`](../SECURITY.md).
