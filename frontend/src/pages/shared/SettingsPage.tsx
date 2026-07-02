@@ -411,6 +411,7 @@ export function SettingsPage() {
   const name         = user ? ('full_name' in user ? user.full_name : user.name) : '—';
   const email        = user?.email ?? '—';
   const role         = user?.role ?? '—';
+  const isSuperAdmin = !!(user && 'is_super_admin' in user && user.is_super_admin);
   const verified     = !!(user && 'identity_verified' in user && user.identity_verified);
   const memberSince  = user && 'created_at' in user ? formatDate(user.created_at) : '—';
 
@@ -447,7 +448,13 @@ export function SettingsPage() {
                   </div>
                   <div className="ac-field">
                     <div className="ac-field-lab">Role</div>
-                    <div className="ac-field-val" style={{ textTransform: 'capitalize' }}>{role}</div>
+                    <div className="ac-field-val">
+                      {isAdmin
+                        ? (isSuperAdmin
+                            ? <SemanticBadge role="info">Super admin</SemanticBadge>
+                            : <SemanticBadge role="neutral">Admin</SemanticBadge>)
+                        : <span style={{ textTransform: 'capitalize' }}>{role}</span>}
+                    </div>
                   </div>
                   {!isAdmin && (
                     <div className="ac-field">
@@ -467,17 +474,7 @@ export function SettingsPage() {
                       </div>
                     </div>
                   )}
-                  {/* Admin-only: access level (super admin) + active state. */}
-                  {isAdmin && user && 'is_super_admin' in user && (
-                    <div className="ac-field">
-                      <div className="ac-field-lab">Access level</div>
-                      <div className="ac-field-val">
-                        {user.is_super_admin
-                          ? <SemanticBadge role="info">Super admin</SemanticBadge>
-                          : <SemanticBadge role="neutral">Admin</SemanticBadge>}
-                      </div>
-                    </div>
-                  )}
+                  {/* Admin-only: active state. Access level now lives in the Role field above. */}
                   {isAdmin && user && 'is_active' in user && (
                     <div className="ac-field">
                       <div className="ac-field-lab">Account</div>
@@ -764,7 +761,7 @@ export function SettingsPage() {
                 <IconCheckCircle size={17} className="ac-check-ico ac-ok" />
                 Access level
                 <span className="ac-check-state ac-ok">
-                  {user && 'is_super_admin' in user && user.is_super_admin ? 'Super admin' : 'Admin'}
+                  {isSuperAdmin ? 'Super admin' : 'Admin'}
                 </span>
               </li>
             </ul>

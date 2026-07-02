@@ -591,6 +591,7 @@ export function AdminDashboard() {
   const { user } = useAuth();
   const adminName = user && user.role === 'admin' ? user.name : 'Administrator';
   const firstName = adminName.split(' ')[0];
+  const isSuperAdmin = !!(user && user.role === 'admin' && user.is_super_admin);
 
   const dashboardReq = useApi(() => adminApi.dashboard(), []);
   const pendingReq = useApi(() => adminApi.pendingListings(), []);
@@ -686,7 +687,7 @@ export function AdminDashboard() {
           <div>
             <div className="hc-date">
               <span className="pill">{dateLabel}</span>
-              <span className="mono-l">Admin console</span>
+              <span className="mono-l">{isSuperAdmin ? 'Super admin console' : 'Admin console'}</span>
             </div>
             <h1 className="hc-greet">
               {greetWord(now.getHours())}, <span className="it">{firstName}.</span>
