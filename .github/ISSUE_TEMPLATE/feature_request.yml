@@ -1,0 +1,68 @@
+name: Feature request
+description: Suggest something new or an improvement for Wyncrest
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. Real, specific requests are easier to act on than general ideas.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Feature summary
+      description: A short, plain-language description of what you would like to see.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: role
+    attributes:
+      label: Who is this for
+      description: Which role would use this feature?
+      options:
+        - Tenant
+        - Landlord
+        - Admin
+        - Super admin
+        - Public visitor
+        - Everyone
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem this solves
+      description: What is difficult, missing, or annoying today without this?
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Desired behavior
+      description: Describe what should happen, step by step if helpful.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: real-data
+    attributes:
+      label: Should this use real data and backend enforcement?
+      description: Wyncrest avoids fake or UI-only data. Confirm this feature would be backed by real records and enforced on the backend, not just shown in the interface.
+      options:
+        - "Yes, real data and backend enforcement"
+        - "Not sure, needs discussion"
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes or mockups
+      description: Anything else useful. Attach a mockup or sketch if you have one.
+    validations:
+      required: false
