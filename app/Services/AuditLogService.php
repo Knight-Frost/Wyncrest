@@ -284,6 +284,12 @@ class AuditLogService
     }
 
     /**
+     * The real hashing algorithm used by AuditLog::chainHashFor(). Reported to
+     * the frontend so it never has to guess or hardcode this on its own.
+     */
+    public const HASH_ALGORITHM = 'SHA-256';
+
+    /**
      * Recompute the SHA-256 hash chain over the whole table (oldest → newest)
      * and report whether it is intact. This is REAL verification: it rebuilds
      * each row's canonical payload with the same serialization used at write
@@ -291,45 +297,95 @@ class AuditLogService
      *
      * A tampered historical row (content edited, or a hash/link overwritten)
      * produces a mismatch that is reported at `broken_at` (the first bad id).
+     * If verification itself cannot finish (e.g. a database error partway
+     * through), that is reported honestly as `warning`, not papered over as
+     * either success or failure.
      *
-     * @return array{intact: bool, verified: int, total: int, head: ?string, broken_at: ?int, checked_at: string}
+     * @return array{status: string, is_valid: bool, message: string,
+     *     checked_count: int, total_count: int, failed_count: int,
+     *     broken_at: ?int, latest_event_id: ?int, latest_hash_prefix: ?string,
+     *     verified_at: string, algorithm: string}
      */
     public function verifyChain(): array
     {
+        $totalRows = AuditLog::count();
+
+        if ($totalRows === 0) {
+            return [
+                'status' => 'empty',
+                'is_valid' => true,
+                'message' => 'No audit events recorded yet.',
+                'checked_count' => 0,
+                'total_count' => 0,
+                'failed_count' => 0,
+                'broken_at' => null,
+                'latest_event_id' => null,
+                'latest_hash_prefix' => null,
+                'verified_at' => now()->toIso8601String(),
+                'algorithm' => self::HASH_ALGORITHM,
+            ];
+        }
+
         $previous = AuditLog::GENESIS_HASH;
         $verified = 0;
         $total = 0;
         $head = null;
+        $latestId = null;
         $brokenAt = null;
+        $incomplete = false;
 
-        AuditLog::query()->orderBy('id')->chunk(500, function ($rows) use (&$previous, &$verified, &$total, &$head, &$brokenAt) {
-            foreach ($rows as $log) {
-                $total++;
-                $expected = AuditLog::chainHashFor($previous, $log->canonicalFields());
+        try {
+            AuditLog::query()->orderBy('id')->chunk(500, function ($rows) use (&$previous, &$verified, &$total, &$head, &$latestId, &$brokenAt) {
+                foreach ($rows as $log) {
+                    $total++;
+                    $expected = AuditLog::chainHashFor($previous, $log->canonicalFields());
 
-                $linkOk = $log->previous_hash === $previous;
-                $hashOk = $log->hash === $expected;
+                    $linkOk = $log->previous_hash === $previous;
+                    $hashOk = $log->hash === $expected;
 
-                if ($linkOk && $hashOk) {
-                    $verified++;
-                } elseif ($brokenAt === null) {
-                    $brokenAt = $log->id;
+                    if ($linkOk && $hashOk) {
+                        $verified++;
+                    } elseif ($brokenAt === null) {
+                        $brokenAt = $log->id;
+                    }
+
+                    // Continue from the STORED hash so a single tampered row is
+                    // localized rather than cascading a break through the tail.
+                    $previous = $log->hash ?? $expected;
+                    $head = $log->hash;
+                    $latestId = $log->id;
                 }
+            });
+        } catch (\Throwable) {
+            $incomplete = true;
+        }
 
-                // Continue from the STORED hash so a single tampered row is
-                // localized rather than cascading a break through the tail.
-                $previous = $log->hash ?? $expected;
-                $head = $log->hash;
-            }
-        });
+        $intact = ! $incomplete && $brokenAt === null && $total === $verified;
+        $failed = max(0, $totalRows - $verified);
+
+        if ($incomplete) {
+            $status = 'warning';
+            $message = "Verification could not finish: {$verified} of {$totalRows} events were checked before it stopped.";
+        } elseif ($intact) {
+            $status = 'healthy';
+            $message = "All {$verified} audit events verified. No broken links found.";
+        } else {
+            $status = 'broken';
+            $message = "Chain verification failed at event #{$brokenAt}. {$failed} of {$totalRows} events could not be verified.";
+        }
 
         return [
-            'intact' => $brokenAt === null && $total === $verified,
-            'verified' => $verified,
-            'total' => $total,
-            'head' => $head,
+            'status' => $status,
+            'is_valid' => $intact,
+            'message' => $message,
+            'checked_count' => $verified,
+            'total_count' => $total,
+            'failed_count' => $failed,
             'broken_at' => $brokenAt,
-            'checked_at' => now()->toIso8601String(),
+            'latest_event_id' => $latestId,
+            'latest_hash_prefix' => $head ? substr($head, 0, 8) : null,
+            'verified_at' => now()->toIso8601String(),
+            'algorithm' => self::HASH_ALGORITHM,
         ];
     }
 

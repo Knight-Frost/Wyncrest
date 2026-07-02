@@ -332,14 +332,22 @@ export interface AuditLogDetail extends AuditLog {
   recommended_steps: { label: string; to: string | null }[];
 }
 
+/** Real hash-chain recomputation status, one of these four truths. */
+export type AuditChainStatus = 'healthy' | 'warning' | 'broken' | 'empty';
+
 /** Result of GET /admin/audit-logs/verify — real SHA-256 chain recomputation. */
 export interface AuditVerify {
-  intact: boolean;
-  verified: number;
-  total: number;
-  head: string | null;
+  status: AuditChainStatus;
+  is_valid: boolean;
+  message: string;
+  checked_count: number;
+  total_count: number;
+  failed_count: number;
   broken_at: number | null;
-  checked_at: string;
+  latest_event_id: number | null;
+  latest_hash_prefix: string | null;
+  verified_at: string;
+  algorithm: string;
 }
 
 export interface AuditInsight {

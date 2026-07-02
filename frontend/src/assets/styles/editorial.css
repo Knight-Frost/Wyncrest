@@ -593,26 +593,43 @@
 }
 .au-sub { color: var(--color-ink-500); max-width: 58ch; font-size: .95rem; line-height: 1.5; }
 
-/* ---- Append-only banner (truthful; no integrity/hash claims) ---- */
+/* ---- Chain integrity banner ----
+   Structural rules live on .au-banner; every color comes from a --kind
+   modifier below, so a banner can never show green before its real state
+   is known. Six real states: loading, healthy, warning, broken, empty, error. */
 .au-banner {
-  display: flex; align-items: center; gap: .9rem;
+  display: flex; align-items: flex-start; gap: .9rem;
   padding: .9rem 1.1rem; border-radius: 16px;
-  background: color-mix(in srgb, var(--color-success-500) 8%, var(--color-surface));
-  border: 1px solid color-mix(in srgb, var(--color-success-500) 26%, transparent);
+  border: 1px solid transparent;
 }
 .au-banner__ic {
   width: 38px; height: 38px; border-radius: 11px; flex: none;
   display: grid; place-items: center;
-  background: color-mix(in srgb, var(--color-success-500) 16%, transparent);
-  color: var(--color-success-600);
+  margin-top: .05rem;
 }
-.au-banner__t { font-weight: 600; font-size: .92rem; color: var(--color-ink-800); }
-.au-banner__s { font-size: .8rem; color: var(--color-ink-500); margin-top: .1rem; }
-.au-banner__meta {
-  margin-left: auto; text-align: right;
-  font-family: var(--font-mono); font-size: .7rem; color: var(--color-ink-400);
+.au-banner__ic:focus-visible { outline: 2px solid var(--audit-accent); outline-offset: 2px; }
+.au-banner__t { font-weight: 600; font-size: .92rem; color: var(--color-ink-900); }
+.au-banner__s { font-size: .8rem; color: var(--color-ink-600); margin-top: .1rem; line-height: 1.5; }
+.au-banner__s .underline { font-weight: 600; }
+
+/* Right-side compact facts — stacked lines, never a single overflowing row. */
+.au-banner__facts {
+  margin-left: auto; flex: none; text-align: right;
+  display: flex; flex-direction: column; gap: .25rem;
+  font-family: var(--font-mono); font-size: .7rem; color: var(--color-ink-500);
+  max-width: 220px; word-break: break-word;
 }
-@media (max-width: 620px) { .au-banner__meta { display: none; } }
+.au-banner__term {
+  cursor: help;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--color-ink-300);
+  text-underline-offset: 2px;
+}
+@media (max-width: 760px) {
+  .au-banner { flex-wrap: wrap; }
+  .au-banner__facts { margin-left: 0; text-align: left; flex-direction: row; flex-wrap: wrap; gap: .25rem 1rem; max-width: none; }
+}
 
 /* ---- Day divider ---- */
 .au-day { display: flex; align-items: center; gap: 1rem; padding: 1.35rem .25rem .55rem; }
@@ -660,13 +677,40 @@
   .au-right { display: none; }
 }
 
-/* ---- Chain banner states (default = intact/green) ---- */
-.au-banner--checking {
-  background: color-mix(in srgb, var(--color-warning-500) 8%, var(--color-surface));
-  border-color: color-mix(in srgb, var(--color-warning-500) 30%, transparent);
+/* ---- Chain banner states, one real color per state ----
+   loading/empty: calm neutral, never claims success before data arrives.
+   healthy: green. warning/error: amber (uncertain, not confirmed danger).
+   broken: red — reserved for confirmed tampering, the only alarming state. */
+.au-banner--loading {
+  background: color-mix(in srgb, var(--color-ink-500) 6%, var(--color-surface));
+  border-color: var(--glass-border);
 }
-.au-banner--checking .au-banner__ic {
-  background: color-mix(in srgb, var(--color-warning-500) 16%, transparent);
+.au-banner--loading .au-banner__ic {
+  background: color-mix(in srgb, var(--color-ink-500) 10%, transparent);
+  color: var(--color-ink-500);
+}
+.au-banner--empty {
+  background: color-mix(in srgb, var(--color-ink-500) 6%, var(--color-surface));
+  border-color: var(--glass-border);
+}
+.au-banner--empty .au-banner__ic {
+  background: color-mix(in srgb, var(--color-ink-500) 10%, transparent);
+  color: var(--color-ink-500);
+}
+.au-banner--healthy {
+  background: color-mix(in srgb, var(--color-success-500) 8%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-success-500) 26%, transparent);
+}
+.au-banner--healthy .au-banner__ic {
+  background: color-mix(in srgb, var(--color-success-500) 16%, transparent);
+  color: var(--color-success-600);
+}
+.au-banner--warning, .au-banner--error {
+  background: color-mix(in srgb, var(--color-warning-500) 9%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-warning-500) 32%, transparent);
+}
+.au-banner--warning .au-banner__ic, .au-banner--error .au-banner__ic {
+  background: color-mix(in srgb, var(--color-warning-500) 18%, transparent);
   color: var(--color-warning-600);
 }
 .au-banner--broken {
@@ -677,7 +721,6 @@
   background: color-mix(in srgb, var(--color-danger-500) 16%, transparent);
   color: var(--color-danger-600);
 }
-.au-banner__meta b { color: var(--color-ink-800); }
 .au-spin { animation: au-spin 1s linear infinite; }
 @keyframes au-spin { to { transform: rotate(360deg); } }
 

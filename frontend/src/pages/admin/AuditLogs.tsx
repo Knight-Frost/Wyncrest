@@ -8,16 +8,88 @@ import { brand } from '@/config/brand';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Field';
 import { ErrorState } from '@/components/ui/states';
+import { Tooltip } from '@/components/ui/Tooltip';
 import {
   IconShield,
   IconChevronLeft,
   IconChevronRight,
   IconDownload,
   IconSearch,
+  IconCheckCircle,
+  IconAlertTriangle,
+  IconAlertCircle,
+  IconInbox,
 } from '@/components/ui/icons';
 import { AuditTimeline } from './audit/AuditTimeline';
 import { rangeForPreset, type AuditFilters, type DatePreset } from './audit/auditFilters';
-import type { ApiError } from '@/lib/types';
+import type { ApiError, AuditVerify } from '@/lib/types';
+
+/**
+ * Everything the chain banner needs to render, boiled down from the real
+ * verify response. Kept in one place so the JSX below never re-derives
+ * banner meaning from raw fields — it only switches on `kind`.
+ */
+type BannerContent = {
+  kind: 'loading' | 'healthy' | 'warning' | 'broken' | 'empty' | 'error';
+  title: string;
+  subtitle: string;
+};
+
+function bannerContent(
+  verify: AuditVerify | null | undefined,
+  verifyLoading: boolean,
+  verifyError: ApiError | null,
+): BannerContent {
+  if (verifyLoading && !verify) {
+    return {
+      kind: 'loading',
+      title: 'Checking audit chain integrity…',
+      subtitle: 'Recomputing the hash chain across every recorded event.',
+    };
+  }
+  if (verifyError) {
+    return {
+      kind: 'error',
+      title: 'Could not check the audit chain',
+      subtitle: verifyError.message || 'The verification request failed. Try again.',
+    };
+  }
+  if (!verify) {
+    return {
+      kind: 'loading',
+      title: 'Checking audit chain integrity…',
+      subtitle: 'Recomputing the hash chain across every recorded event.',
+    };
+  }
+  if (verify.status === 'empty') {
+    return {
+      kind: 'empty',
+      title: 'No audit events yet',
+      subtitle: 'Nothing to verify yet. Events will appear here as they happen.',
+    };
+  }
+  if (verify.status === 'warning') {
+    return {
+      kind: 'warning',
+      title: 'Chain could not be fully verified',
+      subtitle: verify.message,
+    };
+  }
+  if (verify.status === 'broken') {
+    return {
+      kind: 'broken',
+      title: 'Audit chain verification failed',
+      subtitle: verify.message,
+    };
+  }
+  return {
+    kind: 'healthy',
+    title: 'Audit chain verified',
+    subtitle: `No broken links found across ${verify.checked_count.toLocaleString()} recorded ${
+      verify.checked_count === 1 ? 'event' : 'events'
+    }.`,
+  };
+}
 
 const AREAS = [
   'Access', 'Users', 'Listings', 'Properties', 'Contracts', 'Ledger',
@@ -155,103 +227,97 @@ export function AuditLogs() {
 
   const stats = summary?.stats;
   const integrityPct =
-    verify && verify.total > 0 ? Math.round((verify.verified / verify.total) * 100) : 100;
+    verify && verify.total_count > 0
+      ? Math.round((verify.checked_count / verify.total_count) * 100)
+      : 100;
 
-  // Banner state (checking → intact → broken/error)
-  const bannerClass = verifyLoading
-    ? 'au-banner au-banner--checking'
-    : verify && !verify.intact
-      ? 'au-banner au-banner--broken'
-      : verifyError
-        ? 'au-banner au-banner--broken'
-        : 'au-banner';
+  // Banner state — one real status from the backend, never guessed on the frontend.
+  const banner = bannerContent(verify, verifyLoading, verifyError);
+  const bannerClass = `au-banner au-banner--${banner.kind}`;
 
   return (
     <div className="audit-center animate-rise space-y-6">
       {/* ── Editorial header ── */}
       <header>
-        <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-5">
-          <div className="min-w-0">
-            <span className="au-eyebrow">On the record</span>
-            <h1 className="au-title">
-              Audit <em>log.</em>
-            </h1>
-            <p className="au-sub">
-              Every privileged action on {brand.appName}, written once and never rewritten. Each entry
-              is SHA-256 hash-chained to the one before it, so tampering can’t hide.
-            </p>
-          </div>
+        <div className="au-hero glass-panel">
+          <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-5">
+            <div className="min-w-0">
+              <span className="au-eyebrow">On the record</span>
+              <h1 className="au-title">
+                Audit <em>log.</em>
+              </h1>
+              <p className="au-sub">
+                Every privileged action on {brand.appName}, written once and never rewritten. Each entry
+                is SHA-256 hash-chained to the one before it, so tampering can’t hide.
+              </p>
+            </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<IconDownload size={16} />}
-              onClick={handleExport}
-              loading={exporting}
-              aria-label="Export audit logs as CSV"
-            >
-              Export
-            </Button>
-            <button
-              type="button"
-              onClick={reVerify}
-              disabled={verifyLoading}
-              className="au-verify inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-white hover:-translate-y-px disabled:opacity-70"
-            >
-              <IconShield size={16} className={verifyLoading ? 'au-spin' : undefined} />
-              {verifyLoading ? 'Verifying…' : 'Verify integrity'}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={<IconDownload size={16} />}
+                onClick={handleExport}
+                loading={exporting}
+                aria-label="Export audit logs as CSV"
+              >
+                Export
+              </Button>
+              <button
+                type="button"
+                onClick={reVerify}
+                disabled={verifyLoading}
+                className="au-verify inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-white hover:-translate-y-px disabled:opacity-70"
+              >
+                <IconShield size={16} className={verifyLoading ? 'au-spin' : undefined} />
+                {verifyLoading ? 'Verifying…' : 'Verify integrity'}
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Chain integrity banner — real verification, no theatre */}
-        <div className={`${bannerClass} mt-6`}>
-          <span className="au-banner__ic" aria-hidden="true">
-            <IconShield size={20} className={verifyLoading ? 'au-spin' : undefined} />
-          </span>
-          <div>
-            {verifyLoading ? (
-              <>
-                <div className="au-banner__t">Verifying chain…</div>
-                <div className="au-banner__s">Recomputing SHA-256 links across every record.</div>
-              </>
-            ) : verifyError ? (
-              <>
-                <div className="au-banner__t">Couldn’t verify the chain</div>
-                <div className="au-banner__s">
-                  {verifyError.message}{' '}
-                  <button type="button" onClick={reVerify} className="underline">Try again</button>
-                </div>
-              </>
-            ) : verify && !verify.intact ? (
-              <>
-                <div className="au-banner__t">Chain integrity check failed</div>
-                <div className="au-banner__s">
-                  Mismatch at event #{verify.broken_at} — {verify.verified} of{' '}
-                  {verify.total.toLocaleString()} records verified. Investigate immediately.
-                </div>
-              </>
-            ) : verify ? (
-              <>
-                <div className="au-banner__t">Chain intact — no tampering detected</div>
-                <div className="au-banner__s">
-                  Last verified {timeAgo(verify.checked_at)} · {verify.total.toLocaleString()}{' '}
-                  {verify.total === 1 ? 'event' : 'events'} on record
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="au-banner__t">Audit records are append-only</div>
-                <div className="au-banner__s">Every entry is written once and hash-chained.</div>
-              </>
-            )}
+        {/* Chain integrity banner — one real status from the backend */}
+        <div className={`${bannerClass} mt-6`} role="status">
+          <Tooltip content="Each audit event links to the previous one. If someone changes old records, the chain breaks.">
+            <span className="au-banner__ic" tabIndex={0} aria-label="What is the audit chain?">
+              {banner.kind === 'loading' && <IconShield size={20} className="au-spin" />}
+              {banner.kind === 'healthy' && <IconCheckCircle size={20} />}
+              {banner.kind === 'warning' && <IconAlertTriangle size={20} />}
+              {(banner.kind === 'broken' || banner.kind === 'error') && <IconAlertCircle size={20} />}
+              {banner.kind === 'empty' && <IconInbox size={20} />}
+            </span>
+          </Tooltip>
+          <div className="min-w-0">
+            <div className="au-banner__t">{banner.title}</div>
+            <div className="au-banner__s">
+              {banner.subtitle}
+              {(banner.kind === 'error' || banner.kind === 'warning' || banner.kind === 'broken') && (
+                <>
+                  {' '}
+                  <button type="button" onClick={reVerify} className="underline">
+                    Verify again
+                  </button>
+                </>
+              )}
+            </div>
           </div>
-          {verify?.head && (
-            <div className="au-banner__meta">
-              head <b>{verify.head.slice(0, 8)}</b>
-              <br />
-              SHA-256 chained
+          {verify && (banner.kind === 'healthy' || banner.kind === 'warning' || banner.kind === 'broken') && (
+            <div className="au-banner__facts">
+              <div>
+                <Tooltip content="The last time the system verified the audit log integrity.">
+                  <span className="au-banner__term" tabIndex={0}>Last checked</span>
+                </Tooltip>
+                : {timeAgo(verify.verified_at)}
+              </div>
+              <div>
+                <Tooltip content={`A secure hashing method (${verify.algorithm}) used to detect changes.`}>
+                  <span className="au-banner__term" tabIndex={0}>Protection</span>
+                </Tooltip>
+                : {verify.algorithm} hash chain
+              </div>
+              {verify.latest_event_id !== null && (
+                <div>Latest event: #{verify.latest_event_id}</div>
+              )}
             </div>
           )}
         </div>
@@ -271,14 +337,16 @@ export function AuditLogs() {
         </div>
         <div className="au-stat">
           <div className="k">
-            <span className="kd" style={{ background: verify && !verify.intact ? 'var(--color-danger-500)' : 'var(--color-success-500)' }} />
+            <span className="kd" style={{ background: verify && !verify.is_valid ? 'var(--color-danger-500)' : 'var(--color-success-500)' }} />
             Chain integrity
           </div>
-          <div className={`v ${verify && !verify.intact ? 'bad' : 'ok'}`}>
+          <div className={`v ${verify && !verify.is_valid ? 'bad' : 'ok'}`}>
             {verifyLoading && !verify ? '…' : `${integrityPct}%`}
           </div>
           <div className="d">
-            {verify ? `${verify.verified.toLocaleString()} / ${verify.total.toLocaleString()} verified` : 'Verifying…'}
+            {verify
+              ? `${verify.checked_count.toLocaleString()} / ${verify.total_count.toLocaleString()} verified`
+              : 'Verifying…'}
           </div>
         </div>
         <div className="au-stat">

@@ -640,7 +640,7 @@ class AdminAuditLogTest extends TestCase
         }
     }
 
-    public function test_verify_reports_intact_chain(): void
+    public function test_verify_reports_healthy_chain(): void
     {
         AuditLog::factory()->count(5)->create();
         Sanctum::actingAs($this->admin, [], 'sanctum');
@@ -649,15 +649,21 @@ class AdminAuditLogTest extends TestCase
         $response->assertStatus(200);
 
         $response->assertJson([
-            'intact' => true,
-            'verified' => 5,
-            'total' => 5,
+            'status' => 'healthy',
+            'is_valid' => true,
+            'checked_count' => 5,
+            'total_count' => 5,
+            'failed_count' => 0,
             'broken_at' => null,
+            'algorithm' => 'SHA-256',
         ]);
 
-        // Head is the newest row's hash.
-        $head = AuditLog::orderByDesc('id')->value('hash');
-        $this->assertSame($head, $response->json('head'));
+        // Latest event is the newest row, and its hash prefix matches.
+        $newest = AuditLog::orderByDesc('id')->first();
+        $this->assertSame($newest->id, $response->json('latest_event_id'));
+        $this->assertSame(substr($newest->hash, 0, 8), $response->json('latest_hash_prefix'));
+        $this->assertNotEmpty($response->json('message'));
+        $this->assertNotEmpty($response->json('verified_at'));
     }
 
     public function test_verify_detects_tampering(): void
@@ -674,9 +680,32 @@ class AdminAuditLogTest extends TestCase
         $response = $this->getJson('/api/admin/audit-logs/verify');
         $response->assertStatus(200);
 
-        $this->assertFalse($response->json('intact'));
-        $this->assertSame($target->id, $response->json('broken_at'));
-        $this->assertLessThan($response->json('total'), $response->json('verified'));
+        $response->assertJson([
+            'status' => 'broken',
+            'is_valid' => false,
+            'broken_at' => $target->id,
+        ]);
+        $this->assertGreaterThan(0, $response->json('failed_count'));
+        $this->assertLessThan($response->json('total_count'), $response->json('checked_count'));
+        $this->assertStringContainsString((string) $target->id, $response->json('message'));
+    }
+
+    public function test_verify_reports_empty_chain(): void
+    {
+        Sanctum::actingAs($this->admin, [], 'sanctum');
+
+        $response = $this->getJson('/api/admin/audit-logs/verify');
+        $response->assertStatus(200);
+
+        $response->assertJson([
+            'status' => 'empty',
+            'is_valid' => true,
+            'checked_count' => 0,
+            'total_count' => 0,
+            'failed_count' => 0,
+            'latest_event_id' => null,
+            'latest_hash_prefix' => null,
+        ]);
     }
 
     public function test_verify_requires_admin(): void
