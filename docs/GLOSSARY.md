@@ -25,3 +25,19 @@ Who this is for: anyone new to the project, technical or not.
 | Production mode | The real, live setup, which never creates fake people, properties, or money |
 | 401 | A response meaning "you are not logged in," or your login has expired |
 | 403 | A response meaning "you are logged in, but you are not allowed to do this" |
+
+## Legacy internal identifiers
+
+Wyncrest was originally built under the working name "Nexus," and later "Homecrest," before settling on its current name. A handful of internal, never-user-visible identifiers still use the original name, because renaming them would risk breaking existing local data, such as saved login sessions or cached results.
+
+| Identifier | Where it appears | Why it was kept |
+|---|---|---|
+| The `nexus_` login token prefix | Internal token storage | Renaming would invalidate every existing login session |
+| The `nexus.*` browser storage keys | Frontend local storage | Renaming would lose a returning user's saved preferences |
+| The `--nexus-*` style variables | Frontend styling | Purely an internal naming detail, invisible to users |
+| The `nexus-frontend` package name | Frontend project configuration | A cosmetic detail with no user-facing effect |
+| The "NexusCard" component name | Internal frontend code | A naming detail in shared UI code, invisible to users |
+| The `nexus:{environment}:...` cache key format | Backend analytics caching | Renaming would silently invalidate cached results on deploy |
+| The `NEXUS_SEED_MODE` environment variable | Local and deployment configuration, as a fallback only | Kept so existing setups do not break; `WYNCREST_SEED_MODE` is the current name |
+
+None of these are shown to a user anywhere in the product.
