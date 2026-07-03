@@ -34,7 +34,7 @@ class AdminAccessControlTest extends TestCase
 
     protected function actingSuper(): void
     {
-        Sanctum::actingAs($this->super, [], 'sanctum');
+        $this->actingAs($this->super, 'admin');
     }
 
     protected function scopedAdmin(array $capabilities): Admin
@@ -55,7 +55,7 @@ class AdminAccessControlTest extends TestCase
 
     public function test_regular_admin_with_manage_access_can_read(): void
     {
-        Sanctum::actingAs($this->scopedAdmin(['manage_access']), [], 'sanctum');
+        $this->actingAs($this->scopedAdmin(['manage_access']), 'admin');
 
         $this->getJson('/api/admin/access/summary')->assertOk();
         $this->getJson('/api/admin/access/members')->assertOk();
@@ -64,7 +64,7 @@ class AdminAccessControlTest extends TestCase
 
     public function test_regular_admin_without_manage_access_is_forbidden(): void
     {
-        Sanctum::actingAs($this->scopedAdmin([]), [], 'sanctum');
+        $this->actingAs($this->scopedAdmin([]), 'admin');
 
         $this->getJson('/api/admin/access/summary')
             ->assertStatus(403)
@@ -74,7 +74,7 @@ class AdminAccessControlTest extends TestCase
     public function test_non_admin_cannot_access(): void
     {
         Sanctum::actingAs(User::factory()->tenant()->create(), [], 'sanctum');
-        $this->getJson('/api/admin/access/summary')->assertStatus(403);
+        $this->getJson('/api/admin/access/summary')->assertStatus(401);
     }
 
     public function test_guest_is_unauthorized(): void
@@ -135,13 +135,13 @@ class AdminAccessControlTest extends TestCase
 
     public function test_scoped_admin_without_capability_is_blocked_on_guarded_route(): void
     {
-        Sanctum::actingAs($this->scopedAdmin(['manage_access']), [], 'sanctum'); // no manage_users
+        $this->actingAs($this->scopedAdmin(['manage_access']), 'admin'); // no manage_users
         $this->getJson('/api/admin/users')->assertStatus(403);
     }
 
     public function test_scoped_admin_with_capability_is_allowed_on_guarded_route(): void
     {
-        Sanctum::actingAs($this->scopedAdmin(['manage_users']), [], 'sanctum');
+        $this->actingAs($this->scopedAdmin(['manage_users']), 'admin');
         $this->getJson('/api/admin/users')->assertOk();
     }
 
@@ -181,7 +181,7 @@ class AdminAccessControlTest extends TestCase
 
     public function test_regular_admin_cannot_invite_even_with_manage_access(): void
     {
-        Sanctum::actingAs($this->scopedAdmin(['manage_access']), [], 'sanctum');
+        $this->actingAs($this->scopedAdmin(['manage_access']), 'admin');
         $this->postJson('/api/admin/access/admins', ['email' => 'x@example.com'])
             ->assertStatus(403);
     }
@@ -289,7 +289,7 @@ class AdminAccessControlTest extends TestCase
     {
         // The no-FormRequest mutations (resend/activate) are gated by an inline
         // super check — prove a manage_access regular admin still gets 403.
-        Sanctum::actingAs($this->scopedAdmin(['manage_access']), [], 'sanctum');
+        $this->actingAs($this->scopedAdmin(['manage_access']), 'admin');
         $pending = Admin::factory()->create(['invited_at' => now(), 'invite_accepted_at' => null]);
 
         $this->postJson("/api/admin/access/admins/{$pending->id}/resend-invite")
@@ -298,7 +298,7 @@ class AdminAccessControlTest extends TestCase
 
     public function test_regular_admin_cannot_activate_admin(): void
     {
-        Sanctum::actingAs($this->scopedAdmin(['manage_access']), [], 'sanctum');
+        $this->actingAs($this->scopedAdmin(['manage_access']), 'admin');
         $deactivated = Admin::factory()->create(['is_super_admin' => false, 'is_active' => false]);
 
         $this->postJson("/api/admin/access/admins/{$deactivated->id}/activate")
@@ -307,7 +307,7 @@ class AdminAccessControlTest extends TestCase
 
     public function test_regular_admin_cannot_update_capabilities(): void
     {
-        Sanctum::actingAs($this->scopedAdmin(['manage_access']), [], 'sanctum');
+        $this->actingAs($this->scopedAdmin(['manage_access']), 'admin');
         $target = $this->scopedAdmin([]);
 
         $this->patchJson("/api/admin/access/admins/{$target->id}/capabilities", [
@@ -321,7 +321,7 @@ class AdminAccessControlTest extends TestCase
         $target = $this->scopedAdmin([]); // no capabilities → no page access
 
         // Before: the regular admin is locked out of the read endpoints.
-        Sanctum::actingAs($target, [], 'sanctum');
+        $this->actingAs($target, 'admin');
         $this->getJson('/api/admin/access/summary')->assertStatus(403);
 
         // A super admin grants manage_access.
@@ -332,7 +332,7 @@ class AdminAccessControlTest extends TestCase
         ])->assertOk();
 
         // After: the same regular admin can now open the page (read endpoints).
-        Sanctum::actingAs($target->fresh(), [], 'sanctum');
+        $this->actingAs($target->fresh(), 'admin');
         $this->getJson('/api/admin/access/summary')->assertOk();
         $this->getJson('/api/admin/access/admins')->assertOk();
     }
@@ -341,7 +341,7 @@ class AdminAccessControlTest extends TestCase
     {
         $target = $this->scopedAdmin(['manage_access']);
 
-        Sanctum::actingAs($target, [], 'sanctum');
+        $this->actingAs($target, 'admin');
         $this->getJson('/api/admin/access/summary')->assertOk();
 
         // Super admin revokes manage_access (empty capability set).
@@ -351,13 +351,13 @@ class AdminAccessControlTest extends TestCase
             'reason' => 'Revoking access-page permission.',
         ])->assertOk();
 
-        Sanctum::actingAs($target->fresh(), [], 'sanctum');
+        $this->actingAs($target->fresh(), 'admin');
         $this->getJson('/api/admin/access/summary')->assertStatus(403);
     }
 
     public function test_regular_admin_with_manage_access_cannot_promote_super(): void
     {
-        Sanctum::actingAs($this->scopedAdmin(['manage_access']), [], 'sanctum');
+        $this->actingAs($this->scopedAdmin(['manage_access']), 'admin');
         $target = $this->scopedAdmin([]);
 
         $this->postJson("/api/admin/access/admins/{$target->id}/promote-super", [
@@ -449,7 +449,7 @@ class AdminAccessControlTest extends TestCase
         // acting super only, so deactivating the sole remaining super is blocked.
         $actor = Admin::factory()->create(['is_super_admin' => true]);
         // Deactivate the original super first (allowed — two supers exist).
-        Sanctum::actingAs($actor, [], 'sanctum');
+        $this->actingAs($actor, 'admin');
         $this->postJson("/api/admin/access/admins/{$this->super->id}/deactivate", [
             'reason' => 'Deactivating one of two supers.',
         ])->assertOk();
@@ -463,7 +463,7 @@ class AdminAccessControlTest extends TestCase
     public function test_regular_admin_cannot_promote_themselves(): void
     {
         $self = $this->scopedAdmin(['manage_access']);
-        Sanctum::actingAs($self, [], 'sanctum');
+        $this->actingAs($self, 'admin');
 
         $this->postJson("/api/admin/access/admins/{$self->id}/promote-super", [
             'reason' => 'Trying to self-promote.',
@@ -510,7 +510,7 @@ class AdminAccessControlTest extends TestCase
     {
         $this->actingSuper();
 
-        $res = $this->getJson('/api/user')->assertOk();
+        $res = $this->getJson('/api/admin/me')->assertOk();
 
         $this->assertEqualsCanonicalizing(
             \App\Enums\AdminCapability::values(),
@@ -521,9 +521,9 @@ class AdminAccessControlTest extends TestCase
     public function test_authenticated_user_endpoint_exposes_only_granted_scoped_admin_capabilities(): void
     {
         $granted = $this->scopedAdmin(['manage_users', 'view_audit']);
-        Sanctum::actingAs($granted, [], 'sanctum');
+        $this->actingAs($granted, 'admin');
 
-        $res = $this->getJson('/api/user')->assertOk();
+        $res = $this->getJson('/api/admin/me')->assertOk();
 
         $this->assertEqualsCanonicalizing(
             ['manage_users', 'view_audit'],

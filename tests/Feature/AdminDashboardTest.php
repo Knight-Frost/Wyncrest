@@ -35,7 +35,7 @@ class AdminDashboardTest extends TestCase
 
     public function test_returns_full_dashboard_shape_for_admin(): void
     {
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/dashboard');
 
@@ -91,7 +91,7 @@ class AdminDashboardTest extends TestCase
         Listing::factory()->pendingReview()->count(3)->create();
         Listing::factory()->active()->count(4)->create();
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/dashboard');
 
@@ -148,7 +148,7 @@ class AdminDashboardTest extends TestCase
             'delivered_at' => now(),
         ]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/dashboard');
 
@@ -170,7 +170,7 @@ class AdminDashboardTest extends TestCase
         Contract::factory()->active()->count(4)->create();
         Contract::factory()->terminated()->count(1)->create();
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/dashboard');
 
@@ -211,7 +211,7 @@ class AdminDashboardTest extends TestCase
             'due_date' => now()->subMonths(2),
         ]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/dashboard');
 
@@ -225,7 +225,7 @@ class AdminDashboardTest extends TestCase
     {
         Listing::factory()->count(12)->create();
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/dashboard');
 
@@ -242,7 +242,7 @@ class AdminDashboardTest extends TestCase
         $landlord = User::factory()->landlord()->create();
         Sanctum::actingAs($landlord, [], 'sanctum');
 
-        $this->getJson('/api/admin/dashboard')->assertStatus(403);
+        $this->getJson('/api/admin/dashboard')->assertStatus(401);
     }
 
     public function test_forbidden_for_tenant(): void
@@ -250,7 +250,7 @@ class AdminDashboardTest extends TestCase
         $tenant = User::factory()->tenant()->create();
         Sanctum::actingAs($tenant, [], 'sanctum');
 
-        $this->getJson('/api/admin/dashboard')->assertStatus(403);
+        $this->getJson('/api/admin/dashboard')->assertStatus(401);
     }
 
     public function test_unauthenticated_request_is_rejected(): void

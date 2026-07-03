@@ -371,13 +371,13 @@ class AuthorizationIdorTest extends TestCase
 
         $approve = $this->withHeaders($this->authHeaders($tenant))
             ->postJson("/api/admin/listings/{$listing->id}/approve");
-        $approve->assertStatus(403);
+        $approve->assertStatus(401);
 
         $reject = $this->withHeaders($this->authHeaders($tenant))
             ->postJson("/api/admin/listings/{$listing->id}/reject", [
                 'reason' => 'Attacker rejection attempt that is long enough',
             ]);
-        $reject->assertStatus(403);
+        $reject->assertStatus(401);
     }
 
     public function test_landlord_cannot_access_admin_feature_management(): void
@@ -387,11 +387,11 @@ class AuthorizationIdorTest extends TestCase
 
         $enable = $this->withHeaders($this->authHeaders($attacker))
             ->postJson("/api/admin/landlords/{$landlordTarget->id}/features/listings/enable");
-        $enable->assertStatus(403);
+        $enable->assertStatus(401);
 
         $disable = $this->withHeaders($this->authHeaders($attacker))
             ->postJson("/api/admin/landlords/{$landlordTarget->id}/features/listings/disable");
-        $disable->assertStatus(403);
+        $disable->assertStatus(401);
     }
 
     public function test_non_admin_cannot_view_audit_logs(): void
@@ -401,11 +401,11 @@ class AuthorizationIdorTest extends TestCase
 
         $this->withHeaders($this->authHeaders($tenant))
             ->getJson('/api/admin/audit-logs')
-            ->assertStatus(403);
+            ->assertStatus(401);
 
         $this->withHeaders($this->authHeaders($landlord))
             ->getJson('/api/admin/audit-logs')
-            ->assertStatus(403);
+            ->assertStatus(401);
     }
 
     public function test_non_admin_cannot_admin_terminate_contract(): void
@@ -420,13 +420,13 @@ class AuthorizationIdorTest extends TestCase
             ->postJson("/api/admin/contracts/{$contract->id}/terminate", [
                 'reason' => 'Attacker attempting an admin-level forced termination',
             ])
-            ->assertStatus(403);
+            ->assertStatus(401);
 
         $this->withHeaders($this->authHeaders($tenant))
             ->postJson("/api/admin/contracts/{$contract->id}/terminate", [
                 'reason' => 'Attacker attempting an admin-level forced termination',
             ])
-            ->assertStatus(403);
+            ->assertStatus(401);
     }
 
     public function test_user_cannot_read_another_users_notification(): void

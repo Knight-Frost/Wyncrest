@@ -36,7 +36,7 @@ class AdminUserManagementTest extends TestCase
         User::factory()->tenant()->count(3)->create();
         User::factory()->landlord()->count(2)->create();
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/users');
 
@@ -66,7 +66,7 @@ class AdminUserManagementTest extends TestCase
         User::factory()->tenant()->count(3)->create();
         User::factory()->landlord()->count(2)->create();
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $tenants = $this->getJson('/api/admin/users?type=tenant');
         $tenants->assertStatus(200)->assertJsonPath('total', 3);
@@ -83,7 +83,7 @@ class AdminUserManagementTest extends TestCase
             'suspended_at' => now(),
         ]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $active = $this->getJson('/api/admin/users?status=active');
         $active->assertStatus(200)->assertJsonPath('total', 2);
@@ -105,7 +105,7 @@ class AdminUserManagementTest extends TestCase
             'email' => 'ama@example.com',
         ]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         // by first name (case-insensitive)
         $byName = $this->getJson('/api/admin/users?search=kwame');
@@ -127,7 +127,7 @@ class AdminUserManagementTest extends TestCase
         $landlord = User::factory()->landlord()->create();
         Property::factory()->count(2)->create(['landlord_id' => $landlord->id]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson("/api/admin/users/{$landlord->id}");
 
@@ -146,7 +146,7 @@ class AdminUserManagementTest extends TestCase
     {
         $user = User::factory()->tenant()->create();
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->postJson("/api/admin/users/{$user->id}/suspend", [
             'reason' => 'Fraudulent activity detected.',
@@ -172,7 +172,7 @@ class AdminUserManagementTest extends TestCase
     {
         $user = User::factory()->tenant()->create();
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $this->postJson("/api/admin/users/{$user->id}/suspend", [])
             ->assertStatus(422)
@@ -186,7 +186,7 @@ class AdminUserManagementTest extends TestCase
             'suspended_at' => now(),
         ]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $this->postJson("/api/admin/users/{$user->id}/suspend", [
             'reason' => 'Already handled previously.',
@@ -202,7 +202,7 @@ class AdminUserManagementTest extends TestCase
             'suspended_at' => now(),
         ]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->postJson("/api/admin/users/{$user->id}/activate");
 
@@ -224,7 +224,7 @@ class AdminUserManagementTest extends TestCase
     {
         $user = User::factory()->tenant()->create();
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $this->postJson("/api/admin/users/{$user->id}/activate")
             ->assertStatus(422)
@@ -236,7 +236,7 @@ class AdminUserManagementTest extends TestCase
         $landlord = User::factory()->landlord()->create();
         Sanctum::actingAs($landlord, [], 'sanctum');
 
-        $this->getJson('/api/admin/users')->assertStatus(403);
+        $this->getJson('/api/admin/users')->assertStatus(401);
     }
 
     public function test_tenant_cannot_access_admin_user_management(): void
@@ -244,7 +244,7 @@ class AdminUserManagementTest extends TestCase
         $tenant = User::factory()->tenant()->create();
         Sanctum::actingAs($tenant, [], 'sanctum');
 
-        $this->getJson('/api/admin/users')->assertStatus(403);
+        $this->getJson('/api/admin/users')->assertStatus(401);
     }
 
     public function test_admin_user_management_requires_authentication(): void

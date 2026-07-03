@@ -9,7 +9,7 @@
  *                          run in the context of whichever portal is active in
  *                          this tab; resolved at call time via sessionStorage.
  */
-import { http, portalHttp } from './api';
+import { ensureAdminCsrf, http, portalHttp } from './api';
 import { type Portal, getActivePortal } from './storage';
 import type {
   AccessRolesMatrix,
@@ -77,6 +77,15 @@ function activePortalClient() {
 }
 
 /**
+ * Cross-role endpoints (notifications, preferences, weather) exist twice: the
+ * shared bearer routes for tenants/landlords, and isolated `/admin/*` copies
+ * for the admin cookie session. Pick the right path for the active portal.
+ */
+function crossRolePath(path: string): string {
+  return getActivePortal() === 'admin' ? `/admin${path}` : path;
+}
+
+/**
  * The browser's IANA timezone (e.g. "America/New_York"), sent to endpoints that
  * filter by calendar day so the server resolves day boundaries on the user's
  * clock rather than UTC. Falls back to UTC if unavailable.
@@ -118,6 +127,34 @@ export const authApi = {
   },
   async logout(portal: Portal): Promise<void> {
     await portalHttp[portal].post('/logout');
+  },
+
+  // ---- Admin console: first-party cookie session (no bearer token) --------
+
+  /**
+   * Establish the admin session. Primes the CSRF cookie, then POSTs credentials;
+   * the server sets an HttpOnly session cookie and returns the admin identity —
+   * there is deliberately no token in the response for JS to store.
+   */
+  async adminLogin(email: string, password: string, remember = true): Promise<Admin> {
+    await ensureAdminCsrf();
+    const { data } = await portalHttp.admin.post<{ user: Admin }>('/admin/login', {
+      email,
+      password,
+      remember,
+    });
+    return data.user;
+  },
+
+  /** The authenticated admin, resolved from the session cookie (source of truth). */
+  async adminMe(): Promise<Admin> {
+    const { data } = await portalHttp.admin.get<{ user: Admin }>('/admin/me');
+    return data.user;
+  },
+
+  /** Destroy the admin session server-side. */
+  async adminLogout(): Promise<void> {
+    await portalHttp.admin.post('/admin/logout');
   },
 
   /** Returns which social providers are currently configured. */
@@ -195,14 +232,26 @@ export const authApi = {
     password: string,
     passwordConfirmation: string,
   ): Promise<{ message: string; revoked_other_sessions: number }> {
-    const { data } = await portalHttp[portal].post<{
-      message: string;
-      revoked_other_sessions: number;
-    }>('/user/password', {
+    const payload = {
       current_password: currentPassword,
       password,
       password_confirmation: passwordConfirmation,
-    });
+    };
+
+    // Admins use their isolated session endpoint (revokes other sessions via
+    // logoutOtherDevices); tenants/landlords use the shared bearer endpoint.
+    if (portal === 'admin') {
+      const { data } = await portalHttp.admin.post<{ message: string }>(
+        '/admin/password',
+        payload,
+      );
+      return { message: data.message, revoked_other_sessions: 0 };
+    }
+
+    const { data } = await portalHttp[portal].post<{
+      message: string;
+      revoked_other_sessions: number;
+    }>('/user/password', payload);
     return data;
   },
 };
@@ -1150,7 +1199,9 @@ export const adminApi = {
 export const weatherApi = {
   /** Requires auth (any role). Returns a WeatherData payload. */
   async current(city = 'Accra'): Promise<WeatherData> {
-    const { data } = await activePortalClient().get<WeatherData>('/weather', { params: { city } });
+    const { data } = await activePortalClient().get<WeatherData>(crossRolePath('/weather'), {
+      params: { city },
+    });
     return data;
   },
 };
@@ -1158,37 +1209,40 @@ export const weatherApi = {
 /* ========================= Notifications ================================ */
 export const notificationApi = {
   async list(params?: { page?: number }): Promise<Paginated<AppNotification>> {
-    const { data } = await activePortalClient().get<Paginated<AppNotification>>('/notifications', {
-      params,
-    });
+    const { data } = await activePortalClient().get<Paginated<AppNotification>>(
+      crossRolePath('/notifications'),
+      { params },
+    );
     return data;
   },
   async unread(): Promise<AppNotification[]> {
-    const { data } = await activePortalClient().get<AppNotification[]>('/notifications/unread');
+    const { data } = await activePortalClient().get<AppNotification[]>(
+      crossRolePath('/notifications/unread'),
+    );
     return data;
   },
   async unreadCount(): Promise<number> {
     const { data } = await activePortalClient().get<{ count: number }>(
-      '/notifications/unread-count',
+      crossRolePath('/notifications/unread-count'),
     );
     return data.count ?? 0;
   },
   async markRead(id: string): Promise<void> {
-    await activePortalClient().patch(`/notifications/${id}/read`);
+    await activePortalClient().patch(crossRolePath(`/notifications/${id}/read`));
   },
   async markAllRead(): Promise<void> {
-    await activePortalClient().post('/notifications/mark-all-read');
+    await activePortalClient().post(crossRolePath('/notifications/mark-all-read'));
   },
   /** Per-notification-type email/SMS delivery preferences (real backend). */
   async getPreferences(): Promise<Record<string, { email: boolean; sms: boolean }>> {
     const { data } = await activePortalClient().get<Record<string, { email: boolean; sms: boolean }>>(
-      '/notification-preferences',
+      crossRolePath('/notification-preferences'),
     );
     return data;
   },
   async updatePreferences(
     prefs: Record<string, { email: boolean; sms: boolean }>,
   ): Promise<void> {
-    await activePortalClient().put('/notification-preferences', prefs);
+    await activePortalClient().put(crossRolePath('/notification-preferences'), prefs);
   },
 };

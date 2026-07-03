@@ -106,22 +106,12 @@ class AuthController extends Controller
             ]);
         }
 
-        // Check if this is an admin login
-        $admin = Admin::where('email', $validated['email'])->first();
-        if ($admin) {
-            if (! Hash::check($validated['password'], $admin->password)) {
-                // Email matched an admin but password is wrong
-                RateLimiter::hit($throttleKey, 60);
-                throw ValidationException::withMessages([
-                    'password' => ['The provided credentials are incorrect.'],
-                ]);
-            }
-            RateLimiter::clear($throttleKey);
-
-            return $this->handleAdminLogin($admin);
-        }
-
-        // Check regular user
+        // NOTE: This endpoint authenticates tenants/landlords only (Sanctum bearer
+        // tokens). Admins authenticate through the isolated cookie-session surface
+        // at POST /api/admin/login (AdminAuthController). An admin email entered
+        // here intentionally falls through to the User lookup below and returns the
+        // same "no account found" response as any unknown email — no enumeration,
+        // and no admin bearer token is ever issued from here.
         $user = User::where('email', $validated['email'])->first();
 
         if (! $user) {
@@ -183,33 +173,6 @@ class AuthController extends Controller
     protected function throttleKey(Request $request, string $email): string
     {
         return Str::transliterate(Str::lower($email).'|'.$request->ip());
-    }
-
-    /**
-     * Handle admin login.
-     */
-    protected function handleAdminLogin(Admin $admin): JsonResponse
-    {
-        // Check if admin is active
-        if (! $admin->is_active) {
-            throw ValidationException::withMessages([
-                'email' => ['Your admin account has been deactivated.'],
-            ]);
-        }
-
-        // Create Sanctum token
-        $token = $admin->createToken('admin-token')->plainTextToken;
-
-        // Update last login
-        $admin->recordLogin();
-
-        // Audit log
-        $this->auditService->logAdminLogin($admin);
-
-        return response()->json([
-            'user' => $this->formatAdmin($admin),
-            'token' => $token,
-        ]);
     }
 
     /**
@@ -365,21 +328,13 @@ class AuthController extends Controller
 
     /**
      * Format admin data for response.
+     *
+     * Only reachable if an Admin presents a bearer token to the shared /user
+     * endpoint (admins normally use the cookie-session /api/admin/me). Delegates
+     * to the single source of truth so the shape can never drift.
      */
     protected function formatAdmin(Admin $admin): array
     {
-        return [
-            'id' => $admin->id,
-            'email' => $admin->email,
-            'name' => $admin->name,
-            'is_super_admin' => $admin->is_super_admin,
-            'is_active' => $admin->is_active,
-            // Effective capabilities: super admins implicitly hold all of them.
-            // The SPA uses these to reflect (never enforce) access.
-            'capabilities' => $admin->grantedCapabilities(),
-            // Admins live in a separate table with no media; always initials.
-            'avatar_url' => null,
-            'last_login_at' => $admin->last_login_at?->toISOString(),
-        ];
+        return $admin->toAuthPayload();
     }
 }

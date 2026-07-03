@@ -50,6 +50,10 @@ export default defineConfig(({ mode }) => {
             // can use same-origin relative URLs (no CORS in dev).
             proxy: {
                 '/api': { target: API_PROXY_TARGET, changeOrigin: true },
+                // The admin console's cookie session primes its CSRF token here;
+                // proxy it so the SPA can call it same-origin (sets the XSRF-TOKEN
+                // + session cookies for localhost, shared across the dev ports).
+                '/sanctum': { target: API_PROXY_TARGET, changeOrigin: true },
             },
         },
         // File types to support raw imports. Never add .css, .tsx, or .ts files to this.

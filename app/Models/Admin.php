@@ -105,6 +105,33 @@ class Admin extends Authenticatable implements CanResetPasswordContract
     }
 
     /**
+     * The admin identity payload the SPA consumes for its session.
+     *
+     * This is the single source of truth for what an authenticated admin looks
+     * like on the wire — used by the cookie-session endpoints (login / me). It
+     * deliberately exposes only display + authorization fields and never a
+     * token: admin auth is carried by the HttpOnly session cookie, not by any
+     * value JavaScript can read. `capabilities` are the EFFECTIVE set (a super
+     * admin implicitly holds all of them) so the UI can reflect access truthfully.
+     *
+     * @return array<string, mixed>
+     */
+    public function toAuthPayload(): array
+    {
+        return [
+            'id' => $this->id,
+            'email' => $this->email,
+            'name' => $this->name,
+            'is_super_admin' => $this->is_super_admin,
+            'is_active' => $this->is_active,
+            'capabilities' => $this->grantedCapabilities(),
+            // Admins live in a separate table with no media; always initials.
+            'avatar_url' => null,
+            'last_login_at' => $this->last_login_at?->toISOString(),
+        ];
+    }
+
+    /**
      * Update last login timestamp
      */
     public function recordLogin(): void

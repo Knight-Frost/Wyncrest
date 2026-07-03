@@ -11,6 +11,11 @@ export interface AuthContextValue {
   /** True only during the initial "do we have a valid session?" check. */
   initializing: boolean;
   login: (email: string, password: string, remember?: boolean) => Promise<AuthUser>;
+  /**
+   * Admin console sign-in — establishes the first-party cookie session (no token
+   * is stored). Separate from `login` (tenant/landlord bearer) by design.
+   */
+  adminLogin: (email: string, password: string, remember?: boolean) => Promise<AuthUser>;
   register: (payload: {
     email: string;
     password: string;

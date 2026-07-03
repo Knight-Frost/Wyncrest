@@ -99,3 +99,17 @@ export function clearLegacyToken(): void {
     // no-op
   }
 }
+
+/**
+ * Remove any admin BEARER token left by pre-cookie-session builds. Admin auth is
+ * now an HttpOnly session cookie the browser manages; a stale localStorage token
+ * must never be read or trusted for admin authentication again.
+ */
+export function clearDeprecatedAdminToken(): void {
+  try {
+    localStorage.removeItem(tokenKey('admin'));
+    sessionStorage.removeItem(tokenKey('admin'));
+  } catch {
+    // no-op
+  }
+}

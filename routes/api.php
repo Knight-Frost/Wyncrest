@@ -24,6 +24,7 @@ use App\Http\Controllers\Analytics\ContractAnalyticsController;
 use App\Http\Controllers\Analytics\FinancialAnalyticsController;
 use App\Http\Controllers\Analytics\NotificationAnalyticsController;
 use App\Http\Controllers\Analytics\PlatformAnalyticsController;
+use App\Http\Controllers\Auth\AdminAuthController;
 use App\Http\Controllers\Auth\AdminInviteController;
 use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\PasswordResetController;
@@ -110,12 +111,33 @@ Route::middleware(['rate.limit.role'])->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
 });
 
-// Authenticated routes
+// Authenticated routes (tenant/landlord — Sanctum bearer tokens)
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/logout', [AuthController::class, 'logout']);
-    // Self-service password change (User or Admin) — audited, revokes other sessions.
+    // Self-service password change (tenant/landlord) — audited, revokes other tokens.
     Route::post('/user/password', [AuthController::class, 'changePassword']);
+});
+
+// ============================================================================
+// ADMIN CONSOLE AUTH — first-party COOKIE SESSION (never bearer tokens)
+// ----------------------------------------------------------------------------
+// The admin SPA authenticates via an HttpOnly, Secure (prod), SameSite session
+// cookie on the native `admin` guard. These routes use the `web` middleware
+// group (StartSession + CSRF), so the SPA must GET /sanctum/csrf-cookie before
+// any mutating call. Isolated from the tenant/landlord bearer flow by design.
+// ============================================================================
+Route::middleware(['web'])->prefix('admin')->group(function () {
+    // Public: establish a session. CSRF-protected; rate-limited in-controller.
+    Route::middleware(['rate.limit.role'])->post('/login', [AdminAuthController::class, 'login']);
+
+    // Authenticated: identity, logout, password. `auth.session` binds the session
+    // to the password hash so a password change ends the admin's other sessions.
+    Route::middleware(['auth:admin', 'auth.session', 'admin', 'rate.limit.role'])->group(function () {
+        Route::get('/me', [AdminAuthController::class, 'me']);
+        Route::post('/logout', [AdminAuthController::class, 'logout']);
+        Route::post('/password', [AdminAuthController::class, 'password']);
+    });
 });
 
 // ============================================================================
@@ -319,11 +341,29 @@ Route::middleware(['metrics'])->group(function () {
     });
 
     // ============================================================================
-    // ADMIN ROUTES - Protected with admin middleware
+    // ADMIN ROUTES — first-party cookie session on the `admin` guard.
+    // `web` (session + CSRF) + auth:admin + auth.session + EnsureAdmin. Mutating
+    // routes are CSRF-protected; the admin SPA sends the X-XSRF-TOKEN header.
     // ============================================================================
-    Route::middleware(['auth:sanctum', 'admin', 'rate.limit.role'])->prefix('admin')->group(function () {
+    Route::middleware(['web', 'auth:admin', 'auth.session', 'admin', 'rate.limit.role'])->prefix('admin')->group(function () {
         // Dashboard — available to any active admin (no specific capability).
         Route::get('/dashboard', [AdminDashboardController::class, 'index']);
+
+        // Cross-role authenticated endpoints the admin console consumes via its
+        // SESSION — mirrors the tenant/landlord bearer routes. The controllers
+        // already return truthful EMPTY results for admins (who have no per-user
+        // notification stream), so they are reused as-is. Isolated admin copies
+        // (rather than sharing the bearer routes) keep CSRF/session concerns off
+        // the tenant/landlord flow. Static segments precede the {notification}
+        // wildcard; `/notifications/deliveries` stays under view_audit below.
+        Route::get('/notifications', [NotificationController::class, 'index']);
+        Route::get('/notifications/unread', [NotificationController::class, 'unread']);
+        Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+        Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+        Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
+        Route::get('/notification-preferences', [NotificationPreferenceController::class, 'index']);
+        Route::put('/notification-preferences', [NotificationPreferenceController::class, 'update']);
+        Route::get('/weather', [WeatherController::class, 'current']);
 
         // Access Control — "Manage Users & Permissions".
         // Reads require the manage_access capability; every mutation is

@@ -68,7 +68,7 @@ class AdminNotificationDeliveryTest extends TestCase
     public function test_lists_deliveries_with_per_channel_status_and_summary(): void
     {
         $this->seedDeliveries();
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/notifications/deliveries');
 
@@ -88,7 +88,7 @@ class AdminNotificationDeliveryTest extends TestCase
     public function test_filters_by_failed_status(): void
     {
         $this->seedDeliveries();
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/notifications/deliveries?status=failed');
 
@@ -100,7 +100,7 @@ class AdminNotificationDeliveryTest extends TestCase
     public function test_filters_by_channel_and_status(): void
     {
         $this->seedDeliveries();
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/notifications/deliveries?channel=email&status=failed');
 
@@ -118,7 +118,7 @@ class AdminNotificationDeliveryTest extends TestCase
             'delivered_at' => now(),
         ]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/notifications/deliveries?search=ama@example.com');
 
@@ -131,7 +131,7 @@ class AdminNotificationDeliveryTest extends TestCase
         $landlord = User::factory()->landlord()->create();
         Sanctum::actingAs($landlord, [], 'sanctum');
 
-        $this->getJson('/api/admin/notifications/deliveries')->assertForbidden();
+        $this->getJson('/api/admin/notifications/deliveries')->assertUnauthorized();
     }
 
     public function test_unauthenticated_request_is_rejected(): void

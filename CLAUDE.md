@@ -203,11 +203,25 @@ entries get late fees. Either party (or an admin) can terminate.
 
 ## 10. Authentication Model
 
-- **Laravel Sanctum personal access tokens** (`Authorization: Bearer <token>`).
+**Two intentionally ISOLATED mechanisms** (see `docs/ADMIN_AUTH.md`):
+
+- **Tenant / Landlord — Sanctum bearer tokens** (`Authorization: Bearer <token>`,
+  stored client-side). Endpoints: `POST /register`, `POST /login`, `GET /user`,
+  `POST /logout`. Guard: `auth:sanctum`.
+- **Admin console — first-party HttpOnly COOKIE SESSION** on the native `admin`
+  guard (`config/auth.php`). No bearer token is ever issued to or stored by the
+  admin SPA, so client state can never diverge from the real authenticated admin.
+  Endpoints (CSRF-protected via `GET /sanctum/csrf-cookie`): `POST /admin/login`,
+  `GET /admin/me` (**source of truth**), `POST /admin/logout`, `POST /admin/password`.
+  Admin routes run on `['web','auth:admin','auth.session','admin','rate.limit.role']`.
+  The `admin` guard is deliberately absent from `config('sanctum.guard')` so an
+  admin cookie can never authenticate the shared bearer pipeline. Admins sign in
+  at **`/admin/login`** (a separate SPA surface); `/login` no longer accepts admins.
+- **`401` vs `403` are distinct:** no admin session → `401`; authenticated admin
+  lacking a capability → `403`. **Requires HTTPS in production** (Secure cookies);
+  the HTTP-only EC2 demo needs TLS before admin login works there.
 - **Two authenticatable models:** `User` (`user_type` = tenant|landlord) and
-  `Admin` (separate `admins` table, `is_super_admin`). Login checks Admin first,
-  then User (`AuthController::login`).
-- Endpoints: `POST /register`, `POST /login`, `GET /user`, `POST /logout`.
+  `Admin` (separate `admins` table, `is_super_admin`).
 - Login is **rate-limited** (5 attempts/min per email+IP, then lockout).
 - Accounts are gated on `is_active` and `suspended_at`.
 - Token lifetime via `SANCTUM_TOKEN_EXPIRATION` (default 1440 min).

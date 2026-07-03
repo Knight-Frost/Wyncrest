@@ -34,9 +34,9 @@ class AdminNotificationAccessTest extends TestCase
         $admin = Admin::factory()->create();
         $this->assertSame($tenant->id, $admin->id, 'precondition: ids collide');
 
-        Sanctum::actingAs($admin, [], 'sanctum');
+        $this->actingAs($admin, 'admin');
 
-        $res = $this->getJson('/api/notifications');
+        $res = $this->getJson('/api/admin/notifications');
         $res->assertOk()
             ->assertJsonPath('total', 0)
             ->assertJsonPath('data', []);
@@ -47,9 +47,9 @@ class AdminNotificationAccessTest extends TestCase
         $tenant = User::factory()->tenant()->create();
         Notification::factory()->count(2)->create(['user_id' => $tenant->id, 'read_at' => null]);
 
-        Sanctum::actingAs(Admin::factory()->create(), [], 'sanctum');
+        $this->actingAs(Admin::factory()->create(), 'admin');
 
-        $this->getJson('/api/notifications/unread-count')
+        $this->getJson('/api/admin/notifications/unread-count')
             ->assertOk()
             ->assertJsonPath('unread_count', 0);
     }
@@ -59,9 +59,9 @@ class AdminNotificationAccessTest extends TestCase
         $tenant = User::factory()->tenant()->create();
         Notification::factory()->create(['user_id' => $tenant->id, 'read_at' => null]);
 
-        Sanctum::actingAs(Admin::factory()->create(), [], 'sanctum');
+        $this->actingAs(Admin::factory()->create(), 'admin');
 
-        $this->getJson('/api/notifications/unread')
+        $this->getJson('/api/admin/notifications/unread')
             ->assertOk()
             ->assertJson([]);
     }
@@ -71,9 +71,9 @@ class AdminNotificationAccessTest extends TestCase
         $tenant = User::factory()->tenant()->create();
         Notification::factory()->count(2)->create(['user_id' => $tenant->id, 'read_at' => null]);
 
-        Sanctum::actingAs(Admin::factory()->create(), [], 'sanctum');
+        $this->actingAs(Admin::factory()->create(), 'admin');
 
-        $this->postJson('/api/notifications/mark-all-read')
+        $this->postJson('/api/admin/notifications/mark-all-read')
             ->assertOk()
             ->assertJsonPath('count', 0);
 
@@ -83,9 +83,9 @@ class AdminNotificationAccessTest extends TestCase
 
     public function test_admin_preferences_index_returns_defaults(): void
     {
-        Sanctum::actingAs(Admin::factory()->create(), [], 'sanctum');
+        $this->actingAs(Admin::factory()->create(), 'admin');
 
-        $this->getJson('/api/notification-preferences')
+        $this->getJson('/api/admin/notification-preferences')
             ->assertOk()
             ->assertJsonPath('rent_generated.email', true)
             ->assertJsonPath('rent_generated.sms', false);
@@ -93,9 +93,9 @@ class AdminNotificationAccessTest extends TestCase
 
     public function test_admin_cannot_write_preferences(): void
     {
-        Sanctum::actingAs(Admin::factory()->create(), [], 'sanctum');
+        $this->actingAs(Admin::factory()->create(), 'admin');
 
-        $this->putJson('/api/notification-preferences', [
+        $this->putJson('/api/admin/notification-preferences', [
             'rent_generated' => ['email' => false, 'sms' => true],
         ])->assertForbidden();
 

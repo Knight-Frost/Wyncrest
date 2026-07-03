@@ -55,9 +55,10 @@ class TenantDashboardTest extends TestCase
 
     public function test_admin_cannot_fetch_tenant_dashboard(): void
     {
-        Sanctum::actingAs(Admin::factory()->create(), [], 'sanctum');
+        // An admin has no bearer identity on the sanctum guard → 401 on tenant routes.
+        $this->actingAs(Admin::factory()->create(), 'admin');
 
-        $this->getJson('/api/tenant/dashboard')->assertStatus(403);
+        $this->getJson('/api/tenant/dashboard')->assertStatus(401);
     }
 
     public function test_dashboard_counts_reflect_real_records_only(): void

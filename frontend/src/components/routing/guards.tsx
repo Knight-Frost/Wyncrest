@@ -1,6 +1,7 @@
 import { Navigate, useLocation } from 'react-router';
 import { useAuth } from '@/context/auth';
 import { LoadingState } from '@/components/ui/states';
+import { getActivePortal } from '@/lib/storage';
 import type { Role } from '@/lib/types';
 
 /** Blocks unauthenticated access; preserves intended destination for post-login redirect. */
@@ -16,7 +17,10 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
     );
   }
   if (!user) {
-    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+    // Send a lapsed admin session back to the admin console sign-in (its own
+    // isolated surface), not the tenant/landlord login they can't use.
+    const loginPath = getActivePortal() === 'admin' ? '/admin/login' : '/login';
+    return <Navigate to={loginPath} state={{ from: location.pathname }} replace />;
   }
   return <>{children}</>;
 }

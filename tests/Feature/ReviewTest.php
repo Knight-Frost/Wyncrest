@@ -370,7 +370,7 @@ class ReviewTest extends TestCase
             'status' => ReviewStatus::PENDING,
         ]);
 
-        Sanctum::actingAs($admin, [], 'sanctum');
+        $this->actingAs($admin, 'admin');
 
         $response = $this->postJson("/api/admin/reviews/{$review->id}/moderate", [
             'action' => 'approve',
@@ -402,7 +402,7 @@ class ReviewTest extends TestCase
             'status' => ReviewStatus::PENDING,
         ]);
 
-        Sanctum::actingAs($admin, [], 'sanctum');
+        $this->actingAs($admin, 'admin');
 
         $response = $this->postJson("/api/admin/reviews/{$review->id}/moderate", [
             'action' => 'reject',
@@ -435,7 +435,7 @@ class ReviewTest extends TestCase
             'status' => ReviewStatus::APPROVED,
         ]);
 
-        Sanctum::actingAs($admin, [], 'sanctum');
+        $this->actingAs($admin, 'admin');
 
         $response = $this->postJson("/api/admin/reviews/{$review->id}/moderate", [
             'action' => 'hide',
@@ -464,7 +464,7 @@ class ReviewTest extends TestCase
             'status' => ReviewStatus::PENDING,
         ]);
 
-        Sanctum::actingAs($admin, [], 'sanctum');
+        $this->actingAs($admin, 'admin');
 
         $response = $this->postJson("/api/admin/reviews/{$review->id}/moderate", [
             'action' => 'flag',
@@ -493,14 +493,14 @@ class ReviewTest extends TestCase
             'status' => ReviewStatus::PENDING,
         ]);
 
-        // Acting as a landlord — should be 403 on admin route
+        // A landlord bearer identity is unauthenticated on the admin session guard.
         Sanctum::actingAs($landlord, [], 'sanctum');
 
         $response = $this->postJson("/api/admin/reviews/{$review->id}/moderate", [
             'action' => 'approve',
         ]);
 
-        $response->assertStatus(403);
+        $response->assertStatus(401);
     }
 
     // =========================================================================
@@ -637,7 +637,7 @@ class ReviewTest extends TestCase
             'status' => ReviewStatus::PENDING,
         ]);
 
-        Sanctum::actingAs($admin, [], 'sanctum');
+        $this->actingAs($admin, 'admin');
 
         $this->postJson("/api/admin/reviews/{$review->id}/moderate", [
             'action' => 'approve',

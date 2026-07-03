@@ -27,9 +27,16 @@ return [
     | are able to authenticate the request, Sanctum will use the bearer
     | token that's present on an incoming request for authentication.
     |
+    | SECURITY: The `admin` guard is deliberately NOT listed here. Admin console
+    | auth is a first-party cookie session on the `admin` guard, scoped to the
+    | admin routes only (see routes/api.php + AdminAuthController). Keeping it out
+    | of Sanctum's guard list guarantees an admin session can never be resolved by
+    | the shared `auth:sanctum` (tenant/landlord bearer) pipeline — the isolation
+    | that prevents cross-identity leakage between portals in one browser.
+    |
     */
 
-    'guard' => ['web', 'admin'],
+    'guard' => ['web'],
 
     /*
     |--------------------------------------------------------------------------

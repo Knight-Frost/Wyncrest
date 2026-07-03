@@ -2,8 +2,14 @@
  * HTTP clients.
  *
  * `http`        — unauthenticated (login, register, public listings).
- * `portalHttp`  — one axios instance per portal; each reads only its own token
- *                 and routes 401s to its own registered handler, so a tenant 401
+ * `portalHttp`  — one axios instance per portal, with two DIFFERENT auth models:
+ *                   • tenant / landlord — stateless Sanctum BEARER tokens read
+ *                     from storage and sent in the Authorization header.
+ *                   • admin — a first-party COOKIE SESSION: `withCredentials`
+ *                     sends the HttpOnly session cookie, and no token is ever
+ *                     attached or read from JavaScript. This is the isolation that
+ *                     stops a stored value from diverging from the real admin.
+ *                 Each routes 401s to its own registered handler, so a tenant 401
  *                 never logs out the landlord or admin session.
  */
 import axios, { AxiosError, type AxiosInstance } from 'axios';
@@ -11,6 +17,9 @@ import { type Portal, getPortalToken } from './storage';
 import type { ApiError } from './types';
 
 const baseURL = import.meta.env.VITE_API_BASE_URL ?? '/api';
+
+// Sanctum's CSRF-cookie endpoint sits BESIDE /api, not under it.
+const csrfCookieUrl = `${baseURL.replace(/\/api\/?$/, '')}/sanctum/csrf-cookie`;
 
 // ---- Unauthenticated client (login / register / public listings) ---------
 
@@ -32,9 +41,23 @@ export function setPortalUnauthorizedHandler(portal: Portal, handler: () => void
   portalUnauthorizedHandlers.set(portal, handler);
 }
 
-// ---- Portal-scoped client factory ----------------------------------------
+// ---- Portal-scoped client factories --------------------------------------
 
-function makePortalClient(portal: Portal): AxiosInstance {
+/** Routes a 401 to the portal's handler and normalizes the error. */
+function attachUnauthorizedHandler(instance: AxiosInstance, portal: Portal): void {
+  instance.interceptors.response.use(
+    (response) => response,
+    (error: AxiosError) => {
+      if (error.response?.status === 401) {
+        portalUnauthorizedHandlers.get(portal)?.();
+      }
+      return Promise.reject(normalizeError(error));
+    },
+  );
+}
+
+/** Tenant / landlord: stateless bearer token from storage. */
+function makeBearerClient(portal: Portal): AxiosInstance {
   const instance = axios.create({
     baseURL,
     headers: { Accept: 'application/json' },
@@ -48,25 +71,42 @@ function makePortalClient(portal: Portal): AxiosInstance {
     return config;
   });
 
-  instance.interceptors.response.use(
-    (response) => response,
-    (error: AxiosError) => {
-      if (error.response?.status === 401) {
-        portalUnauthorizedHandlers.get(portal)?.();
-      }
-      return Promise.reject(normalizeError(error));
-    },
-  );
-
+  attachUnauthorizedHandler(instance, portal);
   return instance;
 }
 
-/** One axios instance per portal — isolated tokens, isolated 401 handlers. */
+/**
+ * Admin: first-party cookie session. Sends the HttpOnly session cookie
+ * (`withCredentials`) and the CSRF header derived from the XSRF-TOKEN cookie
+ * (`withXSRFToken`). It NEVER reads or attaches a token from JavaScript.
+ */
+function makeCookieClient(portal: Portal): AxiosInstance {
+  const instance = axios.create({
+    baseURL,
+    headers: { Accept: 'application/json' },
+    withCredentials: true,
+    withXSRFToken: true,
+  });
+
+  attachUnauthorizedHandler(instance, portal);
+  return instance;
+}
+
+/** One axios instance per portal — isolated auth, isolated 401 handlers. */
 export const portalHttp: Record<Portal, AxiosInstance> = {
-  tenant: makePortalClient('tenant'),
-  landlord: makePortalClient('landlord'),
-  admin: makePortalClient('admin'),
+  tenant: makeBearerClient('tenant'),
+  landlord: makeBearerClient('landlord'),
+  admin: makeCookieClient('admin'),
 };
+
+/**
+ * Prime the CSRF cookie for the admin cookie session. Must be awaited before the
+ * first mutating admin request (login, and any POST/PUT/PATCH) so Laravel's
+ * ValidateCsrfToken sees a matching X-XSRF-TOKEN header. Safe to call repeatedly.
+ */
+export async function ensureAdminCsrf(): Promise<void> {
+  await axios.get(csrfCookieUrl, { withCredentials: true });
+}
 
 // ---- Error helpers -------------------------------------------------------
 

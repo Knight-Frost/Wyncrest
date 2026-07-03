@@ -5,6 +5,7 @@ import { RequireAuth, RequireRole, RedirectIfAuthed } from '@/components/routing
 import { useAuth } from '@/context/auth';
 
 import { Login } from '@/pages/auth/Login';
+import { AdminLogin } from '@/pages/auth/AdminLogin';
 import { Register } from '@/pages/auth/Register';
 import { AcceptInvite } from '@/pages/auth/AcceptInvite';
 import { ForgotPassword } from '@/pages/auth/ForgotPassword';
@@ -111,6 +112,15 @@ export default function App() {
         element={
           <RedirectIfAuthed>
             <Login />
+          </RedirectIfAuthed>
+        }
+      />
+      {/* Admin console sign-in — isolated cookie-session surface. */}
+      <Route
+        path="/admin/login"
+        element={
+          <RedirectIfAuthed>
+            <AdminLogin />
           </RedirectIfAuthed>
         }
       />

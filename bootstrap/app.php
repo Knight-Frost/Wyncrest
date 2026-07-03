@@ -27,13 +27,20 @@ return Application::configure(basePath: dirname(__DIR__))
             'rate.limit.role' => \App\Http\Middleware\RateLimitByRole::class,
             'metrics' => \App\Http\Middleware\MetricsMiddleware::class,
             'security.headers' => \App\Http\Middleware\SecurityHeaders::class,
+            // Ties a session to the user's current password hash so changing the
+            // password (logoutOtherDevices) invalidates that admin's OTHER sessions.
+            'auth.session' => \Illuminate\Session\Middleware\AuthenticateSession::class,
         ]);
 
-        // Note: Using token-based authentication (Bearer tokens stored in localStorage)
-        // NOT SPA cookie-based authentication, so statefulApi() is not needed.
-        // If you need SPA mode with cookies, uncomment the line below and have
-        // the frontend call GET /sanctum/csrf-cookie before login.
-        // $middleware->statefulApi();
+        // AUTHENTICATION MODEL (two intentionally isolated mechanisms):
+        //  - Tenant/Landlord: stateless Sanctum BEARER tokens (Authorization header).
+        //    Global SPA stateful mode stays OFF so a browser's cookies can never
+        //    override a bearer identity on these routes.
+        //  - Admin console: first-party COOKIE SESSION on the `admin` guard, applied
+        //    ONLY to the admin routes via the `web` middleware group + `auth:admin`
+        //    (see routes/api.php). The SPA calls GET /sanctum/csrf-cookie before
+        //    logging in. This keeps the admin credential HttpOnly (never in JS) while
+        //    leaving the tenant/landlord token flow untouched.
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // In production, don't expose detailed exception messages

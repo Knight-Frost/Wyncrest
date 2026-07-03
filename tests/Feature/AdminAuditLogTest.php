@@ -41,45 +41,45 @@ class AdminAuditLogTest extends TestCase
         $this->getJson('/api/admin/audit-logs')->assertStatus(401);
     }
 
-    public function test_tenant_gets_403_on_index(): void
+    public function test_tenant_gets_401_on_index(): void
     {
         $tenant = User::factory()->tenant()->create();
         Sanctum::actingAs($tenant, [], 'sanctum');
 
-        $this->getJson('/api/admin/audit-logs')->assertStatus(403);
+        $this->getJson('/api/admin/audit-logs')->assertStatus(401);
     }
 
-    public function test_landlord_gets_403_on_index(): void
+    public function test_landlord_gets_401_on_index(): void
     {
         $landlord = User::factory()->landlord()->create();
         Sanctum::actingAs($landlord, [], 'sanctum');
 
-        $this->getJson('/api/admin/audit-logs')->assertStatus(403);
+        $this->getJson('/api/admin/audit-logs')->assertStatus(401);
     }
 
-    public function test_tenant_gets_403_on_summary(): void
+    public function test_tenant_gets_401_on_summary(): void
     {
         $tenant = User::factory()->tenant()->create();
         Sanctum::actingAs($tenant, [], 'sanctum');
 
-        $this->getJson('/api/admin/audit-logs/summary')->assertStatus(403);
+        $this->getJson('/api/admin/audit-logs/summary')->assertStatus(401);
     }
 
-    public function test_tenant_gets_403_on_export(): void
+    public function test_tenant_gets_401_on_export(): void
     {
         $tenant = User::factory()->tenant()->create();
         Sanctum::actingAs($tenant, [], 'sanctum');
 
-        $this->getJson('/api/admin/audit-logs/export')->assertStatus(403);
+        $this->getJson('/api/admin/audit-logs/export')->assertStatus(401);
     }
 
-    public function test_tenant_gets_403_on_show(): void
+    public function test_tenant_gets_401_on_show(): void
     {
         $tenant = User::factory()->tenant()->create();
         $log = AuditLog::factory()->create();
         Sanctum::actingAs($tenant, [], 'sanctum');
 
-        $this->getJson("/api/admin/audit-logs/{$log->id}")->assertStatus(403);
+        $this->getJson("/api/admin/audit-logs/{$log->id}")->assertStatus(401);
     }
 
     public function test_unauthenticated_gets_401_on_show(): void
@@ -96,7 +96,7 @@ class AdminAuditLogTest extends TestCase
     public function test_index_returns_flat_paginated_shape(): void
     {
         AuditLog::factory()->count(5)->create();
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs');
 
@@ -121,7 +121,7 @@ class AdminAuditLogTest extends TestCase
             'severity' => 'critical',
         ]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs');
         $response->assertStatus(200);
@@ -146,7 +146,7 @@ class AdminAuditLogTest extends TestCase
             'severity' => 'info',
         ]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs');
         $response->assertStatus(200);
@@ -165,7 +165,7 @@ class AdminAuditLogTest extends TestCase
             'actor_id' => null,
         ]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs');
         $actor = $response->json('data.0.actor');
@@ -184,7 +184,7 @@ class AdminAuditLogTest extends TestCase
     {
         AuditLog::factory()->count(3)->create(['severity' => 'critical']);
         AuditLog::factory()->count(5)->create(['severity' => 'info']);
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs?severity=critical');
         $response->assertStatus(200);
@@ -201,7 +201,7 @@ class AdminAuditLogTest extends TestCase
         AuditLog::factory()->count(4)->create(['action' => 'payment_recorded']);
         // Non-ledger actions
         AuditLog::factory()->count(3)->create(['action' => 'user_created']);
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs?area=Ledger');
         $response->assertStatus(200);
@@ -217,7 +217,7 @@ class AdminAuditLogTest extends TestCase
     public function test_filter_by_unknown_area_returns_empty(): void
     {
         AuditLog::factory()->count(3)->create();
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs?area=NonExistentArea');
         $response->assertStatus(200);
@@ -233,7 +233,7 @@ class AdminAuditLogTest extends TestCase
         $tenant = User::factory()->tenant()->create();
         AuditLog::factory()->forActor($tenant)->count(2)->create();
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs?actor_role=admin');
         $response->assertStatus(200);
@@ -249,7 +249,7 @@ class AdminAuditLogTest extends TestCase
         AuditLog::factory()->create(['created_at' => now()->subDays(5)]);
         AuditLog::factory()->create(['created_at' => now()->subDays(10)]);
         AuditLog::factory()->create(['created_at' => now()->subDays(1)]);
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $from = now()->subDays(6)->toDateString();
         $to = now()->subDays(2)->toDateString();
@@ -265,7 +265,7 @@ class AdminAuditLogTest extends TestCase
     {
         AuditLog::factory()->create(['action' => 'account_suspended']);
         AuditLog::factory()->create(['action' => 'listing_published']);
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs?search=account_suspended');
         $response->assertStatus(200);
@@ -289,7 +289,7 @@ class AdminAuditLogTest extends TestCase
         $eveningUtc = \Carbon\Carbon::parse('2026-07-01 03:30:00', 'UTC');
         AuditLog::factory()->create(['created_at' => $eveningUtc]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         // The admin, in New York, filters for "June 30" (their local day).
         $tz = 'America/New_York';
@@ -312,7 +312,7 @@ class AdminAuditLogTest extends TestCase
         AuditLog::factory()->create(['created_at' => now()]);
         AuditLog::factory()->create(['created_at' => now()->subDays(2)]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         // Summary counts "today" in the client timezone.
         $summary = $this->getJson("/api/admin/audit-logs/summary?tz={$tz}");
@@ -337,7 +337,7 @@ class AdminAuditLogTest extends TestCase
         // One clearly outside the 7-day window.
         AuditLog::factory()->create(['created_at' => now()->subDays(30)]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         // "Last 7 days" as the SPA computes it in local time: 2026-06-24..2026-06-30.
         $response = $this->getJson("/api/admin/audit-logs?from_date=2026-06-24&to_date=2026-06-30&tz={$tz}");
@@ -348,7 +348,7 @@ class AdminAuditLogTest extends TestCase
     public function test_no_date_filters_returns_all_events(): void
     {
         AuditLog::factory()->count(4)->create();
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs');
         $response->assertStatus(200);
@@ -358,7 +358,7 @@ class AdminAuditLogTest extends TestCase
     public function test_invalid_timezone_falls_back_gracefully(): void
     {
         AuditLog::factory()->create(['created_at' => now()]);
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         // A bogus tz must not error — it falls back to the app timezone.
         $response = $this->getJson('/api/admin/audit-logs?tz=Not/AZone');
@@ -370,7 +370,7 @@ class AdminAuditLogTest extends TestCase
     {
         AuditLog::factory()->create(['ip_address' => '192.168.99.1']);
         AuditLog::factory()->create(['ip_address' => '10.0.0.1']);
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs?search=192.168.99');
         $response->assertStatus(200);
@@ -383,7 +383,7 @@ class AdminAuditLogTest extends TestCase
         $tenant = User::factory()->tenant()->create(['email' => 'uniqueuser@example.com']);
         AuditLog::factory()->forActor($tenant)->create();
         AuditLog::factory()->count(3)->create(); // no actor or different actor
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs?search=uniqueuser@example.com');
         $response->assertStatus(200);
@@ -395,7 +395,7 @@ class AdminAuditLogTest extends TestCase
     {
         AuditLog::factory()->create(['created_at' => now()->subDays(3), 'action' => 'user_login']);
         AuditLog::factory()->create(['created_at' => now()->subDays(1), 'action' => 'admin_login']);
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         // Newest first (default)
         $newestFirst = $this->getJson('/api/admin/audit-logs?sort=newest');
@@ -409,7 +409,7 @@ class AdminAuditLogTest extends TestCase
     public function test_per_page_and_pagination(): void
     {
         AuditLog::factory()->count(25)->create();
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs?per_page=10&page=2');
         $response->assertStatus(200);
@@ -427,7 +427,7 @@ class AdminAuditLogTest extends TestCase
 
     public function test_summary_returns_expected_structure(): void
     {
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs/summary');
         $response->assertStatus(200);
@@ -457,7 +457,7 @@ class AdminAuditLogTest extends TestCase
             'created_at' => now()->subDay(),
         ]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs/summary');
         $response->assertStatus(200);
@@ -473,7 +473,7 @@ class AdminAuditLogTest extends TestCase
             'created_at' => now(),
         ]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs/summary');
         $response->assertStatus(200);
@@ -487,7 +487,7 @@ class AdminAuditLogTest extends TestCase
 
     public function test_summary_insights_is_array(): void
     {
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs/summary');
         $response->assertStatus(200);
@@ -497,7 +497,7 @@ class AdminAuditLogTest extends TestCase
 
     public function test_summary_needs_review_has_no_trend_key(): void
     {
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs/summary');
         $response->assertStatus(200);
@@ -522,7 +522,7 @@ class AdminAuditLogTest extends TestCase
             'metadata' => ['stripe_error' => 'card_declined'],
         ]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson("/api/admin/audit-logs/{$log->id}");
         $response->assertStatus(200);
@@ -556,7 +556,7 @@ class AdminAuditLogTest extends TestCase
     {
         $log = AuditLog::factory()->create(['user_agent' => null]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson("/api/admin/audit-logs/{$log->id}");
         $response->assertStatus(200);
@@ -568,7 +568,7 @@ class AdminAuditLogTest extends TestCase
     {
         $log = AuditLog::factory()->create(['action' => 'listing_submitted', 'severity' => 'info']);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson("/api/admin/audit-logs/{$log->id}");
         $response->assertStatus(200);
@@ -581,7 +581,7 @@ class AdminAuditLogTest extends TestCase
 
     public function test_show_returns_404_for_missing_audit_log(): void
     {
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $this->getJson('/api/admin/audit-logs/999999')->assertStatus(404);
     }
@@ -593,7 +593,7 @@ class AdminAuditLogTest extends TestCase
     public function test_export_returns_csv_with_correct_headers(): void
     {
         AuditLog::factory()->count(5)->create();
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->get('/api/admin/audit-logs/export');
 
@@ -606,7 +606,7 @@ class AdminAuditLogTest extends TestCase
     public function test_export_csv_body_contains_header_row(): void
     {
         AuditLog::factory()->count(2)->create();
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->get('/api/admin/audit-logs/export');
         $response->assertStatus(200);
@@ -643,7 +643,7 @@ class AdminAuditLogTest extends TestCase
     public function test_verify_reports_healthy_chain(): void
     {
         AuditLog::factory()->count(5)->create();
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs/verify');
         $response->assertStatus(200);
@@ -675,7 +675,7 @@ class AdminAuditLogTest extends TestCase
         $target = AuditLog::orderBy('id')->skip(1)->first();
         DB::table('audit_logs')->where('id', $target->id)->update(['action' => 'tampered_action']);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs/verify');
         $response->assertStatus(200);
@@ -692,7 +692,7 @@ class AdminAuditLogTest extends TestCase
 
     public function test_verify_reports_empty_chain(): void
     {
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs/verify');
         $response->assertStatus(200);
@@ -714,13 +714,13 @@ class AdminAuditLogTest extends TestCase
 
         $tenant = User::factory()->tenant()->create();
         Sanctum::actingAs($tenant, [], 'sanctum');
-        $this->getJson('/api/admin/audit-logs/verify')->assertStatus(403);
+        $this->getJson('/api/admin/audit-logs/verify')->assertStatus(401);
     }
 
     public function test_show_includes_hash_chain_fields(): void
     {
         $log = AuditLog::factory()->create();
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson("/api/admin/audit-logs/{$log->id}");
         $response->assertStatus(200)->assertJsonStructure(['hash', 'previous_hash']);
@@ -730,7 +730,7 @@ class AdminAuditLogTest extends TestCase
     public function test_index_rows_include_hash(): void
     {
         AuditLog::factory()->count(2)->create();
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs');
         $response->assertStatus(200)->assertJsonStructure(['data' => [['hash']]]);

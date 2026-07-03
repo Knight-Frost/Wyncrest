@@ -46,8 +46,12 @@ class LoginCredentialTest extends TestCase
         $response->assertJsonMissingValidationErrors('email');
     }
 
-    public function test_wrong_password_for_admin_returns_a_password_error(): void
+    public function test_admin_cannot_authenticate_via_the_user_login_endpoint(): void
     {
+        // Admins authenticate through the isolated cookie-session surface at
+        // POST /api/admin/login. The shared /login endpoint (tenant/landlord
+        // bearer tokens) must NOT authenticate an admin, even with the correct
+        // password, and must never leak that the email belongs to an admin.
         Admin::factory()->create([
             'email' => 'admin@example.com',
             'password' => Hash::make('AdminPass123'),
@@ -55,11 +59,13 @@ class LoginCredentialTest extends TestCase
 
         $response = $this->postJson('/api/login', [
             'email' => 'admin@example.com',
-            'password' => 'Nope12345',
+            'password' => 'AdminPass123', // correct password, still rejected here
         ]);
 
         $response->assertStatus(422);
-        $response->assertJsonValidationErrors('password');
+        // Falls through to the user lookup → generic "no account" (no enumeration).
+        $this->assertArrayNotHasKey('token', $response->json());
+        $this->assertGuest('admin');
     }
 
     public function test_correct_credentials_succeed(): void

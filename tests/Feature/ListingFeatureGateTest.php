@@ -84,6 +84,7 @@ class ListingFeatureGateTest extends TestCase
     {
         $tenant = User::factory()->tenant()->create();
 
+        // A tenant IS authenticated (bearer) but is the wrong role → 403.
         $this->actingAs($tenant, 'sanctum')
             ->getJson('/api/landlord/listings')
             ->assertStatus(403);
@@ -93,8 +94,9 @@ class ListingFeatureGateTest extends TestCase
     {
         $admin = Admin::factory()->create(['is_super_admin' => true]);
 
-        $this->actingAs($admin, 'sanctum')
+        // An admin has no bearer identity on the sanctum guard → unauthenticated (401).
+        $this->actingAs($admin, 'admin')
             ->getJson('/api/landlord/listings')
-            ->assertStatus(403);
+            ->assertStatus(401);
     }
 }

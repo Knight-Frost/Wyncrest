@@ -310,7 +310,7 @@ class LifecycleNotificationsTest extends TestCase
     {
         ['landlord' => $landlord, 'tenant' => $tenant, 'admin' => $admin, 'contract' => $contract] = $this->makeContractSetup();
 
-        Sanctum::actingAs($admin, [], 'sanctum');
+        $this->actingAs($admin, 'admin');
 
         $this->postJson("/api/admin/contracts/{$contract->id}/terminate", [
             'reason' => 'Fraud investigation.',
@@ -347,7 +347,7 @@ class LifecycleNotificationsTest extends TestCase
         $admin = Admin::factory()->create(['is_super_admin' => true]);
         $user = User::factory()->tenant()->create();
 
-        Sanctum::actingAs($admin, [], 'sanctum');
+        $this->actingAs($admin, 'admin');
 
         $this->postJson("/api/admin/users/{$user->id}/suspend", [
             'reason' => 'Violation of platform terms.',
@@ -373,7 +373,7 @@ class LifecycleNotificationsTest extends TestCase
             'is_active' => false,
         ]);
 
-        Sanctum::actingAs($admin, [], 'sanctum');
+        $this->actingAs($admin, 'admin');
 
         $this->postJson("/api/admin/users/{$user->id}/activate")
             ->assertStatus(200);
@@ -395,7 +395,7 @@ class LifecycleNotificationsTest extends TestCase
 
         $overduEntry = $this->makeOverdueLedgerEntry($contract);
 
-        Sanctum::actingAs($admin, [], 'sanctum');
+        $this->actingAs($admin, 'admin');
 
         $response = $this->postJson("/api/admin/ledger/{$overduEntry->id}/late-fee", [
             'amount_cents' => 5000,
@@ -514,7 +514,7 @@ class LifecycleNotificationsTest extends TestCase
             'tenant_id' => $tenant->id,
         ]);
 
-        Sanctum::actingAs($admin, [], 'sanctum');
+        $this->actingAs($admin, 'admin');
 
         $response = $this->getJson("/api/admin/contracts?landlord_id={$landlord->id}");
 
@@ -541,7 +541,7 @@ class LifecycleNotificationsTest extends TestCase
             'tenant_id' => $tenant->id,
         ]);
 
-        Sanctum::actingAs($admin, [], 'sanctum');
+        $this->actingAs($admin, 'admin');
 
         $response = $this->getJson("/api/admin/contracts?tenant_id={$tenant->id}");
 
@@ -579,7 +579,7 @@ class LifecycleNotificationsTest extends TestCase
             'billing_period_end' => now()->addDays(20),
         ]);
 
-        Sanctum::actingAs($admin, [], 'sanctum');
+        $this->actingAs($admin, 'admin');
 
         $response = $this->getJson("/api/admin/ledger?landlord_id={$landlord->id}");
 
@@ -617,7 +617,7 @@ class LifecycleNotificationsTest extends TestCase
             'billing_period_end' => now()->addDays(20),
         ]);
 
-        Sanctum::actingAs($admin, [], 'sanctum');
+        $this->actingAs($admin, 'admin');
 
         $response = $this->getJson("/api/admin/ledger?tenant_id={$tenant->id}");
 

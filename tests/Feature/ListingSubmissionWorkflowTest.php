@@ -167,7 +167,7 @@ class ListingSubmissionWorkflowTest extends TestCase
         ]);
 
         // Step 5: Admin approves listing
-        $response = $this->actingAs($this->admin, 'sanctum')
+        $response = $this->actingAs($this->admin, 'admin')
             ->postJson("/api/admin/listings/{$listingId}/approve");
 
         $response->assertStatus(200)

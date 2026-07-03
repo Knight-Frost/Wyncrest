@@ -107,14 +107,15 @@ class MessageableRecipientTest extends TestCase
     {
         Sanctum::actingAs(User::factory()->landlord()->create(), [], 'sanctum');
 
+        // A landlord IS authenticated (bearer) but is the wrong role → 403.
         $this->getJson('/api/tenant/messageable-recipients')->assertStatus(403);
     }
 
     public function test_admin_cannot_reach_tenant_route(): void
     {
-        Sanctum::actingAs(Admin::factory()->create(), [], 'sanctum');
+        $this->actingAs(Admin::factory()->create(), 'admin');
 
-        $this->getJson('/api/tenant/messageable-recipients')->assertStatus(403);
+        $this->getJson('/api/tenant/messageable-recipients')->assertStatus(401);
     }
 
     // -------------------------------------------------------------------------

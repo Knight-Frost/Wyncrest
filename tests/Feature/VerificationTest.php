@@ -139,7 +139,7 @@ class VerificationTest extends TestCase
             'submitted_at' => now(),
         ]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
         $response = $this->postJson("/api/admin/verifications/{$req->id}/approve", [
             'reason' => 'Documents look good.',
         ]);
@@ -169,7 +169,7 @@ class VerificationTest extends TestCase
             'submitted_at' => now(),
         ]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
         $response = $this->postJson("/api/admin/verifications/{$req->id}/reject", [
             'reason' => 'Invalid documents provided.',
         ]);
@@ -192,7 +192,7 @@ class VerificationTest extends TestCase
             'submitted_at' => now(),
         ]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
         $response = $this->postJson("/api/admin/verifications/{$req->id}/request-info", [
             'note' => 'Please provide a clearer photo of your ID.',
         ]);
@@ -214,7 +214,7 @@ class VerificationTest extends TestCase
             'submitted_at' => now(),
         ]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
         $response = $this->getJson('/api/admin/verifications');
 
         $response->assertStatus(200)
@@ -335,7 +335,7 @@ class VerificationTest extends TestCase
 
     public function test_admin_can_block_user(): void
     {
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
         $response = $this->postJson("/api/admin/users/{$this->tenant->id}/block", [
             'reason' => 'Fraudulent activity detected.',
         ]);
@@ -352,7 +352,7 @@ class VerificationTest extends TestCase
 
     public function test_admin_can_archive_user(): void
     {
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
         $response = $this->postJson("/api/admin/users/{$this->tenant->id}/archive", [
             'reason' => 'Account requested for closure.',
         ]);
@@ -405,7 +405,7 @@ class VerificationTest extends TestCase
             'is_active' => false,
         ]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
         $response = $this->postJson("/api/admin/users/{$this->tenant->id}/activate");
 
         $response->assertStatus(200);
@@ -436,7 +436,7 @@ class VerificationTest extends TestCase
             'size_bytes' => 14,
         ]);
 
-        Sanctum::actingAs($this->admin, [], 'sanctum');
+        $this->actingAs($this->admin, 'admin');
         $response = $this->get("/api/admin/documents/{$doc->id}/download");
 
         $response->assertStatus(200);
@@ -460,7 +460,9 @@ class VerificationTest extends TestCase
             'size_bytes' => 14,
         ]);
 
+        // A tenant bearer identity is unauthenticated on the admin session guard.
+        // (Non-JSON GET still resolves to a clean 401, not a redirect crash.)
         Sanctum::actingAs($this->tenant, [], 'sanctum');
-        $this->get("/api/admin/documents/{$doc->id}/download")->assertStatus(403);
+        $this->get("/api/admin/documents/{$doc->id}/download")->assertStatus(401);
     }
 }
