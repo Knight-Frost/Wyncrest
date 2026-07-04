@@ -9,7 +9,10 @@ Who this is for: developers setting up a local copy, and anyone deploying Wyncre
 | | Development mode | Production mode |
 |---|---|---|
 | Purpose | A small, realistic demo world for building and testing | A clean, real platform |
-| Creates | 3 admins, 5 landlords, 5 tenants, properties, listings, contracts, a real ledger history, notifications, reviews, and more | Reference data only, plus one optional admin account |
+| Creates | 4 admins, 7 landlords, 9 tenants (plus a few verification-queue accounts), properties, listings, contracts across their full lifecycle, a real ledger history, messaging, notifications, reviews, and more | Reference data only, plus one optional admin account |
+
+> **For the full account-by-account scenario matrix — every login, its purpose,
+> and exactly what it lets you test — see [`SEEDED_SCENARIOS.md`](SEEDED_SCENARIOS.md).**
 | Demo people, money, or properties | Yes, clearly fictional | Never |
 | Safe to reset | Yes, any time | No |
 | Safe to run more than once | Yes | Yes, it will not create duplicates |
@@ -40,25 +43,28 @@ The `./dev.sh` script (see [`docs/DEVELOPMENT.md`](DEVELOPMENT.md)) runs the rig
 
 **Warning: everything below is fictional demo data. None of it exists outside a local or demo environment set to development mode.**
 
-**Admin team** (three accounts, so the access-control system is visible, not just described):
+**Admin team** (four accounts, so the access-control system is visible, not just described):
 
 | Account | Role | What it can do |
 |---|---|---|
 | `admin@wyncrest.test` | Super admin | Everything |
-| `reviewer@wyncrest.test` | Scoped admin | Review verifications, moderate listings, moderate reviews, view the audit log |
+| `reviewer@wyncrest.test` | Scoped — content | Review verifications, moderate listings, moderate reviews, view the audit log |
+| `finance@wyncrest.test` | Scoped — finance | Manage contracts & the ledger, view analytics, view the audit log |
 | `pending.admin@wyncrest.test` | Invited, not yet accepted | Nothing yet; demonstrates what an unaccepted invite looks like |
 
-**Landlords and tenants** (five of each, all verified):
+The two scoped admins are deliberate mirror images — each is denied what the other is allowed — so a `403` is demonstrable in both directions.
+
+**Landlords** (seven) and **tenants** (nine) — each account exists to exercise one specific scenario (verification states, account states, financial states, contract lifecycle, empty states). The full breakdown lives in [`SEEDED_SCENARIOS.md`](SEEDED_SCENARIOS.md); in summary:
 
 | Landlord notes | Tenant notes |
 |---|---|
-| One established landlord with a full property and tenants | Four tenants in good standing, paid up with a zero balance |
-| One smaller landlord | One tenant who owes exactly one month's rent |
-| One landlord with a listing awaiting review | |
-| One landlord with limited features enabled | |
-| One landlord with no properties yet, to show an empty state | |
+| Established, smaller, listing-in-review, and limited-feature landlords | Four tenants in good standing (zero balance) |
+| An empty-state landlord (no properties) | One owing exactly one clean month's rent |
+| A pending-verification landlord (blocked from listing by the hard-gate) | One owing rent **plus a real late fee** |
+| A suspended landlord (login rejected) | Two former tenants (one terminated lease, one expired) |
+| | One unverified tenant (blocked from applying) |
 
-**Money and inventory:** several properties and units across a handful of Ghanaian cities, a mix of active, pending, and draft listings, and active leases built through the real ledger logic, not invented numbers. The four good-standing tenants are paid to zero, and the one owing tenant has a single unpaid, overdue month. No late fee is invented; late fees only appear if the real overdue-processing rule creates one.
+**Money and inventory:** several properties and units across a handful of Ghanaian cities, a mix of active, pending, draft and inactive listings, and leases across their full lifecycle (active, terminated, expired) built through the real ledger logic, not invented numbers. Good-standing and former tenants are paid to zero; one tenant owes a single clean overdue month; one owes that plus a late fee raised through the real service. Messaging threads carry a mix of read and unread messages, with two inboxes left empty on purpose.
 
 All demo accounts share the password `password` and use the reserved `wyncrest.test` email domain, which cannot receive real mail.
 
@@ -82,5 +88,14 @@ Production setup can be run more than once safely. It updates existing reference
 
 ## Known limitations
 
-- Seeded photo galleries have metadata (so counts and galleries display correctly) but not real image files, so a seeded photo will not actually load until a real one is uploaded through the app.
+- Seeded photo galleries use real image files when the bundled `Homes_Photos/` folder is present (copied to the public disk); otherwise they fall back to metadata-only rows so counts still populate.
 - No real Stripe or Twilio calls happen during seeding. Payment records use clearly fake identifiers and never contact an external service.
+
+## Scenarios that are deliberately not seeded
+
+Two commonly-requested scenarios are **not supported by the backend**, so the seeder does **not** fake them (a fake would make the UI lie):
+
+- **Partial payments** — the ledger requires every payment to settle the full obligation; there is no partial-payment state to represent.
+- **Failed-payment ledger rows** — a failed payment writes only an audit entry and a notification, never a ledger row. The seed world includes that truthful trace (on `tenant.owing`) but no fabricated "failed" ledger entry.
+
+See the [Unsupported scenarios](SEEDED_SCENARIOS.md#unsupported-scenarios) section of the scenario guide for the full rationale and what a backend change would require.

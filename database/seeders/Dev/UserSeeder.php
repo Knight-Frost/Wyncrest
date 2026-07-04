@@ -15,10 +15,13 @@ use Illuminate\Support\Str;
  * UserSeeder — demo identities.
  *
  * Creates exactly:
- *   - 3 admins (separate `admins` table): 1 super admin + 1 scoped admin (both
- *     active logins) + 1 pending invite (created but never accepted, cannot log in)
- *   - 5 landlords (all verified; 4 operating + 1 deliberate empty-state account)
- *   - 5 tenants  (all verified; 4 in good standing + 1 who owes one month)
+ *   - 4 admins (separate `admins` table): 1 super admin + 2 scoped admins (a
+ *     content reviewer + a finance admin, both active logins) + 1 pending invite
+ *     (created but never accepted, cannot log in)
+ *   - 7 landlords (4 operating + 1 empty-state + 1 pending-verification + 1
+ *     suspended). Verification/account state comes from the catalog.
+ *   - 9 tenants  (4 good standing + 1 owing + 1 owing-with-late-fee + 2 former
+ *     tenants + 1 unverified). Standing/verification state comes from the catalog.
  *
  * Every account uses an @{test-domain} email and the shared demo password. Names
  * are fictional. Phone numbers use Ghana MTN-style prefixes; cities are real
@@ -35,7 +38,7 @@ class UserSeeder extends DevSeeder
         $this->seedRole(SeedCatalog::TENANTS, UserType::TENANT, $password);
 
         $this->command?->info(
-            '  ✓ Users: 3 admins (1 super, 1 scoped, 1 pending invite), '
+            '  ✓ Users: 4 admins (1 super, 2 scoped [content + finance], 1 pending invite), '
             .count(SeedCatalog::LANDLORDS).' landlords, '
             .count(SeedCatalog::TENANTS).' tenants.'
         );
@@ -44,8 +47,9 @@ class UserSeeder extends DevSeeder
     /**
      * The admin team for the development world:
      *   - 1 super admin (system operator — full authority)
-     *   - 1 scoped regular admin (limited capabilities) so the access page and
-     *     capability enforcement are visible/demonstrable
+     *   - 2 scoped regular admins (a content reviewer + a finance admin) so the
+     *     access page and capability enforcement are visible/demonstrable from
+     *     both sides of the boundary
      *   - 1 pending invite (never accepted) so the invite lifecycle is visible
      */
     protected function seedAdmin(string $password): void
@@ -55,8 +59,8 @@ class UserSeeder extends DevSeeder
             ['name' => 'Wyncrest Admin', 'password' => $password, 'is_super_admin' => true, 'is_active' => true],
         );
 
-        // Scoped regular admin — can moderate content & read the audit log, but
-        // cannot manage the team or touch finance (enforced server-side).
+        // Scoped CONTENT admin — can moderate content & read the audit log, but
+        // cannot manage the team, touch finance, or the ledger (enforced server-side).
         Admin::updateOrCreate(
             ['email' => 'reviewer@'.$this->domain()],
             [
@@ -72,6 +76,29 @@ class UserSeeder extends DevSeeder
                 ],
                 'invited_at' => now()->subDays(14),
                 'invite_accepted_at' => now()->subDays(13),
+            ],
+        );
+
+        // Scoped FINANCE admin — the mirror image of the content reviewer: can
+        // manage contracts/ledger and read analytics, but CANNOT moderate listings,
+        // reviews, verifications or manage the team. Together the two scoped admins
+        // exercise both sides of the capability boundary (each is denied what the
+        // other is allowed), so 403s are demonstrable in both directions.
+        Admin::updateOrCreate(
+            ['email' => 'finance@'.$this->domain()],
+            [
+                'name' => 'Kwabena Finance',
+                'password' => $password,
+                'is_super_admin' => false,
+                'is_active' => true,
+                'capabilities' => [
+                    AdminCapability::MANAGE_CONTRACTS->value,
+                    AdminCapability::MANAGE_LEDGER->value,
+                    AdminCapability::VIEW_ANALYTICS->value,
+                    AdminCapability::VIEW_AUDIT->value,
+                ],
+                'invited_at' => now()->subDays(12),
+                'invite_accepted_at' => now()->subDays(11),
             ],
         );
 

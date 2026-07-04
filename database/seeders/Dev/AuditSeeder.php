@@ -2,9 +2,13 @@
 
 namespace Database\Seeders\Dev;
 
+use App\Enums\ContractStatus;
+use App\Enums\LedgerStatus;
+use App\Enums\LedgerType;
 use App\Enums\ListingStatus;
 use App\Models\AuditLog;
 use App\Models\Contract;
+use App\Models\LedgerEntry;
 use App\Models\Listing;
 
 /**
@@ -18,11 +22,17 @@ use App\Models\Listing;
  *   - identity_verified   — for every verified demo user (they were approved)
  *   - listing_published   — for every active/published listing
  *   - feature_enabled     — for every landlord feature grant
- *   - contract_accepted   — for every active lease (the tenant accepted it)
+ *   - contract_accepted   — for every lease (the tenant accepted it)
+ *   - contract_terminated — for the lease that was terminated early
+ *   - account_suspended   — for the suspended landlord account
+ *   - payment_failed      — the owing tenant's failed payment attempt (this is
+ *                           the ONLY persistent trace of a failed payment; the
+ *                           backend writes no ledger row for it)
  *   - admin_login         — a single sign-in by the seeded admin, today
  *
- * No bulk random history, no invented rate-limit storms, no events for things
- * that did not occur.
+ * (late_fee_applied is self-audited by LedgerService::generateLateFee while the
+ * LedgerSeeder runs, so it is not re-created here.) No bulk random history, no
+ * invented events for things that did not occur.
  */
 class AuditSeeder extends DevSeeder
 {
@@ -36,6 +46,9 @@ class AuditSeeder extends DevSeeder
         $this->seedListingModeration($admin);
         $this->seedFeatureGrants($admin);
         $this->seedContractAcceptances();
+        $this->seedContractTermination();
+        $this->seedAccountSuspension($admin);
+        $this->seedFailedPayment();
 
         $added = AuditLog::count() - $before;
         $total = AuditLog::count();
@@ -120,7 +133,7 @@ class AuditSeeder extends DevSeeder
         }
     }
 
-    /** contract_accepted for each active lease (the tenant accepted it). */
+    /** contract_accepted for each lease (the tenant accepted it). */
     protected function seedContractAcceptances(): void
     {
         $contracts = Contract::orderBy('created_at')->get();
@@ -138,5 +151,73 @@ class AuditSeeder extends DevSeeder
                 'created_at' => $contract->start_date,
             ]);
         }
+    }
+
+    /** contract_terminated for the lease that was actually terminated early. */
+    protected function seedContractTermination(): void
+    {
+        $terminated = Contract::where('status', ContractStatus::TERMINATED->value)->get();
+
+        foreach ($terminated as $contract) {
+            $tenant = $contract->tenant;
+            $factory = AuditLog::factory()->aboutSubject($contract);
+            if ($tenant) {
+                $factory = $factory->forActor($tenant);
+            }
+            $factory->create([
+                'action' => 'contract_terminated',
+                'severity' => 'warning',
+                'description' => 'Lease terminated: '.($contract->termination_reason ?? 'ended by tenant.'),
+                'created_at' => $contract->end_date,
+            ]);
+        }
+    }
+
+    /** account_suspended for the suspended landlord (an admin action). */
+    protected function seedAccountSuspension(?object $admin): void
+    {
+        $landlord = $this->user('landlord.suspended');
+        if (! $landlord) {
+            return;
+        }
+
+        $factory = AuditLog::factory()->aboutSubject($landlord);
+        if ($admin) {
+            $factory = $factory->forActor($admin);
+        }
+        $factory->create([
+            'action' => 'account_suspended',
+            'severity' => 'warning',
+            'description' => 'Landlord account suspended pending review.',
+            'created_at' => now()->subDays(3),
+        ]);
+    }
+
+    /**
+     * payment_failed for the owing tenant's overdue rent — mirroring
+     * PaymentService::recordFailedPayment, which writes ONLY an audit entry (no
+     * ledger row), so this is the sole persistent record of the failed attempt.
+     */
+    protected function seedFailedPayment(): void
+    {
+        $tenant = $this->user('tenant.owing');
+        if (! $tenant) {
+            return;
+        }
+
+        $overdue = LedgerEntry::byTenant($tenant->id)
+            ->where('type', LedgerType::RENT->value)
+            ->where('status', LedgerStatus::OVERDUE->value)
+            ->first();
+        if (! $overdue) {
+            return;
+        }
+
+        AuditLog::factory()->aboutSubject($overdue)->create([
+            'action' => 'payment_failed',
+            'severity' => 'warning',
+            'description' => 'Rent payment attempt failed (card declined). No charge was made.',
+            'created_at' => now()->subDays(2),
+        ]);
     }
 }

@@ -27,13 +27,22 @@ class NotificationSeeder extends DevSeeder
         $specs = [
             // Tenants — backed by real ledger state.
             ['tenant.owing', NotificationType::RENT_OVERDUE, 'Rent overdue', "Your rent of {$cur}2,500 is overdue. Please pay to bring your account up to date.", 'unread'],
+            // Failed payment leaves NO ledger row (backend records only an audit
+            // entry + this notification) — so the owing balance stays unchanged.
+            ['tenant.owing', NotificationType::PAYMENT_FAILED, 'Payment failed', 'Your rent payment could not be processed. No charge was made — please try again.', 'unread'],
             ['tenant.good1', NotificationType::PAYMENT_SUCCEEDED, 'Payment received', "We received your rent payment of {$cur}2,800. Thank you!", 'read'],
             ['tenant.good3', NotificationType::PAYMENT_SUCCEEDED, 'Payment received', "We received your rent payment of {$cur}4,500. Thank you!", 'read'],
+            // Backed by a REAL late_fee ledger entry (10% of GH₵2,600 rent).
+            ['tenant.latefee', NotificationType::LATE_FEE_ADDED, 'Late fee added', "A late fee of {$cur}260 was added to your overdue rent.", 'unread'],
+            // Backed by a REAL terminated contract (tenant.former's lease).
+            ['tenant.former', NotificationType::CONTRACT_TERMINATED, 'Lease ended', 'Your lease at Garden Villas has been terminated. Thank you for renting with us.', 'read'],
 
             // Landlords — backed by real applications / reviews.
             ['landlord.1', NotificationType::APPLICATION_SUBMITTED, 'New application', 'A tenant applied to your available unit at Ridge Court.', 'unread'],
             ['landlord.3', NotificationType::APPLICATION_SUBMITTED, 'New application', 'A tenant applied to your available unit at Garden Villas.', 'unread'],
             ['landlord.1', NotificationType::REVIEW_SUBMITTED, 'New review', 'A tenant left a review on one of your Ridge Court units.', 'read'],
+            // Backed by a REAL suspended account.
+            ['landlord.suspended', NotificationType::ACCOUNT_SUSPENDED, 'Account suspended', 'Your account has been suspended pending review. Contact support for details.', 'unread'],
         ];
 
         $count = 0;

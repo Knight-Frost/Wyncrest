@@ -2,19 +2,25 @@
 
 namespace Tests\Feature\Seeding;
 
+use App\Enums\AccountStatus;
 use App\Enums\ContractStatus;
 use App\Enums\LedgerStatus;
 use App\Enums\LedgerType;
 use App\Enums\ListingStatus;
 use App\Enums\UserType;
+use App\Enums\VerificationStatus;
 use App\Models\Admin;
 use App\Models\Contract;
+use App\Models\Conversation;
 use App\Models\Feature;
 use App\Models\LedgerEntry;
 use App\Models\Listing;
+use App\Models\Message;
 use App\Models\Property;
+use App\Models\Review;
 use App\Models\Unit;
 use App\Models\User;
+use App\Models\VerificationRequest;
 use App\Services\PaymentService;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\Dev\SeedCatalog;
@@ -104,21 +110,28 @@ class SeedingTest extends TestCase
     {
         $this->seed(DevelopmentSeeder::class);
 
-        // Exact, controlled counts — 3 admins (1 super, 1 scoped, 1 pending
-        // invite), 5 landlords, 5 tenants.
-        $this->assertSame(3, Admin::count());
+        // Exact, controlled counts — 4 admins (1 super, 2 scoped [content +
+        // finance], 1 pending invite), 7 catalog landlords + 1 verification-queue
+        // demo landlord, 9 catalog tenants + 4 verification-queue demo tenants.
+        // The extra accounts (seeded by VerificationSeeder, not SeedCatalog) exist
+        // solely to keep the admin verification review queue non-empty in a fresh
+        // dev world — see VerificationSeeder::seedQueueDemoCases().
+        $this->assertSame(4, Admin::count());
         $this->assertSame(1, Admin::where('is_super_admin', true)->count());
+        $this->assertSame(3, Admin::where('is_super_admin', false)->count());
         $this->assertSame(1, Admin::whereNotNull('invited_at')->whereNull('invite_accepted_at')->count());
-        $this->assertSame(5, User::where('user_type', UserType::LANDLORD->value)->count());
-        $this->assertSame(5, User::where('user_type', UserType::TENANT->value)->count());
+        $this->assertSame(count(SeedCatalog::LANDLORDS) + 1, User::where('user_type', UserType::LANDLORD->value)->count());
+        $this->assertSame(count(SeedCatalog::TENANTS) + 4, User::where('user_type', UserType::TENANT->value)->count());
         $this->assertSame(count(SeedCatalog::PROPERTIES), Property::count());
         $this->assertSame(count(SeedCatalog::UNITS), Unit::count());
         $this->assertSame(count(SeedCatalog::UNITS), Listing::count());
 
-        // Exactly one active lease per occupied unit; every contract is active.
-        $leased = count(SeedCatalog::leasedUnits());
-        $this->assertSame($leased, Contract::count());
-        $this->assertSame($leased, Contract::where('status', ContractStatus::ACTIVE->value)->count());
+        // Contracts cover the full lifecycle: one per contracted unit; the active
+        // ones equal the live lease graph, plus one terminated and one expired.
+        $this->assertSame(count(SeedCatalog::contractedUnits()), Contract::count());
+        $this->assertSame(count(SeedCatalog::leasedUnits()), Contract::where('status', ContractStatus::ACTIVE->value)->count());
+        $this->assertSame(1, Contract::where('status', ContractStatus::TERMINATED->value)->count());
+        $this->assertSame(1, Contract::where('status', ContractStatus::EXPIRED->value)->count());
 
         // The listing statuses this world deliberately includes are present.
         foreach ([ListingStatus::ACTIVE, ListingStatus::PENDING_REVIEW, ListingStatus::DRAFT, ListingStatus::INACTIVE] as $status) {
@@ -130,6 +143,95 @@ class SeedingTest extends TestCase
 
         $this->assertLedgerIsConsistent();
         $this->assertTenantStanding();
+    }
+
+    public function test_development_world_seeds_messaging_with_read_and_unread(): void
+    {
+        $this->seed(DevelopmentSeeder::class);
+
+        // Three real tenant↔landlord threads, each anchored to a listing.
+        $this->assertSame(3, Conversation::count());
+        $this->assertTrue(Message::where('is_read', true)->exists(), 'Expected read messages.');
+        $this->assertTrue(Message::where('is_read', false)->exists(), 'Expected unread messages.');
+
+        // The owing tenant has an UNREAD message FROM their landlord — an unread
+        // badge is derived from is_read + sender, never a stored count.
+        $tenant = User::where('email', SeedCatalog::email('tenant.owing'))->first();
+        $landlord = User::where('email', SeedCatalog::email('landlord.2'))->first();
+        $conversation = Conversation::where('participant_one_id', $tenant->id)
+            ->where('participant_two_id', $landlord->id)->first();
+        $this->assertNotNull($conversation);
+        $this->assertSame(
+            1,
+            $conversation->messages()->where('is_read', false)->where('sender_id', $landlord->id)->count(),
+        );
+
+        // Two good tenants are deliberately left with empty inboxes (empty state).
+        foreach (['tenant.good3', 'tenant.good4'] as $key) {
+            $u = User::where('email', SeedCatalog::email($key))->first();
+            $count = Conversation::where('participant_one_id', $u->id)
+                ->orWhere('participant_two_id', $u->id)->count();
+            $this->assertSame(0, $count, "Expected {$key} to have an empty inbox.");
+        }
+    }
+
+    public function test_development_world_covers_account_and_verification_states(): void
+    {
+        $this->seed(DevelopmentSeeder::class);
+
+        // Suspended landlord: cannot log in (is_active false), status suspended.
+        $suspended = User::where('email', SeedCatalog::email('landlord.suspended'))->first();
+        $this->assertNotNull($suspended);
+        $this->assertFalse((bool) $suspended->is_active);
+        $this->assertSame(AccountStatus::SUSPENDED, $suspended->account_status);
+
+        // Pending-verification landlord: not identity-verified → hard-gated features.
+        $pending = User::where('email', SeedCatalog::email('landlord.pending'))->first();
+        $this->assertFalse($pending->identity_verified);
+        $this->assertSame(VerificationStatus::PENDING, $pending->verification_status);
+
+        // Unverified tenant: never submitted → no verification request at all.
+        $unverified = User::where('email', SeedCatalog::email('tenant.unverified'))->first();
+        $this->assertFalse($unverified->identity_verified);
+        $this->assertSame(0, VerificationRequest::where('user_id', $unverified->id)->count());
+
+        // The admin review queue is genuinely populated across every review state.
+        foreach (['pending', 'rejected', 'needs_more_information'] as $status) {
+            $this->assertTrue(
+                VerificationRequest::where('status', $status)->exists(),
+                "Expected a verification request in status {$status}.",
+            );
+        }
+    }
+
+    public function test_development_world_former_leases_are_settled_and_reviewable(): void
+    {
+        $this->seed(DevelopmentSeeder::class);
+
+        $payments = app(PaymentService::class);
+
+        // Both former leases (terminated + expired) are paid off — zero balance.
+        foreach (['tenant.former', 'tenant.expired'] as $key) {
+            $tenant = User::where('email', SeedCatalog::email($key))->first();
+            $this->assertNotNull($tenant);
+            $this->assertSame(0, $payments->getTenantBalance($tenant), "Expected {$key} to owe nothing.");
+        }
+
+        // The terminated contract carries its termination metadata (truthful record).
+        $terminated = Contract::where('status', ContractStatus::TERMINATED->value)->first();
+        $this->assertNotNull($terminated);
+        $this->assertNotNull($terminated->terminated_by);
+        $this->assertNotEmpty($terminated->termination_reason);
+
+        // A former tenant left a review (platform allows reviews on ended leases).
+        $formerContractIds = Contract::whereIn('status', [
+            ContractStatus::TERMINATED->value,
+            ContractStatus::EXPIRED->value,
+        ])->pluck('id');
+        $this->assertTrue(
+            Review::whereIn('contract_id', $formerContractIds)->exists(),
+            'Expected at least one review from a former tenant.',
+        );
     }
 
     /** Payments are negative & linked; obligations positive; balances derivable. */
@@ -165,9 +267,11 @@ class SeedingTest extends TestCase
     }
 
     /**
-     * Exactly 4 tenants in good standing (balance 0) and exactly 1 owing tenant
-     * who owes EXACTLY one month of rent via a single overdue entry — and no late
-     * fee was invented by the seeder.
+     * Good-standing tenants have balance 0: the 4 catalog good tenants, the 2
+     * former tenants (settled leases), the 1 unverified tenant (no ledger), and
+     * the 4 verification-queue demo tenants (no ledger) — 11 in all. Two tenants
+     * owe money: tenant.owing (one clean month) and tenant.latefee (one month +
+     * a real late fee). Exactly one late fee exists, raised via the real service.
      */
     protected function assertTenantStanding(): void
     {
@@ -184,25 +288,40 @@ class SeedingTest extends TestCase
             }
         }
 
-        $this->assertSame(4, $good, 'Expected exactly 4 tenants in good standing (balance 0).');
-        $this->assertSame(1, $owing, 'Expected exactly 1 tenant owing money.');
+        $this->assertSame(11, $good, 'Expected exactly 11 tenants in good standing (balance 0).');
+        $this->assertSame(2, $owing, 'Expected exactly 2 tenants owing money (owing + late-fee).');
 
-        // No late fees are ever invented by the seeder.
-        $this->assertSame(0, LedgerEntry::where('type', LedgerType::LATE_FEE->value)->count());
+        // Exactly one late fee exists, and it is on an overdue rent entry.
+        $this->assertSame(1, LedgerEntry::where('type', LedgerType::LATE_FEE->value)->count());
 
-        // The owing tenant owes exactly one month's rent, via one overdue entry.
+        // The owing tenant owes exactly one clean month's rent, via one overdue entry.
         $owingTenant = User::where('email', SeedCatalog::email('tenant.owing'))->first();
         $this->assertNotNull($owingTenant);
 
         $owingUnit = collect(SeedCatalog::leasedUnits())->firstWhere('standing', 'owing');
-        $expected = (int) round($owingUnit['rent'] * 100);
-        $this->assertSame($expected, $payments->getTenantBalance($owingTenant));
+        $this->assertSame((int) round($owingUnit['rent'] * 100), $payments->getTenantBalance($owingTenant));
 
         $this->assertSame(
             1,
             LedgerEntry::byTenant($owingTenant->id)
                 ->where('type', LedgerType::RENT->value)
                 ->where('status', LedgerStatus::OVERDUE->value)->count(),
+        );
+
+        // The late-fee tenant owes one overdue month + a 10% late fee.
+        $lateFeeTenant = User::where('email', SeedCatalog::email('tenant.latefee'))->first();
+        $this->assertNotNull($lateFeeTenant);
+
+        $lateFeeUnit = collect(SeedCatalog::leasedUnits())->firstWhere('standing', 'latefee');
+        $rentCents = (int) round($lateFeeUnit['rent'] * 100);
+        $this->assertSame(
+            $rentCents + (int) round($rentCents * 0.10),
+            $payments->getTenantBalance($lateFeeTenant),
+        );
+        $this->assertSame(
+            1,
+            LedgerEntry::byTenant($lateFeeTenant->id)
+                ->where('type', LedgerType::LATE_FEE->value)->count(),
         );
     }
 }

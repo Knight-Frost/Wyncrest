@@ -2,7 +2,6 @@
 
 namespace Database\Seeders\Dev;
 
-use App\Enums\ContractStatus;
 use App\Enums\LedgerStatus;
 use App\Enums\LedgerType;
 use App\Models\Contract;
@@ -22,14 +21,20 @@ use App\Services\LedgerService;
  * ever changed via transitionStatus(). Payments are stored as negative amounts so
  * PaymentService::getTenantBalance() (Σ obligations + Σ payments) stays correct.
  *
- * Two scenarios, taken from the catalog's per-unit `standing`:
- *   - 'good'  : every month (including the current one) is PAID → balance is 0.
- *   - 'owing' : every prior month is PAID, the latest month is left OVERDUE and
- *               unpaid → balance equals EXACTLY one month of rent.
+ * Scenarios, taken from the catalog's per-unit `standing`:
+ *   - 'good'    : every month (including the current one) is PAID → balance is 0.
+ *   - 'owing'   : every prior month is PAID, the latest month is left OVERDUE and
+ *                 unpaid → balance equals EXACTLY one month of rent (no late fee).
+ *   - 'latefee' : like 'owing', PLUS a REAL late fee raised through
+ *                 LedgerService::generateLateFee on the overdue month → balance
+ *                 equals one month of rent + the late fee.
+ *   - 'former'  : a terminated/expired lease whose every month was PAID before it
+ *                 ended → balance is 0 (a settled, closed lease history).
  *
- * No late fee is invented for the owing tenant: late fees are produced by the real
- * overdue-processing rules (LedgerService::generateLateFee, run by the scheduled
- * mark-overdue command), not by the seeder. So the owing balance is one clean month.
+ * The owing tenant gets NO late fee — that scenario is owned by 'latefee' so the
+ * two owing profiles stay distinct and each balance is traceable to its entries.
+ * Every late fee is created only through the real service (which enforces "must be
+ * overdue" and "no duplicate late fee per rent entry"), never hand-inserted.
  */
 class LedgerSeeder extends DevSeeder
 {
@@ -39,28 +44,30 @@ class LedgerSeeder extends DevSeeder
     {
         $this->ledger = app(LedgerService::class);
         $entriesBefore = LedgerEntry::count();
-        $paid = 0;
-        $owing = 0;
+        $counts = ['good' => 0, 'owing' => 0, 'latefee' => 0, 'former' => 0];
 
-        foreach (SeedCatalog::leasedUnits() as $u) {
+        foreach (SeedCatalog::contractedUnits() as $u) {
             $unit = $this->unitFromCatalog($u);
             $contract = $unit ? Contract::where('listing_id', $this->listingForUnit($unit)?->id)->first() : null;
-
-            if (! $contract || $contract->status !== ContractStatus::ACTIVE) {
+            if (! $contract) {
                 continue;
             }
 
-            if ($u['standing'] === 'owing') {
-                $this->seedOwing($contract, (int) $u['months']);
-                $owing++;
-            } else {
-                $this->seedGoodStanding($contract, (int) $u['months']);
-                $paid++;
-            }
+            match ($u['standing']) {
+                'owing' => $this->seedOwing($contract, (int) $u['months']),
+                'latefee' => $this->seedLateFee($contract, (int) $u['months']),
+                'former' => $this->seedFormerSettled($contract, (int) $u['months']),
+                default => $this->seedGoodStanding($contract, (int) $u['months']),
+            };
+            $counts[$u['standing']]++;
         }
 
         $total = LedgerEntry::count() - $entriesBefore;
-        $this->command?->info("  ✓ Ledger: {$total} immutable entries — {$paid} fully-paid leases, {$owing} owing one month.");
+        $this->command?->info(
+            "  ✓ Ledger: {$total} immutable entries — {$counts['good']} paid-to-zero, "
+            ."{$counts['owing']} owing one month, {$counts['latefee']} owing rent + late fee, "
+            ."{$counts['former']} settled former leases."
+        );
     }
 
     /**
@@ -90,6 +97,48 @@ class LedgerSeeder extends DevSeeder
             } else {
                 $this->settlePaid($entry);
             }
+        }
+    }
+
+    /**
+     * Owing one month PLUS a real late fee. Identical to seedOwing, then a late
+     * fee is raised on the overdue month through LedgerService::generateLateFee
+     * (which requires the entry to be overdue and refuses duplicates). The late
+     * fee is 10% of the monthly rent. Final balance = one month rent + late fee.
+     */
+    protected function seedLateFee(Contract $contract, int $months): void
+    {
+        $entries = $this->generateMonthlyRent($contract, $months);
+        $last = count($entries) - 1;
+        $overdueEntry = null;
+
+        foreach ($entries as $i => $entry) {
+            if ($i === $last) {
+                $entry->transitionStatus(LedgerStatus::OVERDUE);
+                $overdueEntry = $entry;
+            } else {
+                $this->settlePaid($entry);
+            }
+        }
+
+        if ($overdueEntry) {
+            $lateFeeCents = (int) round($contract->rent_amount * 0.10);
+            $this->ledger->generateLateFee($overdueEntry, $lateFeeCents);
+        }
+    }
+
+    /**
+     * A closed former lease (terminated/expired): every month the lease ran was
+     * paid in full before it ended, so the balance is 0. The lease ran exactly
+     * $months whole months, so we bill EXACTLY $months periods (no obligation
+     * beyond the lease end) and settle every one.
+     */
+    protected function seedFormerSettled(Contract $contract, int $months): void
+    {
+        // generateMonthlyRent($n) yields $n+1 entries, so ($months - 1) gives the
+        // $months periods the lease actually ran.
+        foreach ($this->generateMonthlyRent($contract, max($months - 1, 0)) as $entry) {
+            $this->settlePaid($entry);
         }
     }
 

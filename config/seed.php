@@ -42,11 +42,12 @@ return [
         // never collide with or email a real person.
         'email_domain' => env('WYNCREST_DEMO_DOMAIN', env('NEXUS_DEMO_DOMAIN', 'wyncrest.test')),
 
-        // Expected account counts for the controlled development world. These are
-        // the contract the seed + verify command enforce; the SeedCatalog defines
-        // the actual identities.
-        'tenants' => (int) env('WYNCREST_DEMO_TENANTS', env('NEXUS_DEMO_TENANTS', 5)),
-        'landlords' => (int) env('WYNCREST_DEMO_LANDLORDS', env('NEXUS_DEMO_LANDLORDS', 5)),
+        // Expected CATALOG account counts for the controlled development world
+        // (SeedCatalog::LANDLORDS / ::TENANTS). The VerificationSeeder adds a few
+        // standalone accounts on top to keep the admin review queue non-empty; the
+        // verify command accounts for those separately.
+        'tenants' => (int) env('WYNCREST_DEMO_TENANTS', env('NEXUS_DEMO_TENANTS', 9)),
+        'landlords' => (int) env('WYNCREST_DEMO_LANDLORDS', env('NEXUS_DEMO_LANDLORDS', 7)),
     ],
 
     // -------------------------------------------------------------------------

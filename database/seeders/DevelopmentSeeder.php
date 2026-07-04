@@ -11,6 +11,7 @@ use App\Models\User;
 use Database\Seeders\Dev\ApplicationSeeder;
 use Database\Seeders\Dev\AuditSeeder;
 use Database\Seeders\Dev\ContractSeeder;
+use Database\Seeders\Dev\ConversationSeeder;
 use Database\Seeders\Dev\EngagementSeeder;
 use Database\Seeders\Dev\FeatureGateSeeder;
 use Database\Seeders\Dev\LedgerSeeder;
@@ -28,16 +29,21 @@ use Illuminate\Database\Seeder;
  * DevelopmentSeeder — the controlled Wyncrest development world.
  *
  * Builds a SMALL, recognisable, fully-truthful platform so every dashboard, list
- * and analytic is meaningful — without demo noise:
- *   - 3 admins (1 super, 1 scoped, 1 pending invite), 5 landlords (incl. 1
- *     empty-state), 5 tenants (4 good + 1 owing)
- *   - 4 properties / 10 units; listings across active / pending-review / draft /
+ * and analytic is meaningful — without demo noise. Each account exists to exercise
+ * a specific scenario (see docs/SEEDED_SCENARIOS.md):
+ *   - 4 admins (1 super, 2 scoped [content + finance], 1 pending invite);
+ *     7 landlords (4 operating + 1 empty-state + 1 pending-verification +
+ *     1 suspended); 9 tenants (4 good + 1 owing + 1 owing-with-late-fee +
+ *     2 former [terminated/expired] + 1 unverified)
+ *   - 4 properties / 13 units; listings across active / pending-review / draft /
  *     inactive so browse, the moderation queue and occupied units are testable
- *   - 5 active leases with an immutable, mathematically-consistent ledger: four
- *     tenants paid to zero, one owing EXACTLY one month (no invented late fee)
- *   - verification records, feature gates, a couple of live applications, one
- *     maintenance request per lease, a few reviews, and notifications/audit rows
- *     that every map back to a real seeded event
+ *   - 8 leases (6 active + 1 terminated + 1 expired) with an immutable,
+ *     mathematically-consistent ledger: paid-to-zero, one owing EXACTLY one month,
+ *     one owing rent + a REAL late fee, and two settled former leases
+ *   - verification records (incl. pending/needs-info/rejected), feature gates,
+ *     live applications, maintenance, reviews (incl. from a former tenant),
+ *     messaging threads (read/unread), and notifications/audit rows that every
+ *     map back to a real seeded event
  *
  * All data is obviously demo (fictional names, @wyncrest.test emails, shared
  * password). Each focused sub-seeder owns one slice and reads its prerequisites
@@ -51,18 +57,19 @@ class DevelopmentSeeder extends Seeder
      */
     private const PIPELINE = [
         ReferenceDataSeeder::class,   // shared feature definitions
-        UserSeeder::class,            // 3 admins (super/scoped/pending), 5 landlords, 5 tenants
+        UserSeeder::class,            // 4 admins (super/2 scoped/pending), 7 landlords, 9 tenants
         VerificationSeeder::class,    // identity verification requests + statuses
-        FeatureGateSeeder::class,     // per-landlord feature access (full/limited)
-        PropertySeeder::class,        // 4 properties + 10 units
+        FeatureGateSeeder::class,     // per-landlord feature access (full/limited/none)
+        PropertySeeder::class,        // 4 properties + 13 units
         ListingSeeder::class,         // listings: active/pending_review/draft/inactive
         ApplicationSeeder::class,     // approved histories + a few live applicants
-        ContractSeeder::class,        // 5 active leases
-        LedgerSeeder::class,          // immutable ledger: 4 paid-to-zero, 1 owing one month
+        ContractSeeder::class,        // 8 leases: 6 active + 1 terminated + 1 expired
+        LedgerSeeder::class,          // immutable ledger: paid-to-zero, owing, late fee, former
         MaintenanceSeeder::class,     // one maintenance request per active lease
         ReviewSeeder::class,          // reviews (approved/pending/rejected + responses)
         NotificationSeeder::class,    // in-app notifications tied to real events
         EngagementSeeder::class,      // saved listings, email logs, media metadata
+        ConversationSeeder::class,    // tenant↔landlord messaging threads (read/unread)
         AuditSeeder::class,           // privileged audit activity tied to real state
     ];
 
@@ -122,9 +129,10 @@ class DevelopmentSeeder extends Seeder
         $this->command->table(['Entity', 'Count'], $counts);
 
         $out->writeln("  <comment>Demo logins</comment> (local development only), password: <info>{$password}</info>");
-        $out->writeln('  <comment>Admins</comment> (3 records: 2 active logins, 1 pending invite)');
+        $out->writeln('  <comment>Admins</comment> (4 records: 3 active logins, 1 pending invite)');
         $out->writeln('    '.str_pad(SeedCatalog::email('admin'), 30).'super admin, full access');
-        $out->writeln('    '.str_pad(SeedCatalog::email('reviewer'), 30).'scoped admin (verifications, listings, reviews, audit log)');
+        $out->writeln('    '.str_pad(SeedCatalog::email('reviewer'), 30).'scoped admin — content (verifications, listings, reviews, audit)');
+        $out->writeln('    '.str_pad(SeedCatalog::email('finance'), 30).'scoped admin — finance (contracts, ledger, analytics, audit)');
         $out->writeln('    '.str_pad(SeedCatalog::email('pending.admin'), 30).'pending invite, not an active login');
 
         $out->writeln('  <comment>Landlords</comment>');
@@ -134,7 +142,13 @@ class DevelopmentSeeder extends Seeder
 
         $out->writeln('  <comment>Tenants</comment>');
         foreach (SeedCatalog::TENANTS as $t) {
-            $status = $t['standing'] === 'owing' ? 'owes exactly one month' : 'good standing (paid up)';
+            $status = match ($t['standing']) {
+                'owing' => 'owes exactly one month',
+                'latefee' => 'owes one month + a late fee',
+                'former' => 'former tenant (lease ended, paid up)',
+                null => 'unverified, no lease (empty state)',
+                default => 'good standing (paid up)',
+            };
             $out->writeln('    '.str_pad(SeedCatalog::email($t['key']), 30).$status);
         }
 

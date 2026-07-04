@@ -34,10 +34,13 @@ class ReviewSeeder extends DevSeeder
     {
         $adminId = $this->superAdmin()?->id;
 
-        // Eligible contracts: a tenant may review an active/terminated/expired lease.
-        // This world only uses active leases, so reviews come from current tenants.
-        $contracts = Contract::where('status', ContractStatus::ACTIVE->value)
-            ->orderBy('created_at')->get();
+        // Eligible contracts: a tenant may review an active/terminated/expired lease
+        // — so both current tenants and the two former tenants can leave a review.
+        $contracts = Contract::whereIn('status', [
+            ContractStatus::ACTIVE->value,
+            ContractStatus::TERMINATED->value,
+            ContractStatus::EXPIRED->value,
+        ])->orderBy('created_at')->get();
 
         $count = 0;
         foreach ($contracts as $i => $contract) {

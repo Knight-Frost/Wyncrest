@@ -13,12 +13,15 @@ namespace Database\Seeders\Dev;
  * stable graph that the developer can recognise account-by-account.
  *
  * The world it describes:
- *   - 3 admins (seeded in UserSeeder): 1 super, 1 scoped, 1 pending invite
- *   - 5 landlords (4 operating + 1 deliberate empty-state account)
- *   - 5 tenants   (4 in good standing + 1 who owes exactly one month of rent)
- *   - 4 properties / 10 units, with listings spanning active / pending-review /
+ *   - 4 admins (seeded in UserSeeder): 1 super, 2 scoped (content + finance),
+ *     1 pending invite
+ *   - 7 landlords (4 operating + 1 empty-state + 1 pending-verification +
+ *     1 suspended)
+ *   - 9 tenants   (4 good standing + 1 owing one month + 1 owing rent & a late
+ *     fee + 2 former tenants [1 terminated, 1 expired] + 1 unverified)
+ *   - 4 properties / 13 units, with listings spanning active / pending-review /
  *     draft / inactive so browse, the moderation queue and occupied units are all
- *     testable.
+ *     testable. Contracts span active / terminated / expired.
  *
  * Money is expressed in GH₵ major units here and converted to integer cents where
  * the schema stores cents (contracts/ledger). Demo users are referenced everywhere
@@ -41,11 +44,16 @@ class SeedCatalog
      * It is named obviously so it is never mistaken for missing data.
      */
     public const LANDLORDS = [
-        ['key' => 'landlord.1', 'first' => 'Kwame', 'last' => 'Mensah', 'city' => 'Accra', 'verification' => 'verified', 'account' => 'active', 'features' => 'full', 'purpose' => 'Established landlord — 1 property, 2 active tenants, an available listing'],
-        ['key' => 'landlord.2', 'first' => 'Ama', 'last' => 'Owusu', 'city' => 'Accra', 'verification' => 'verified', 'account' => 'active', 'features' => 'full', 'purpose' => 'Landlord of the owing tenant — 1 property, 2 active tenants, a listing in review'],
-        ['key' => 'landlord.3', 'first' => 'Kofi', 'last' => 'Asante', 'city' => 'Kumasi', 'verification' => 'verified', 'account' => 'active', 'features' => 'full', 'purpose' => 'Smaller landlord — 1 property, 1 active tenant, an available listing'],
+        ['key' => 'landlord.1', 'first' => 'Kwame', 'last' => 'Mensah', 'city' => 'Accra', 'verification' => 'verified', 'account' => 'active', 'features' => 'full', 'purpose' => 'Established landlord — 1 property, active + former tenants, an available listing'],
+        ['key' => 'landlord.2', 'first' => 'Ama', 'last' => 'Owusu', 'city' => 'Accra', 'verification' => 'verified', 'account' => 'active', 'features' => 'full', 'purpose' => 'Landlord of the owing + late-fee tenants — 1 property, active tenants, a listing in review'],
+        ['key' => 'landlord.3', 'first' => 'Kofi', 'last' => 'Asante', 'city' => 'Kumasi', 'verification' => 'verified', 'account' => 'active', 'features' => 'full', 'purpose' => 'Smaller landlord — 1 property, 1 active tenant + 1 terminated lease, an available listing'],
         ['key' => 'landlord.4', 'first' => 'Akosua', 'last' => 'Boateng', 'city' => 'Tema', 'verification' => 'verified', 'account' => 'active', 'features' => 'limited', 'purpose' => 'Listings-only landlord (limited features) — listings but no tenants yet'],
         ['key' => 'landlord.empty', 'first' => 'Yaw', 'last' => 'Darko', 'city' => 'Takoradi', 'verification' => 'verified', 'account' => 'active', 'features' => 'full', 'purpose' => 'EMPTY-STATE account — verified, full features, but no properties (tests empty dashboards)'],
+
+        // --- Edge-state landlords (no properties, so they never ripple into the
+        //     property/listing/contract/ledger graph) --------------------------
+        ['key' => 'landlord.pending', 'first' => 'Kojo', 'last' => 'Ansah', 'city' => 'Accra', 'verification' => 'pending', 'account' => 'active', 'features' => 'none', 'purpose' => 'PENDING VERIFICATION — no features, blocked from submitting a listing (tests the identity hard-gate + admin verification queue)'],
+        ['key' => 'landlord.suspended', 'first' => 'Abena', 'last' => 'Quaye', 'city' => 'Accra', 'verification' => 'verified', 'account' => 'suspended', 'features' => 'none', 'purpose' => 'SUSPENDED ACCOUNT — verified but suspended, login is rejected (tests account governance + admin reactivate)'],
     ];
 
     /**
@@ -60,6 +68,20 @@ class SeedCatalog
         ['key' => 'tenant.good3', 'first' => 'Kwesi', 'last' => 'Mensa', 'city' => 'Accra', 'verification' => 'verified', 'account' => 'active', 'standing' => 'good'],
         ['key' => 'tenant.good4', 'first' => 'Adjoa', 'last' => 'Frimpong', 'city' => 'Kumasi', 'verification' => 'verified', 'account' => 'active', 'standing' => 'good'],
         ['key' => 'tenant.owing', 'first' => 'Selorm', 'last' => 'Agbeko', 'city' => 'Accra', 'verification' => 'verified', 'account' => 'active', 'standing' => 'owing'],
+
+        // --- Edge-state tenants -------------------------------------------------
+        // latefee : active lease, one overdue month + a REAL late fee (seeded via
+        //           LedgerService::generateLateFee) — owes rent + late fee.
+        ['key' => 'tenant.latefee', 'first' => 'Yaw', 'last' => 'Owusu-Ansah', 'city' => 'Accra', 'verification' => 'verified', 'account' => 'active', 'standing' => 'latefee'],
+        // former  : a TERMINATED lease, paid to zero before leaving — tests the
+        //           former-tenant view + a review from a past tenant.
+        ['key' => 'tenant.former', 'first' => 'Akua', 'last' => 'Nyarko', 'city' => 'Kumasi', 'verification' => 'verified', 'account' => 'active', 'standing' => 'former'],
+        // expired : an EXPIRED lease (ran its full term), paid to zero — tests the
+        //           expired-contract lifecycle end.
+        ['key' => 'tenant.expired', 'first' => 'Kojo', 'last' => 'Addai', 'city' => 'Accra', 'verification' => 'verified', 'account' => 'active', 'standing' => 'former'],
+        // unverified : never verified, no lease — tests the application hard-gate
+        //              and tenant empty states (no lease / no applications).
+        ['key' => 'tenant.unverified', 'first' => 'Esi', 'last' => 'Bonsu', 'city' => 'Accra', 'verification' => 'unverified', 'account' => 'active', 'standing' => null],
     ];
 
     /**
@@ -80,12 +102,15 @@ class SeedCatalog
      *
      * listing:      draft | pending_review | active | inactive
      *               (occupied units carry an INACTIVE listing — taken off-market;
-     *                available units carry active/pending_review/draft)
+     *                available units carry active/pending_review/draft; a unit whose
+     *                lease ended is re-listed active while it looks for a new tenant)
      * availability: available | occupied | unlisted
-     * contract:     null | active   (this world only uses active leases)
+     * contract:     null | active | terminated | expired
      * tenant:       TENANTS key (when contract is set)
-     * months:       active-contract age in months — i.e. how much paid history
-     * standing:     'good' | 'owing' (only meaningful when contract is set)
+     * months:       lease age/length in months — how much paid history to build
+     * standing:     'good' | 'owing' | 'latefee' | 'former' (meaningful when leased)
+     *               good=paid to zero, owing=one overdue month, latefee=one overdue
+     *               month + a real late fee, former=fully paid then the lease ended
      */
     public const UNITS = [
         // --- Ridge Court (landlord.1): two occupied + one available -------------
@@ -105,6 +130,16 @@ class SeedCatalog
         // --- Tema Residences (landlord.4, limited features): listings only -----
         ['type' => 'Co-living suite', 'property' => 'tema-residences', 'number' => 'CL-25', 'bedrooms' => 1, 'bathrooms' => 1, 'sqft' => 350, 'rent' => 3500, 'deposit' => 3500, 'amenities' => ['Shared lounge', 'Co-working space', 'Wi-Fi', 'Cleaning'], 'listing' => 'active', 'availability' => 'available', 'contract' => null, 'tenant' => null, 'months' => 0, 'standing' => null],
         ['type' => 'Serviced apartment', 'property' => 'tema-residences', 'number' => 'SV-11', 'bedrooms' => 1, 'bathrooms' => 1, 'sqft' => 800, 'rent' => 4000, 'deposit' => 4000, 'amenities' => ['Housekeeping', 'Gym', 'Wi-Fi'], 'listing' => 'draft', 'availability' => 'unlisted', 'contract' => null, 'tenant' => null, 'months' => 0, 'standing' => null],
+
+        // --- Edge-state leases (financial + contract-lifecycle coverage) --------
+        // Late-fee lease: occupied by the late-fee tenant. Off-market (inactive
+        // listing) like the other occupied units. Balance = one overdue month + fee.
+        ['type' => 'Two-bedroom apartment', 'property' => 'harbour-view', 'number' => 'GA-06', 'bedrooms' => 2, 'bathrooms' => 2, 'sqft' => 980, 'rent' => 2600, 'deposit' => 5200, 'amenities' => ['Air conditioning', 'Parking', 'Security'], 'listing' => 'inactive', 'availability' => 'occupied', 'contract' => 'active', 'tenant' => 'tenant.latefee', 'months' => 3, 'standing' => 'latefee'],
+        // Terminated lease: the tenant left early; the unit is back on the market
+        // (available + active listing) and carries its historical terminated contract.
+        ['type' => 'Townhouse', 'property' => 'garden-villas', 'number' => 'TH-C', 'bedrooms' => 3, 'bathrooms' => 2, 'sqft' => 1750, 'rent' => 5500, 'deposit' => 11000, 'amenities' => ['Garage', 'Private garden', 'Security'], 'listing' => 'active', 'availability' => 'available', 'contract' => 'terminated', 'tenant' => 'tenant.former', 'months' => 5, 'standing' => 'former'],
+        // Expired lease: a full 12-month term that ran its course; unit re-listed.
+        ['type' => 'One-bedroom apartment', 'property' => 'ridge-court', 'number' => '1B-08', 'bedrooms' => 1, 'bathrooms' => 1, 'sqft' => 620, 'rent' => 2900, 'deposit' => 5800, 'amenities' => ['Air conditioning', 'Fibre internet', 'Security'], 'listing' => 'active', 'availability' => 'available', 'contract' => 'expired', 'tenant' => 'tenant.expired', 'months' => 12, 'standing' => 'former'],
     ];
 
     /**
@@ -134,12 +169,34 @@ class SeedCatalog
         return $key.'@'.config('seed.development.email_domain', 'wyncrest.test');
     }
 
-    /** All occupied units that carry an active contract (the lease graph). */
+    /** All occupied units that carry an ACTIVE contract (the live lease graph). */
     public static function leasedUnits(): array
     {
         return array_values(array_filter(
             self::UNITS,
             fn (array $u) => $u['contract'] === 'active' && $u['tenant'] !== null,
+        ));
+    }
+
+    /**
+     * Every unit that carries a contract in ANY lifecycle state — active AND
+     * historical (terminated/expired). Used by the contract/ledger/application/
+     * review seeders, which must build history for former leases too.
+     */
+    public static function contractedUnits(): array
+    {
+        return array_values(array_filter(
+            self::UNITS,
+            fn (array $u) => $u['contract'] !== null && $u['tenant'] !== null,
+        ));
+    }
+
+    /** Units whose lease has ENDED (terminated or expired) — former tenants. */
+    public static function formerLeaseUnits(): array
+    {
+        return array_values(array_filter(
+            self::UNITS,
+            fn (array $u) => in_array($u['contract'], ['terminated', 'expired'], true) && $u['tenant'] !== null,
         ));
     }
 }
