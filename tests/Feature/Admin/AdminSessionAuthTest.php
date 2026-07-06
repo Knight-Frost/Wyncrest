@@ -213,4 +213,72 @@ class AdminSessionAuthTest extends TestCase
 
         $this->assertTrue(Hash::check('NewPassw0rd', $admin->fresh()->password));
     }
+
+    // ---- Self-service profile edit (name + email) ------------------------
+
+    public function test_scoped_admin_can_update_their_own_name_and_email(): void
+    {
+        $admin = $this->scopedAdmin(['view_audit']);
+
+        $this->actingAs($admin, 'admin')
+            ->patchJson('/api/admin/profile', [
+                'name' => 'Updated Name',
+                'email' => 'updated@wyncrest.test',
+            ])
+            ->assertOk()
+            ->assertJsonPath('user.name', 'Updated Name')
+            ->assertJsonPath('user.email', 'updated@wyncrest.test');
+
+        $admin->refresh();
+        $this->assertSame('Updated Name', $admin->name);
+        $this->assertSame('updated@wyncrest.test', $admin->email);
+    }
+
+    public function test_super_admin_can_update_their_own_name_and_email(): void
+    {
+        $admin = $this->superAdmin();
+
+        $this->actingAs($admin, 'admin')
+            ->patchJson('/api/admin/profile', [
+                'name' => 'New Super Name',
+                'email' => 'newsuper@wyncrest.test',
+            ])
+            ->assertOk()
+            ->assertJsonPath('user.name', 'New Super Name')
+            ->assertJsonPath('user.email', 'newsuper@wyncrest.test');
+    }
+
+    public function test_profile_update_rejects_email_already_used_by_another_admin(): void
+    {
+        $admin = $this->superAdmin();
+        $other = Admin::factory()->create(['email' => 'taken@wyncrest.test']);
+
+        $this->actingAs($admin, 'admin')
+            ->patchJson('/api/admin/profile', [
+                'name' => $admin->name,
+                'email' => $other->email,
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('email');
+    }
+
+    public function test_profile_update_allows_keeping_the_same_email(): void
+    {
+        $admin = $this->superAdmin();
+
+        $this->actingAs($admin, 'admin')
+            ->patchJson('/api/admin/profile', [
+                'name' => 'Same Email Admin',
+                'email' => $admin->email,
+            ])
+            ->assertOk();
+    }
+
+    public function test_profile_update_is_401_for_guest(): void
+    {
+        $this->patchJson('/api/admin/profile', [
+            'name' => 'Nope',
+            'email' => 'nope@wyncrest.test',
+        ])->assertStatus(401);
+    }
 }

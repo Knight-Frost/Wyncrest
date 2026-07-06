@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\Admin;
+use App\Services\AuditService;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -20,6 +21,8 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class EnsureAdminCan
 {
+    public function __construct(private readonly AuditService $auditService) {}
+
     public function handle(Request $request, Closure $next, string $capability): Response
     {
         $user = $request->user();
@@ -35,6 +38,17 @@ class EnsureAdminCan
         }
 
         if (! $user->hasCapability($capability)) {
+            // Real signal for the Super Admin Analytics "failed access attempts"
+            // metric — a scoped admin reaching for something outside their
+            // granted capabilities is worth a durable, auditable record.
+            $this->auditService->log(
+                actor: $user,
+                action: 'admin_access_denied',
+                description: "{$user->name} attempted to access a route requiring the '{$capability}' capability, which they do not hold.",
+                metadata: ['required_capability' => $capability, 'path' => $request->path()],
+                severity: 'warning',
+            );
+
             return response()->json([
                 'message' => 'You do not have permission to perform this action.',
                 'required_capability' => $capability,

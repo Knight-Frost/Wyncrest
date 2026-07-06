@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { brand } from '@/config/brand';
 import { useAuth } from '@/context/auth';
 import { useApi } from '@/hooks/useApi';
-import { tenantApi } from '@/lib/endpoints';
+import { authApi, tenantApi } from '@/lib/endpoints';
 import { fieldErrors } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { Donut } from '@/components/ui/charts';
@@ -211,8 +211,7 @@ function VerificationCard({ verified }: { verified: boolean }) {
       </div>
       {!verified && (
         <div className="ac-vactions">
-          <button className="ac-btn ac-btn-primary">Continue verification</button>
-          <button className="ac-link">Learn more <IconChevronRight size={14} /></button>
+          <Link to="/app/verification" className="ac-btn ac-btn-primary">Continue verification</Link>
         </div>
       )}
     </div>
@@ -496,43 +495,111 @@ function TenantProfileView() {
   );
 }
 
-/* ── Non-tenant (landlord / admin) read-only view ────────────────────────── */
-function NonTenantProfileView() {
-  const { user } = useAuth();
-  if (!user) return null;
+/* ── AdminAccountForm (admins & super admins can edit their own identity) ─── */
+function adminFieldStyle(hasError: boolean): React.CSSProperties {
+  return {
+    display: 'block',
+    width: '100%',
+    marginTop: 4,
+    padding: '9px 12px',
+    borderRadius: 'var(--radius-xl)',
+    border: hasError ? '1.5px solid var(--color-danger-600)' : '1px solid var(--color-ink-300)',
+    fontSize: 14,
+    color: 'var(--color-ink-900)',
+    background: 'var(--color-surface)',
+    fontFamily: 'var(--font-sans)',
+    boxSizing: 'border-box',
+  };
+}
 
-  const name = 'full_name' in user ? user.full_name : user.name;
-  const email = user.email;
-  const phone = 'phone' in user ? user.phone ?? null : null;
-  const role = user.role;
-  const verified = 'identity_verified' in user ? user.identity_verified : false;
-  const memberSince = 'created_at' in user ? formatDate(user.created_at) : '—';
+function AdminAccountForm({
+  name,
+  email,
+  phone,
+  role,
+  memberSince,
+  verified,
+}: {
+  name: string;
+  email: string;
+  phone: string | null;
+  role: string;
+  memberSince: string;
+  verified: boolean;
+}) {
+  const { toast } = useToast();
+  const { updateUser } = useAuth();
+  const [form, setForm] = useState({ name, email });
+  const [saving, setSaving] = useState(false);
+  const [ferrors, setFerrors] = useState<Record<string, string>>({});
+
+  function set(key: 'name' | 'email', value: string) {
+    setForm((f) => ({ ...f, [key]: value }));
+    setFerrors((e) => { const n = { ...e }; delete n[key]; return n; });
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setFerrors({});
+    try {
+      const admin = await authApi.adminUpdateProfile({ name: form.name, email: form.email });
+      updateUser({ ...admin, role: 'admin' });
+      toast('Profile updated', 'success');
+    } catch (err) {
+      const fe = fieldErrors(err as ApiError);
+      if (Object.keys(fe).length) {
+        setFerrors(fe);
+      } else {
+        toast((err as ApiError).message ?? 'Could not save profile', 'error');
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
-    <div className="ac-main">
-      <IdentityCard
-        name={name}
-        abbrev={initials(name)}
-        avatarUrl={'avatar_url' in user ? user.avatar_url : null}
-        email={email}
-        phone={phone}
-        role={role}
-        memberSince={memberSince}
-        verified={verified}
-      />
-
+    <form onSubmit={handleSubmit}>
       <div className="ac-card">
         <div className="ac-card-head">
           <h2 className="ac-card-title">Account details</h2>
+          <button type="submit" className="ac-btn ac-btn-primary ac-btn-sm" disabled={saving}>
+            {saving ? 'Saving…' : 'Save changes'}
+          </button>
         </div>
         <div className="ac-fields">
           <div className="ac-field">
-            <div className="ac-field-lab">Full name</div>
-            <div className="ac-field-val">{name}</div>
+            <label className="ac-field-lab" htmlFor="ap-name">Full name</label>
+            <input
+              id="ap-name"
+              type="text"
+              value={form.name}
+              onChange={(e) => set('name', e.target.value)}
+              style={adminFieldStyle(!!ferrors.name)}
+              aria-describedby={ferrors.name ? 'ap-name-err' : undefined}
+            />
+            {ferrors.name && (
+              <p id="ap-name-err" role="alert" style={{ fontSize: 12, color: 'var(--color-danger-600)', marginTop: 3 }}>
+                {ferrors.name}
+              </p>
+            )}
           </div>
           <div className="ac-field">
-            <div className="ac-field-lab">Email address</div>
-            <div className="ac-field-val">{email}</div>
+            <label className="ac-field-lab" htmlFor="ap-email">Email address</label>
+            <input
+              id="ap-email"
+              type="email"
+              value={form.email}
+              onChange={(e) => set('email', e.target.value)}
+              style={adminFieldStyle(!!ferrors.email)}
+              aria-describedby={ferrors.email ? 'ap-email-err' : undefined}
+            />
+            {ferrors.email && (
+              <p id="ap-email-err" role="alert" style={{ fontSize: 12, color: 'var(--color-danger-600)', marginTop: 3 }}>
+                {ferrors.email}
+              </p>
+            )}
           </div>
           {phone && (
             <div className="ac-field">
@@ -558,6 +625,84 @@ function NonTenantProfileView() {
           </div>
         </div>
       </div>
+    </form>
+  );
+}
+
+/* ── Non-tenant (landlord / admin) profile view ──────────────────────────── */
+function NonTenantProfileView() {
+  const { user } = useAuth();
+  if (!user) return null;
+
+  const name = 'full_name' in user ? user.full_name : user.name;
+  const email = user.email;
+  const phone = 'phone' in user ? user.phone ?? null : null;
+  const role = user.role;
+  const verified = 'identity_verified' in user ? user.identity_verified : false;
+  const memberSince = 'created_at' in user ? formatDate(user.created_at) : '—';
+  const isAdmin = role === 'admin';
+
+  return (
+    <div className="ac-main">
+      <IdentityCard
+        name={name}
+        abbrev={initials(name)}
+        avatarUrl={'avatar_url' in user ? user.avatar_url : null}
+        email={email}
+        phone={phone}
+        role={role}
+        memberSince={memberSince}
+        verified={verified}
+      />
+
+      {isAdmin ? (
+        <AdminAccountForm
+          name={name}
+          email={email}
+          phone={phone}
+          role={role}
+          memberSince={memberSince}
+          verified={verified}
+        />
+      ) : (
+        <div className="ac-card">
+          <div className="ac-card-head">
+            <h2 className="ac-card-title">Account details</h2>
+          </div>
+          <div className="ac-fields">
+            <div className="ac-field">
+              <div className="ac-field-lab">Full name</div>
+              <div className="ac-field-val">{name}</div>
+            </div>
+            <div className="ac-field">
+              <div className="ac-field-lab">Email address</div>
+              <div className="ac-field-val">{email}</div>
+            </div>
+            {phone && (
+              <div className="ac-field">
+                <div className="ac-field-lab">Phone</div>
+                <div className="ac-field-val">{phone}</div>
+              </div>
+            )}
+            <div className="ac-field">
+              <div className="ac-field-lab">Role</div>
+              <div className="ac-field-val" style={{ textTransform: 'capitalize' }}>{role}</div>
+            </div>
+            <div className="ac-field">
+              <div className="ac-field-lab">Member since</div>
+              <div className="ac-field-val">{memberSince}</div>
+            </div>
+            <div className="ac-field">
+              <div className="ac-field-lab">Identity</div>
+              <div className="ac-field-val">
+                {verified
+                  ? <SemanticBadge role="success">Verified</SemanticBadge>
+                  : <SemanticBadge role="neutral">Not verified</SemanticBadge>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="ac-card">
         <div className="ac-mini-row">
@@ -582,7 +727,7 @@ export function ProfilePage() {
 
   return (
     <div className="ac-page">
-      <div>
+      <div className="ac-card ac-hero">
         <p className="ac-eyebrow">Account</p>
         <h1 className="ac-title">Profile</h1>
         <p className="ac-sub">Manage your personal details and identity information.</p>

@@ -142,6 +142,121 @@ class AdminUserManagementTest extends TestCase
             ->assertJsonPath('user.id', $landlord->id);
     }
 
+    public function test_index_returns_segment_counts(): void
+    {
+        User::factory()->landlord()->identityVerified()->count(2)->create();
+        User::factory()->landlord()->create(['identity_verified' => false]);
+        User::factory()->tenant()->count(3)->create(['identity_verified' => false]);
+
+        $this->actingAs($this->admin, 'admin');
+
+        $response = $this->getJson('/api/admin/users');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('counts.all', 6)
+            ->assertJsonPath('counts.landlords', 3)
+            ->assertJsonPath('counts.tenants', 3)
+            // "needs review" = no verified identity (1 landlord + 3 tenants)
+            ->assertJsonPath('counts.unverified', 4);
+    }
+
+    public function test_index_segment_counts_are_global_not_filtered(): void
+    {
+        User::factory()->landlord()->identityVerified()->count(2)->create();
+        User::factory()->tenant()->count(3)->create(['identity_verified' => false]);
+
+        $this->actingAs($this->admin, 'admin');
+
+        // Even when the list is narrowed to landlords, the tiles show the
+        // platform-wide totals so they never lie about the whole population.
+        $response = $this->getJson('/api/admin/users?type=landlord');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('total', 2)          // list is filtered
+            ->assertJsonPath('counts.all', 5)     // counts are global
+            ->assertJsonPath('counts.tenants', 3);
+    }
+
+    public function test_index_unverified_status_filter(): void
+    {
+        User::factory()->tenant()->identityVerified()->count(2)->create();
+        User::factory()->tenant()->create(['identity_verified' => false]);
+
+        $this->actingAs($this->admin, 'admin');
+
+        $this->getJson('/api/admin/users?status=unverified')
+            ->assertStatus(200)
+            ->assertJsonPath('total', 1);
+    }
+
+    public function test_index_sort_by_name(): void
+    {
+        User::factory()->tenant()->create(['first_name' => 'Zara', 'last_name' => 'Zed']);
+        User::factory()->tenant()->create(['first_name' => 'Abena', 'last_name' => 'Ackah']);
+
+        $this->actingAs($this->admin, 'admin');
+
+        $this->getJson('/api/admin/users?sort=name')
+            ->assertStatus(200)
+            ->assertJsonPath('data.0.first_name', 'Abena');
+    }
+
+    public function test_index_archived_filter_includes_soft_deleted(): void
+    {
+        $user = User::factory()->tenant()->create(['account_status' => 'archived']);
+        $user->delete(); // soft delete — only reachable via withTrashed()
+
+        User::factory()->tenant()->count(2)->create();
+
+        $this->actingAs($this->admin, 'admin');
+
+        // Default list excludes the soft-deleted archived user…
+        $this->getJson('/api/admin/users')
+            ->assertStatus(200)
+            ->assertJsonPath('total', 2);
+
+        // …but the archived filter surfaces it.
+        $this->getJson('/api/admin/users?status=archived')
+            ->assertStatus(200)
+            ->assertJsonPath('total', 1)
+            ->assertJsonPath('data.0.id', $user->id);
+    }
+
+    public function test_show_includes_verification_and_landlord_rating(): void
+    {
+        $landlord = User::factory()->landlord()->identityVerified()->create();
+        $property = Property::factory()->create(['landlord_id' => $landlord->id]);
+
+        \App\Models\Review::factory()->approved()->create([
+            'landlord_id' => $landlord->id,
+            'property_id' => $property->id,
+            'rating' => 4,
+        ]);
+        \App\Models\Review::factory()->approved()->create([
+            'landlord_id' => $landlord->id,
+            'property_id' => $property->id,
+            'rating' => 5,
+        ]);
+        // A pending review must NOT count toward the average.
+        \App\Models\Review::factory()->create([
+            'landlord_id' => $landlord->id,
+            'property_id' => $property->id,
+            'rating' => 1,
+        ]);
+
+        $this->actingAs($this->admin, 'admin');
+
+        $this->getJson("/api/admin/users/{$landlord->id}")
+            ->assertStatus(200)
+            ->assertJsonStructure([
+                'verification' => ['identity_verified', 'email_verified', 'latest_request'],
+                'stats' => ['rating', 'review_count'],
+            ])
+            ->assertJsonPath('verification.identity_verified', true)
+            ->assertJsonPath('stats.rating', 4.5) // (4+5)/2, pending excluded
+            ->assertJsonPath('stats.review_count', 2);
+    }
+
     public function test_admin_can_suspend_a_user(): void
     {
         $user = User::factory()->tenant()->create();
@@ -236,6 +351,7 @@ class AdminUserManagementTest extends TestCase
         $landlord = User::factory()->landlord()->create();
         Sanctum::actingAs($landlord, [], 'sanctum');
 
+        // A landlord bearer identity is unauthenticated on the admin session guard.
         $this->getJson('/api/admin/users')->assertStatus(401);
     }
 
@@ -250,6 +366,39 @@ class AdminUserManagementTest extends TestCase
     public function test_admin_user_management_requires_authentication(): void
     {
         $this->getJson('/api/admin/users')->assertStatus(401);
+    }
+
+    public function test_scoped_admin_without_manage_users_can_still_view_roster(): void
+    {
+        User::factory()->tenant()->count(2)->create();
+        $scoped = Admin::factory()->create(['is_super_admin' => false, 'capabilities' => []]);
+        $this->actingAs($scoped, 'admin');
+
+        $this->getJson('/api/admin/users')->assertOk();
+    }
+
+    public function test_scoped_admin_without_manage_users_cannot_suspend(): void
+    {
+        $user = User::factory()->tenant()->create();
+        $scoped = Admin::factory()->create(['is_super_admin' => false, 'capabilities' => []]);
+        $this->actingAs($scoped, 'admin');
+
+        $this->postJson("/api/admin/users/{$user->id}/suspend", ['reason' => 'test'])
+            ->assertStatus(403)->assertJsonPath('required_capability', 'manage_users');
+
+        $this->assertTrue($user->fresh()->is_active);
+    }
+
+    public function test_scoped_admin_with_manage_users_can_suspend(): void
+    {
+        $user = User::factory()->tenant()->create();
+        $scoped = Admin::factory()->create(['is_super_admin' => false, 'capabilities' => ['manage_users']]);
+        $this->actingAs($scoped, 'admin');
+
+        $this->postJson("/api/admin/users/{$user->id}/suspend", ['reason' => 'Suspended for a policy review.'])
+            ->assertOk();
+
+        $this->assertFalse($user->fresh()->is_active);
     }
 
     /**

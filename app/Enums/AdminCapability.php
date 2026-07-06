@@ -57,14 +57,16 @@ enum AdminCapability: string
     {
         return match ($this) {
             self::MANAGE_ACCESS => 'Open this page and manage the admin team',
-            self::MANAGE_USERS => 'Suspend, restore, block or archive tenants & landlords',
+            self::MANAGE_USERS => 'Suspend, restore, block or archive tenants & landlords (every admin can already view the roster)',
             self::REVIEW_VERIFICATIONS => 'Approve or reject identity verification requests',
             self::MODERATE_LISTINGS => 'Approve or reject listings in the review queue',
             self::MODERATE_REVIEWS => 'Moderate tenant reviews of properties',
-            self::MANAGE_FEATURES => 'Enable or disable per-landlord platform features',
+            // why: manage_features IS enforced on the feature endpoints, but the
+            // admin SPA has no screen that calls them yet — say so honestly.
+            self::MANAGE_FEATURES => 'Enable or disable per-landlord platform features (API only; no admin UI surface yet)',
             self::VIEW_AUDIT => 'Read and export the immutable audit log',
-            self::MANAGE_CONTRACTS => 'View all contracts and force-terminate them',
-            self::MANAGE_LEDGER => 'View the platform ledger and apply late fees',
+            self::MANAGE_CONTRACTS => 'Add case notes and force-terminate contracts (every admin can already view contracts)',
+            self::MANAGE_LEDGER => 'Apply late fees on ledger entries (every admin can already view the ledger)',
             self::VIEW_ANALYTICS => 'View platform-wide analytics dashboards',
             self::MANAGE_SETTINGS => 'Change global platform configuration',
         };

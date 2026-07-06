@@ -135,14 +135,15 @@ class AdminAccessControlTest extends TestCase
 
     public function test_scoped_admin_without_capability_is_blocked_on_guarded_route(): void
     {
-        $this->actingAs($this->scopedAdmin(['manage_access']), 'admin'); // no manage_users
-        $this->getJson('/api/admin/users')->assertStatus(403);
+        // /admin/access/summary has no view/manage split — it's a hard capability gate.
+        $this->actingAs($this->scopedAdmin(['manage_users']), 'admin'); // no manage_access
+        $this->getJson('/api/admin/access/summary')->assertStatus(403);
     }
 
     public function test_scoped_admin_with_capability_is_allowed_on_guarded_route(): void
     {
-        $this->actingAs($this->scopedAdmin(['manage_users']), 'admin');
-        $this->getJson('/api/admin/users')->assertOk();
+        $this->actingAs($this->scopedAdmin(['manage_access']), 'admin');
+        $this->getJson('/api/admin/access/summary')->assertOk();
     }
 
     public function test_super_admin_bypasses_capability_checks(): void
@@ -530,5 +531,66 @@ class AdminAccessControlTest extends TestCase
             $res->json('user.capabilities'),
         );
         $this->assertNotContains('manage_access', $res->json('user.capabilities'));
+    }
+
+    // ---- Reviewer-scoped admin matrix (the seeded "Efua Reviewer" profile) ----
+
+    /**
+     * The exact capability set the dev seeder grants the scoped reviewer.
+     *
+     * @var list<string>
+     */
+    private const REVIEWER_CAPS = ['review_verifications', 'moderate_listings', 'moderate_reviews', 'view_audit'];
+
+    public function test_reviewer_scoped_admin_can_reach_only_granted_areas(): void
+    {
+        $this->actingAs($this->scopedAdmin(self::REVIEWER_CAPS), 'admin');
+
+        // Granted capabilities → allowed.
+        $this->getJson('/api/admin/verifications')->assertOk();      // review_verifications
+        $this->getJson('/api/admin/listings/review')->assertOk();    // moderate_listings
+        $this->getJson('/api/admin/reviews')->assertOk();            // moderate_reviews
+        $this->getJson('/api/admin/audit-logs')->assertOk();         // view_audit
+    }
+
+    public function test_reviewer_scoped_admin_can_view_but_not_manage_financial_and_user_areas(): void
+    {
+        $this->actingAs($this->scopedAdmin(self::REVIEWER_CAPS), 'admin');
+
+        // Read access to Users/Contracts/Ledger is a baseline admin privilege —
+        // no capability required just to view.
+        $this->getJson('/api/admin/ledger')->assertOk();
+        $this->getJson('/api/admin/contracts')->assertOk();
+        $this->getJson('/api/admin/users')->assertOk();
+
+        // But mutating those areas still requires the matching capability,
+        // which the reviewer profile was never granted.
+        $tenant = User::factory()->tenant()->create();
+        $this->postJson("/api/admin/users/{$tenant->id}/suspend", ['reason' => 'test'])
+            ->assertStatus(403)->assertJsonPath('required_capability', 'manage_users');
+
+        // Admin team management remains fully gated (view included) — it is
+        // not a "view vs manage" split, just a hard capability requirement.
+        $this->getJson('/api/admin/access/summary')
+            ->assertStatus(403)->assertJsonPath('required_capability', 'manage_access');
+    }
+
+    public function test_super_admin_can_reach_every_capability_gated_area(): void
+    {
+        $this->actingSuper();
+
+        // Super admin passes every gate without any capability rows assigned.
+        foreach ([
+            '/api/admin/verifications',
+            '/api/admin/listings/review',
+            '/api/admin/reviews',
+            '/api/admin/audit-logs',
+            '/api/admin/ledger',
+            '/api/admin/contracts',
+            '/api/admin/users',
+            '/api/admin/access/summary',
+        ] as $route) {
+            $this->getJson($route)->assertOk();
+        }
     }
 }

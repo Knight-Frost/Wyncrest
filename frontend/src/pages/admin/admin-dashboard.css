@@ -7,6 +7,18 @@
    can NEVER collide with the rest of the SPA — this design is surgical to the
    admin dashboard and fully reversible.
 
+   All local aliases below resolve to the SHARED design tokens (index.css),
+   never a literal hex/rgba. That's what makes this page re-theme correctly:
+   dark mode isn't a separate stylesheet, it's the same rules reading
+   different variable values. Tinted badge/notice/blob/ring-track backgrounds
+   use color-mix(in srgb, <token> X%, transparent) instead of a hand-picked
+   rgba, so the tint always tracks its paired token in both themes. A few
+   truly bespoke, non-semantic surfaces (the glass sheen highlight, the hero
+   glasschip sitting on a photo) use light-dark() to keep their exact original
+   values per-theme without inventing a new shared token for a one-off.
+   There is deliberately NO separate `[data-theme='dark'] .wadm { ... }` block
+   any more — every rule below already flips with the theme on its own.
+
    Motion: the mockup used GSAP + ScrollTrigger. Here it's reproduced with pure
    CSS keyframes / transitions (reveal, bar-grow, ring sweep, track fill) plus a
    tiny JS count-up — all disabled under prefers-reduced-motion.
@@ -14,21 +26,20 @@
 
 .wadm {
   /* local token set (matches the mockup palette — White Liquid Glass) */
-  --white: #ffffff;
-  --ink: #13161b;
-  --ink-2: #3c4450;
-  --ink-3: #6b7480;
-  --petrol: #163c47;
-  --petrol-2: #23596b;
-  --mist: #cfe0df;
-  --oxblood: #8a2436;
-  --wine: #a93346;
-  --green: #2c7a57;
-  --amber: #9a6a1e;
-  --glass: linear-gradient(150deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.5));
-  --gborder: rgba(20, 22, 27, 0.08);
-  --gshadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 22px 50px -28px rgba(16, 38, 54, 0.32),
-    0 3px 10px -5px rgba(16, 38, 54, 0.12);
+  --white: var(--color-surface); /* currently unused directly, kept for parity */
+  --ink: var(--color-ink-900);
+  --ink-2: var(--color-ink-700);
+  --ink-3: var(--color-ink-500);
+  --petrol: var(--color-action-600);
+  --petrol-2: var(--color-action-500);
+  --mist: color-mix(in srgb, var(--petrol-2) 20%, var(--color-surface)); /* unused directly, kept for parity */
+  --oxblood: var(--color-danger-600);
+  --wine: var(--color-danger-500); /* unused directly, kept for parity */
+  --green: var(--color-success-600);
+  --amber: var(--color-warning-600);
+  --glass: linear-gradient(150deg, var(--glass-bg-strong), var(--glass-bg));
+  --gborder: var(--glass-border);
+  --gshadow: var(--glass-highlight), var(--glass-shadow-lg);
   --disp: "Big Shoulders Display", Impact, sans-serif;
   --serif: "Fraunces", Georgia, serif;
   --sans: "Hanken Grotesque", system-ui, sans-serif;
@@ -80,21 +91,21 @@
   height: 40vw;
   left: -12vw;
   top: -4vh;
-  background: radial-gradient(circle, rgba(35, 89, 107, 0.1), transparent 68%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--petrol) 11%, transparent), transparent 68%);
 }
 .wadm .blob.b2 {
   width: 34vw;
   height: 34vw;
   right: -8vw;
   top: 18vh;
-  background: radial-gradient(circle, rgba(138, 36, 54, 0.07), transparent 68%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--oxblood) 8%, transparent), transparent 68%);
 }
 .wadm .blob.b3 {
   width: 42vw;
   height: 42vw;
   right: 6vw;
   bottom: -14vh;
-  background: radial-gradient(circle, rgba(35, 89, 107, 0.08), transparent 70%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--petrol) 9%, transparent), transparent 70%);
 }
 .wadm > *:not(.wadm-bg) {
   position: relative;
@@ -119,12 +130,14 @@
   left: 0;
   right: 0;
   height: 40%;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.55), transparent);
+  /* bespoke glass sheen highlight — always a white-ish top edge reflection,
+     just far more subtle on dark glass; not tied to a shared semantic token */
+  background: linear-gradient(to bottom, light-dark(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.07)), transparent);
   pointer-events: none;
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .wadm .glass {
-    background: rgba(255, 255, 255, 0.94);
+    background: var(--color-surface);
   }
 }
 
@@ -171,7 +184,7 @@
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--petrol);
-  background: rgba(207, 224, 223, 0.55);
+  background: color-mix(in srgb, currentColor 20%, transparent);
   padding: 0.4em 0.8em;
   border-radius: 100px;
 }
@@ -234,12 +247,12 @@
   transform: translateY(-2px);
 }
 .wadm .btn-glass {
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--glass-bg-strong);
   color: var(--ink);
   box-shadow: inset 0 0 0 1px var(--gborder);
 }
 .wadm .btn-glass:hover {
-  background: #fff;
+  background: var(--color-surface);
   transform: translateY(-2px);
 }
 .wadm .hc-art {
@@ -257,7 +270,9 @@
      Other edges stay flush and inherit the hero card's rounded corners. */
   border-radius: 32% 0 0 32% / 50% 0 0 50%;
   overflow: hidden;
-  box-shadow: -16px 0 40px -18px rgba(16, 38, 54, 0.24);
+  /* bespoke shadow spill from the curved photo edge onto the glass — a
+     petrol-tinted shadow in light, plain black in dark (not a semantic hue) */
+  box-shadow: -16px 0 40px -18px light-dark(rgba(16, 38, 54, 0.24), rgba(0, 0, 0, 0.55));
 }
 .wadm .hc-photo {
   position: absolute;
@@ -277,10 +292,12 @@
   left: 18px;
   bottom: 18px;
   z-index: 3;
-  background: rgba(255, 255, 255, 0.6);
+  /* bespoke glass-over-photo chip — a white-frost chip in light, a dark-frost
+     chip in dark (mirrors a physical glass rim more than a semantic surface) */
+  background: light-dark(rgba(255, 255, 255, 0.6), rgba(18, 28, 30, 0.55));
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  border: 1px solid light-dark(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.14));
   border-radius: 16px;
   padding: 0.7rem 1rem;
   display: flex;
@@ -292,11 +309,11 @@
   height: 8px;
   border-radius: 50%;
   background: var(--green);
-  box-shadow: 0 0 0 4px rgba(44, 122, 87, 0.16);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--green) 16%, transparent);
 }
 .wadm .hc-glasschip.warn .d {
   background: var(--amber);
-  box-shadow: 0 0 0 4px rgba(154, 106, 30, 0.16);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--amber) 16%, transparent);
 }
 .wadm .hc-glasschip .ct1 {
   font-family: var(--mono);
@@ -493,14 +510,14 @@
   transition: background 0.25s;
 }
 .wadm .q-row:hover {
-  background: rgba(20, 22, 27, 0.035);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
 }
 .wadm .q-thumb {
   width: 60px;
   height: 60px;
   border-radius: 13px;
   overflow: hidden;
-  background: linear-gradient(145deg, rgba(35, 89, 107, 0.18), rgba(207, 224, 223, 0.5));
+  background: linear-gradient(145deg, color-mix(in srgb, var(--petrol) 20%, transparent), color-mix(in srgb, var(--petrol-2) 24%, transparent));
   display: grid;
   place-items: center;
 }
@@ -555,7 +572,7 @@
   height: 38px;
   border-radius: 12px;
   border: 1px solid var(--gborder);
-  background: rgba(255, 255, 255, 0.6);
+  background: var(--glass-bg-strong);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -574,10 +591,10 @@
   stroke: var(--oxblood);
 }
 .wadm .q-btn.ok:hover {
-  background: rgba(44, 122, 87, 0.14);
+  background: color-mix(in srgb, var(--green) 16%, transparent);
 }
 .wadm .q-btn.no:hover {
-  background: rgba(138, 36, 54, 0.12);
+  background: color-mix(in srgb, var(--oxblood) 15%, transparent);
 }
 .wadm .q-btn:disabled {
   opacity: 0.4;
@@ -598,7 +615,12 @@
   height: 60px;
   margin: 0.4rem 0.2rem;
   border-radius: 16px;
-  background: linear-gradient(90deg, rgba(20, 22, 27, 0.05), rgba(20, 22, 27, 0.09), rgba(20, 22, 27, 0.05));
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--ink) 5%, transparent),
+    color-mix(in srgb, var(--ink) 9%, transparent),
+    color-mix(in srgb, var(--ink) 5%, transparent)
+  );
   background-size: 200% 100%;
   animation: wadmShimmer 1.3s ease-in-out infinite;
 }
@@ -626,7 +648,7 @@
   top: 8px;
   bottom: 8px;
   width: 1px;
-  background: rgba(20, 22, 27, 0.12);
+  background: color-mix(in srgb, var(--ink) 13%, transparent);
 }
 .wadm .tl-item {
   position: relative;
@@ -640,7 +662,7 @@
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--color-surface);
   box-shadow: 0 0 0 1.5px var(--petrol);
 }
 .wadm .tl-item.blood::before {
@@ -732,7 +754,7 @@
   justify-content: space-between;
   margin-top: 1.1rem;
   padding-top: 1rem;
-  border-top: 1px solid rgba(20, 22, 27, 0.1);
+  border-top: 1px solid color-mix(in srgb, var(--ink) 11%, transparent);
   font-size: 0.82rem;
   color: var(--ink-3);
 }
@@ -763,7 +785,7 @@
 }
 .wadm .ring .track {
   fill: none;
-  stroke: rgba(20, 22, 27, 0.09);
+  stroke: color-mix(in srgb, var(--color-ink-500) 20%, transparent);
   stroke-width: 11;
 }
 .wadm .ring .prog {
@@ -838,7 +860,7 @@
 .wadm .track-bar {
   height: 10px;
   border-radius: 100px;
-  background: rgba(20, 22, 27, 0.07);
+  background: color-mix(in srgb, var(--color-ink-500) 16%, transparent);
   overflow: hidden;
 }
 .wadm .track-bar i {
@@ -871,113 +893,4 @@
   .wadm .hc-photo {
     transition: none !important;
   }
-}
-
-/* ============================================================================
-   DARK MODE — `<html data-theme="dark">` flips the local token set from white
-   glass to dark glass (translucent dark surfaces, light text, brightened
-   teal/red/green for contrast). A handful of element rules override hardcoded
-   light rgba() values that don't read from tokens. Gated on dark → zero effect
-   in light.
-   ============================================================================ */
-[data-theme='dark'] .wadm {
-  --ink: #EAF1EE;
-  --ink-2: #B7C3C0;
-  --ink-3: #879592;
-  --petrol: #2E93A8;
-  --petrol-2: #46B9D0;
-  --mist: #2A4A50;
-  --oxblood: #E16277;
-  --wine: #C9485E;
-  --green: #34D399;
-  --amber: #FBBF24;
-  --glass: linear-gradient(150deg, rgba(30, 44, 48, 0.66), rgba(16, 26, 28, 0.5));
-  --gborder: rgba(255, 255, 255, 0.1);
-  --gshadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 24px 56px -26px rgba(0, 0, 0, 0.72),
-    0 3px 10px -5px rgba(0, 0, 0, 0.5);
-}
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  [data-theme='dark'] .wadm .glass {
-    background: rgba(20, 30, 32, 0.94);
-  }
-}
-/* softer top sheen on dark glass */
-[data-theme='dark'] .wadm .glass::before {
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.07), transparent);
-}
-/* blobs read a touch stronger against the dark base */
-[data-theme='dark'] .wadm .blob.b1 {
-  background: radial-gradient(circle, rgba(70, 185, 208, 0.12), transparent 68%);
-}
-[data-theme='dark'] .wadm .blob.b2 {
-  background: radial-gradient(circle, rgba(225, 98, 119, 0.1), transparent 68%);
-}
-[data-theme='dark'] .wadm .blob.b3 {
-  background: radial-gradient(circle, rgba(70, 185, 208, 0.1), transparent 70%);
-}
-/* hero date pill: light mint → dark teal chip */
-[data-theme='dark'] .wadm .hc-date .pill {
-  color: #9fe4f1;
-  background: rgba(46, 147, 168, 0.18);
-}
-[data-theme='dark'] .wadm .hc-photos {
-  box-shadow: -16px 0 44px -18px rgba(0, 0, 0, 0.55);
-}
-[data-theme='dark'] .wadm .hc-glasschip {
-  background: rgba(18, 28, 30, 0.55);
-  border-color: rgba(255, 255, 255, 0.14);
-}
-[data-theme='dark'] .wadm .btn-glass {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--ink);
-  box-shadow: inset 0 0 0 1px var(--gborder);
-}
-[data-theme='dark'] .wadm .btn-glass:hover {
-  background: rgba(255, 255, 255, 0.14);
-}
-/* queue */
-[data-theme='dark'] .wadm .q-row:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-[data-theme='dark'] .wadm .q-btn {
-  background: rgba(255, 255, 255, 0.08);
-}
-[data-theme='dark'] .wadm .q-btn.ok:hover {
-  background: rgba(52, 211, 153, 0.18);
-}
-[data-theme='dark'] .wadm .q-btn.no:hover {
-  background: rgba(225, 98, 119, 0.18);
-}
-[data-theme='dark'] .wadm .q-skel {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.05),
-    rgba(255, 255, 255, 0.1),
-    rgba(255, 255, 255, 0.05)
-  );
-  background-size: 200% 100%;
-}
-/* timeline rail + nodes */
-[data-theme='dark'] .wadm .tl::before {
-  background: rgba(255, 255, 255, 0.14);
-}
-[data-theme='dark'] .wadm .tl-item::before {
-  background: #16242a;
-  box-shadow: 0 0 0 1.5px var(--petrol);
-}
-[data-theme='dark'] .wadm .tl-item.blood::before {
-  box-shadow: 0 0 0 1.5px var(--oxblood);
-}
-[data-theme='dark'] .wadm .tl-item.warn::before {
-  box-shadow: 0 0 0 1.5px var(--amber);
-}
-/* chart + ring + track surfaces */
-[data-theme='dark'] .wadm .chart-foot {
-  border-top-color: rgba(255, 255, 255, 0.12);
-}
-[data-theme='dark'] .wadm .ring .track {
-  stroke: rgba(255, 255, 255, 0.12);
-}
-[data-theme='dark'] .wadm .track-bar {
-  background: rgba(255, 255, 255, 0.08);
 }

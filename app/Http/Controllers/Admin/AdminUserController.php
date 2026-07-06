@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\SuspendUserRequest;
 use App\Models\Application;
 use App\Models\Contract;
+use App\Models\Review;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Services\NotificationService;
@@ -35,45 +36,84 @@ class AdminUserController extends Controller
     {
         $filters = $request->validate([
             'type' => ['sometimes', 'in:tenant,landlord'],
-            'status' => ['sometimes', 'in:active,suspended,blocked,archived'],
+            // 'unverified' is a virtual status ("needs review") — the user has no
+            // verified identity yet. It is not a column, it is derived below.
+            'status' => ['sometimes', 'in:active,suspended,blocked,archived,unverified'],
             'search' => ['sometimes', 'string', 'max:255'],
+            'sort' => ['sometimes', 'in:review,joined,name'],
         ]);
 
         $query = User::query()
-            ->withCount(['properties', 'listings', 'applications'])
-            ->orderBy('created_at', 'desc');
+            ->withCount(['properties', 'listings', 'applications']);
+
+        // Archived accounts are soft-deleted, so they are only reachable through
+        // withTrashed(). Every other status lives on a live row.
+        if (($filters['status'] ?? null) === 'archived') {
+            $query->withTrashed();
+        }
 
         if (! empty($filters['type'])) {
             $query->where('user_type', $filters['type']);
         }
 
-        if (! empty($filters['status'])) {
-            if ($filters['status'] === 'active') {
-                $query->where('is_active', true)->whereNull('suspended_at');
-            } elseif ($filters['status'] === 'suspended') {
-                $query->whereNotNull('suspended_at');
-            } elseif ($filters['status'] === 'blocked') {
-                $query->where('account_status', 'blocked');
-            } elseif ($filters['status'] === 'archived') {
-                $query->where('account_status', 'archived');
-            }
-        }
+        $this->applyStatusFilter($query, $filters['status'] ?? null);
 
         if (! empty($filters['search'])) {
             $term = '%'.strtolower($filters['search']).'%';
             $query->where(function ($q) use ($term) {
                 $q->whereRaw('LOWER(first_name) LIKE ?', [$term])
                     ->orWhereRaw('LOWER(last_name) LIKE ?', [$term])
-                    ->orWhereRaw('LOWER(email) LIKE ?', [$term]);
+                    ->orWhereRaw('LOWER(email) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(city) LIKE ?', [$term]);
             });
         }
+
+        // Sort: "review" surfaces unverified accounts first (they need an admin's
+        // attention), then newest; "joined" is newest-first; "name" is A–Z.
+        match ($filters['sort'] ?? 'joined') {
+            'review' => $query->orderBy('identity_verified', 'asc')->orderByDesc('created_at'),
+            'name' => $query->orderBy('first_name')->orderBy('last_name'),
+            default => $query->orderByDesc('created_at'),
+        };
 
         $users = $query->paginate(20);
         // Expose the profile photo (+ name/initials) so the admin list can show
         // avatars, falling back to initials when a user has no photo.
         $users->getCollection()->each->append(['full_name', 'initials', 'avatar_url']);
 
-        return response()->json($users);
+        // Global segment counts for the directory's filter tiles. These are
+        // platform-wide totals (independent of the current filter/search), so the
+        // tiles stay honest no matter how the list below is narrowed.
+        $counts = [
+            'all' => User::count(),
+            'landlords' => User::where('user_type', 'landlord')->count(),
+            'tenants' => User::where('user_type', 'tenant')->count(),
+            // "Needs review": no verified identity on file yet.
+            'unverified' => User::where('identity_verified', false)->count(),
+        ];
+
+        return response()->json([
+            ...$users->toArray(),
+            'counts' => $counts,
+        ]);
+    }
+
+    /**
+     * Apply a status filter to the user query. Kept separate so index() reads
+     * cleanly and the archived/unverified derivations live in one place.
+     */
+    protected function applyStatusFilter($query, ?string $status): void
+    {
+        match ($status) {
+            'active' => $query->where('is_active', true)
+                ->whereNull('suspended_at')
+                ->where('account_status', 'active'),
+            'suspended' => $query->whereNotNull('suspended_at'),
+            'blocked' => $query->where('account_status', 'blocked'),
+            'archived' => $query->where('account_status', 'archived'),
+            'unverified' => $query->where('identity_verified', false),
+            default => null,
+        };
     }
 
     /**
@@ -120,6 +160,35 @@ class AdminUserController extends Controller
             ->get()
             ->load('listing.unit.property', 'tenant');
 
+        // Verification snapshot — the identity flag is authoritative; the latest
+        // request (if any) lets the admin jump straight into the document review.
+        // Email confirmation is real; phone is contact-only (no phone verification
+        // exists in this system, so we never claim one).
+        $latestVerification = $user->verificationRequests()
+            ->latest('created_at')
+            ->first();
+
+        $verification = [
+            'identity_verified' => $user->identity_verified === true,
+            'email_verified' => $user->email_verified_at !== null,
+            'latest_request' => $latestVerification ? [
+                'id' => $latestVerification->id,
+                'status' => $latestVerification->status,
+            ] : null,
+        ];
+
+        // Landlord rating is the mean of APPROVED reviews across their properties
+        // (pending/hidden reviews never count) — the same approved-only rule used
+        // everywhere else. Tenants are not rated in this system, so this stays null.
+        $rating = null;
+        $reviewCount = 0;
+        if ($user->isLandlord()) {
+            $approved = Review::where('landlord_id', $user->id)->approved();
+            $reviewCount = (clone $approved)->count();
+            $avg = (clone $approved)->avg('rating');
+            $rating = $avg !== null ? round((float) $avg, 1) : null;
+        }
+
         return response()->json([
             'user' => $user,
             'stats' => [
@@ -127,7 +196,10 @@ class AdminUserController extends Controller
                 'listings' => $listings,
                 'active_contracts' => $activeContracts,
                 'applications' => $applications,
+                'rating' => $rating,
+                'review_count' => $reviewCount,
             ],
+            'verification' => $verification,
             'recent_contracts' => $recentContracts,
             'recent_applications' => $recentApplications,
         ]);

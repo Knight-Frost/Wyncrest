@@ -6,11 +6,13 @@ import { useAccent } from '@/context/accent';
 import { ACCENTS, DEFAULT_ACCENT_KEY } from '@/config/accents';
 import { DARK_THEMES } from '@/config/darkThemes';
 import { useAuth, type Portal } from '@/context/auth';
+import { isSuperAdmin as userIsSuperAdmin } from '@/lib/permissions';
 import { useApi } from '@/hooks/useApi';
 import { authApi, notificationApi } from '@/lib/endpoints';
 import { fieldErrors } from '@/lib/api';
 import type { ApiError } from '@/lib/types';
 import { LoadingState, ErrorState } from '@/components/ui/states';
+import { useToast } from '@/components/ui/toast';
 import { formatDate } from '@/lib/format';
 import { SemanticBadge } from '@/components/cards';
 import {
@@ -54,11 +56,12 @@ function Toggle({
   );
 }
 
-/* ── Notification types: these map 1:1 to the backend NotificationType enum,
-   so every toggle here persists to a real per-type email/SMS preference. ──── */
+/* ── Notification types surfaced for per-type email/SMS preferences. Each row
+   is a real backend NotificationType value and persists a real preference —
+   but this is a curated SUBSET of the enum (the high-signal money/lease
+   types), not the full list. Types without a row use the backend defaults. ── */
 const NOTIF_TYPES: { type: string; name: string; desc: string }[] = [
   { type: 'rent_generated',      name: 'Rent invoice issued', desc: 'When a new rent charge is created' },
-  { type: 'rent_due_soon',       name: 'Rent due soon',       desc: 'A reminder before rent is due' },
   { type: 'rent_overdue',        name: 'Rent overdue',        desc: 'When a payment is past due' },
   { type: 'payment_succeeded',   name: 'Payment received',    desc: 'When your payment is confirmed' },
   { type: 'payment_failed',      name: 'Payment failed',      desc: "When a payment doesn't go through" },
@@ -407,17 +410,34 @@ export function SettingsPage() {
     }
   }
 
+  /* Resend the email-verification link (tenant/landlord bearer routes only —
+     admins have no email-verification flow and never see the button). */
+  const { toast } = useToast();
+  const [resendingVerification, setResendingVerification] = useState(false);
+  async function resendVerificationEmail() {
+    if (resendingVerification || !portal || portal === 'admin') return;
+    setResendingVerification(true);
+    try {
+      const res = await authApi.sendEmailVerification(portal);
+      toast(res.message || 'Verification email sent — check your inbox.', 'success');
+    } catch (err) {
+      toast((err as ApiError).message ?? 'Could not send the verification email.', 'error');
+    } finally {
+      setResendingVerification(false);
+    }
+  }
+
   /* Derive truthful account info from auth context */
   const name         = user ? ('full_name' in user ? user.full_name : user.name) : '—';
   const email        = user?.email ?? '—';
   const role         = user?.role ?? '—';
-  const isSuperAdmin = !!(user && 'is_super_admin' in user && user.is_super_admin);
+  const isSuperAdmin = userIsSuperAdmin(user);
   const verified     = !!(user && 'identity_verified' in user && user.identity_verified);
   const memberSince  = user && 'created_at' in user ? formatDate(user.created_at) : '—';
 
   return (
     <div className="ac-page">
-      <div>
+      <div className="ac-card ac-hero">
         <p className="ac-eyebrow">Account</p>
         <h1 className="ac-title">Settings</h1>
         <p className="ac-sub">Control your preferences, notifications, appearance, and security.</p>
@@ -780,11 +800,17 @@ export function SettingsPage() {
               </p>
             </div>
             <ul className="ac-check ac-check-grid">
-              <li>
-                <IconCheckCircle size={17} className="ac-check-ico ac-ok" />
-                Account active
-                <span className="ac-check-state ac-ok">Active</span>
-              </li>
+              {user && 'is_active' in user && (
+                <li>
+                  {user.is_active
+                    ? <IconCheckCircle size={17} className="ac-check-ico ac-ok" />
+                    : <IconClock size={17} className="ac-check-ico ac-pending" />}
+                  Account active
+                  <span className={`ac-check-state ${user.is_active ? 'ac-ok' : 'ac-pending'}`}>
+                    {user.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                </li>
+              )}
               <li>
                 {verified
                   ? <IconCheckCircle size={17} className="ac-check-ico ac-ok" />
@@ -794,11 +820,28 @@ export function SettingsPage() {
                   {verified ? 'Verified' : 'Pending'}
                 </span>
               </li>
-              <li>
-                <IconCheckCircle size={17} className="ac-check-ico ac-ok" />
-                Email confirmed
-                <span className="ac-check-state ac-ok">Confirmed</span>
-              </li>
+              {user && 'email_verified_at' in user && (
+                <li>
+                  {user.email_verified_at
+                    ? <IconCheckCircle size={17} className="ac-check-ico ac-ok" />
+                    : <IconClock size={17} className="ac-check-ico ac-pending" />}
+                  Email confirmed
+                  <span className={`ac-check-state ${user.email_verified_at ? 'ac-ok' : 'ac-pending'}`}>
+                    {user.email_verified_at ? 'Confirmed' : 'Unconfirmed'}
+                  </span>
+                  {!user.email_verified_at && (
+                    <button
+                      type="button"
+                      className="ac-btn ac-btn-ghost ac-btn-sm"
+                      style={{ marginLeft: 8 }}
+                      onClick={() => void resendVerificationEmail()}
+                      disabled={resendingVerification}
+                    >
+                      {resendingVerification ? 'Sending…' : 'Resend verification email'}
+                    </button>
+                  )}
+                </li>
+              )}
             </ul>
           </div>
         )}

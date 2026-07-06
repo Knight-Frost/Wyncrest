@@ -8,21 +8,36 @@
    ============================================================================ */
 
 .wacc {
-  --white: #ffffff;
-  --ink: #13161b;
-  --ink-2: #3c4450;
-  --ink-3: #6b7480;
-  --petrol: #163c47;
-  --petrol-2: #23596b;
-  --mist: #cfe0df;
-  --oxblood: #8a2436;
-  --wine: #a93346;
-  --green: #2c7a57;
-  --amber: #9a6a1e;
-  --glass: linear-gradient(150deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.5));
-  --gborder: rgba(20, 22, 27, 0.08);
-  --gshadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 22px 50px -28px rgba(16, 38, 54, 0.32),
-    0 3px 10px -5px rgba(16, 38, 54, 0.12);
+  /* All aliases below resolve to the SHARED design tokens (index.css), never a
+     literal hex/rgba, so this page re-themes automatically: dark mode isn't a
+     separate stylesheet, it's the same rules reading different variable
+     values. Tinted badge/notice backgrounds use
+     color-mix(in srgb, <token> N%, transparent) instead of a hand-picked
+     rgba, so the tint always tracks its paired color in both themes. */
+  --white: var(--color-surface);
+  --ink: var(--color-ink-900);
+  --ink-2: var(--color-ink-700);
+  --ink-3: var(--color-ink-500);
+  --petrol: var(--color-action-600);
+  --petrol-2: var(--color-action-500);
+  /* Decorative brand-tinted mist — no shared "mist" token exists, so it's
+     derived as a soft color-mix of the accent instead of a fixed literal. */
+  --mist: color-mix(in srgb, var(--petrol) 14%, var(--color-surface));
+  /* Semantic danger stays a fixed red regardless of accent — destructive
+     actions, bad-status pills, and error/warning text must not turn blue (or
+     whatever) when the accent does. --oxblood and --danger are intentionally
+     identical fixed reds; kept as two names because the mockup's classes
+     already reference --oxblood for legacy "estate red" marks. Both now read
+     the shared theme-aware danger token instead of a literal hex, so they
+     still stay red-but-fixed-relative-to-accent while re-theming for dark
+     mode contrast. */
+  --oxblood: var(--color-danger-600);
+  --danger: var(--color-danger-600);
+  --green: var(--color-success-600);
+  --amber: var(--color-warning-600);
+  --glass: var(--glass-bg-strong);
+  --gborder: var(--glass-border);
+  --gshadow: var(--glass-shadow-lg), var(--glass-highlight);
   --disp: "Big Shoulders Display", Impact, sans-serif;
   --serif: "Fraunces", Georgia, serif;
   --sans: "Hanken Grotesque", system-ui, sans-serif;
@@ -79,7 +94,9 @@
   content: "";
   width: 26px;
   height: 1px;
-  background: var(--oxblood);
+  /* Brand-identity flourish, not a danger signal — follows the user's chosen
+     accent instead of the fixed oxblood used for real danger states below. */
+  background: var(--petrol);
 }
 .wacc .ph-title {
   font-family: var(--disp);
@@ -90,7 +107,7 @@
   margin: 0.6rem 0 0.55rem;
 }
 .wacc .ph-title .it {
-  color: var(--oxblood);
+  color: var(--petrol);
 }
 .wacc .ph-sub {
   color: var(--ink-2);
@@ -123,20 +140,32 @@
   cursor: not-allowed;
 }
 .wacc .wbtn-blood {
-  background: linear-gradient(145deg, var(--wine), var(--oxblood));
-  color: #fff;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 10px 24px -12px rgba(138, 36, 54, 0.7);
+  /* Primary action → the accent's BUTTON ramp. action-600/700 are guaranteed to
+     hold white text at AA in both light and dark (see accents.ts contrast
+     contract), so the Invite-admin button stays legible under any accent. */
+  background: linear-gradient(145deg, var(--color-action-600, #a93346), var(--color-action-700, #8a2436));
+  color: var(--color-on-action, #fff);
+  /* why: the rgba(255,255,255,.25) inset is a fixed glare/bevel sheen drawn on
+     top of the button's own opaque saturated gradient fill, not a background
+     wash of the page canvas — it reads the same regardless of page theme, so
+     it's left as a literal rather than swapped for --glass-highlight (whose
+     alpha is tuned for translucent glass panels over the canvas, not a sheen
+     over a solid brand fill). The hexes inside var(..., #fallback) are
+     fallbacks behind an already-token-primary value, never the value used in
+     practice. */
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 10px 24px -12px color-mix(in srgb, var(--color-action-700, #8a2436) 65%, transparent);
 }
 .wacc .wbtn-blood:not(:disabled):hover {
   transform: translateY(-2px);
 }
 .wacc .wbtn-glass {
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--glass-bg-strong);
   color: var(--ink);
   box-shadow: inset 0 0 0 1px var(--gborder);
 }
 .wacc .wbtn-glass:not(:disabled):hover {
-  background: #fff;
+  background: var(--color-surface);
 }
 .wacc .wbtn-ghost {
   background: transparent;
@@ -144,16 +173,16 @@
   box-shadow: inset 0 0 0 1px var(--gborder);
 }
 .wacc .wbtn-ghost:not(:disabled):hover {
-  background: rgba(20, 22, 27, 0.04);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
   color: var(--ink);
 }
 .wacc .wbtn-danger {
-  background: rgba(138, 36, 54, 0.08);
-  color: var(--oxblood);
-  box-shadow: inset 0 0 0 1px rgba(138, 36, 54, 0.25);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--danger);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 25%, transparent);
 }
 .wacc .wbtn-danger:not(:disabled):hover {
-  background: rgba(138, 36, 54, 0.14);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
 }
 .wacc .wbtn-sm {
   padding: 0.45em 0.85em;
@@ -311,7 +340,7 @@
   height: 30px;
   border-radius: 9px;
   border: 1px solid var(--gborder);
-  background: rgba(20, 22, 27, 0.03);
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
   display: inline-grid;
   place-items: center;
   color: transparent;
@@ -326,10 +355,10 @@
 .wacc .cellmark.granted {
   background: var(--rc);
   border-color: var(--rc);
-  color: #fff;
+  color: var(--color-on-action);
 }
 .wacc .cellmark.granted svg {
-  stroke: #fff;
+  stroke: var(--color-on-action);
 }
 .wacc .cellmark.assignable {
   border-style: dashed;
@@ -363,7 +392,7 @@
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  background: rgba(20, 22, 27, 0.04);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
   border: 1px solid var(--gborder);
   border-radius: 100px;
   padding: 0.5rem 1rem;
@@ -371,7 +400,7 @@
   min-width: 200px;
 }
 .wacc .search:focus-within {
-  background: #fff;
+  background: var(--color-surface);
 }
 .wacc .search input {
   border: none;
@@ -393,18 +422,21 @@
   padding: 0.45rem 0.85rem;
   border-radius: 100px;
   border: 1px solid var(--gborder);
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--glass-bg);
   color: var(--ink-2);
   transition: 0.2s;
   white-space: nowrap;
 }
 .wacc .chip:hover {
-  background: #fff;
+  background: var(--color-surface);
   color: var(--ink);
 }
 .wacc .chip.on {
   background: var(--ink);
-  color: #fff;
+  /* --ink flips between the darkest and lightest ink shade across themes, so
+     the "on" text needs to flip with it; --color-canvas is always ink-900's
+     inverse in both themes (near-white in light, near-black in dark). */
+  color: var(--color-canvas);
   border-color: var(--ink);
 }
 
@@ -425,7 +457,7 @@
   transition: background 0.2s;
 }
 .wacc .row:hover {
-  background: rgba(20, 22, 27, 0.035);
+  background: color-mix(in srgb, var(--ink) 3.5%, transparent);
 }
 .wacc .avatar {
   width: 42px;
@@ -436,7 +468,7 @@
   font-family: var(--disp);
   font-weight: 700;
   font-size: 0.92rem;
-  color: #fff;
+  color: var(--color-on-action);
   flex: none;
 }
 .wacc .r-id .r-name {
@@ -455,7 +487,7 @@
   text-transform: uppercase;
   padding: 0.35em 0.7em;
   border-radius: 100px;
-  background: color-mix(in srgb, var(--rc) 12%, white);
+  background: color-mix(in srgb, var(--rc) 12%, transparent);
   color: var(--rc);
   white-space: nowrap;
 }
@@ -483,13 +515,13 @@
 .wacc .statuspill.suspended,
 .wacc .statuspill.blocked,
 .wacc .statuspill.archived {
-  color: var(--oxblood);
+  color: var(--danger);
 }
 .wacc .statuspill.deactivated .sd,
 .wacc .statuspill.suspended .sd,
 .wacc .statuspill.blocked .sd,
 .wacc .statuspill.archived .sd {
-  background: var(--oxblood);
+  background: var(--danger);
 }
 .wacc .r-meta {
   font-family: var(--mono);
@@ -530,7 +562,7 @@
   padding: 0.7rem 0.85rem;
   border: 1px solid var(--gborder);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--glass-bg);
 }
 .wacc .capitem .cap-name {
   font-size: 0.88rem;
@@ -602,7 +634,7 @@
   padding: 0.8rem 1rem;
   border: 1px dashed var(--gborder);
   border-radius: 12px;
-  background: rgba(35, 89, 107, 0.04);
+  background: color-mix(in srgb, var(--petrol) 4%, transparent);
   font-size: 0.8rem;
   color: var(--ink-2);
 }

@@ -11,6 +11,7 @@ use App\Models\LedgerEntry;
 use App\Models\Listing;
 use App\Models\Notification;
 use App\Models\User;
+use App\Services\Ledger\LedgerComputationEngine;
 use App\Services\TenantReadinessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,7 +26,7 @@ use Illuminate\Support\Str;
  */
 class TenantDashboardController extends Controller
 {
-    public function index(Request $request, TenantReadinessService $readiness): JsonResponse
+    public function index(Request $request, TenantReadinessService $readiness, LedgerComputationEngine $engine): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -51,7 +52,10 @@ class TenantDashboardController extends Controller
             $nextDue = $unpaid->sortBy(fn ($e) => $e->due_date)->first();
 
             $rentSummary = [
-                'balance_cents' => (int) $unpaid->sum('amount_cents'),
+                // "What the tenant currently owes" = outstanding unpaid
+                // obligations, via the same engine that powers every other
+                // balance figure in the app.
+                'balance_cents' => $engine->computeOutstanding(['tenant_id' => $uid]),
                 'currency' => $activeContract->currency,
                 // Whether ANY ledger entry exists for this tenant (paid or
                 // unpaid) — distinct from next_due, which only reflects

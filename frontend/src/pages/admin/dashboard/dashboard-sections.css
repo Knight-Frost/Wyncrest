@@ -1,0 +1,433 @@
+/* ============================================================================
+   ADMIN DASHBOARD — Phase A sections below the hero (Attention Queue,
+   Priority Cases, Platform Snapshot, Rent Risk Monitor, Review Queues,
+   System Health, Recent Activity).
+
+   Scoped under `.wadm` and built entirely from the tokens/primitives already
+   defined in admin-dashboard.css (--ink/--oxblood/--green/--amber, .glass,
+   .reveal, .btn, .mono-l, .panel-head conventions) — no new literal colors,
+   no separate dark-mode block (every rule already flips with the theme).
+   ============================================================================ */
+
+.wadm .down {
+  color: var(--oxblood);
+}
+
+.wadm .wadm-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.wadm .wadm-section-head h2 {
+  font-family: var(--disp);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 1.5rem;
+  margin: 0;
+}
+.wadm .wadm-section-head .ph-sub {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-top: 0.35rem;
+}
+
+/* Severity vocabulary shared across attention cards, priority-case badges,
+   and rent-risk day pills. */
+.wadm .sev-high {
+  --sev: var(--oxblood);
+}
+.wadm .sev-medium {
+  --sev: var(--amber);
+}
+.wadm .sev-low {
+  --sev: var(--ink-3);
+}
+.wadm .sev-clear {
+  --sev: var(--green);
+}
+
+/* ---------- Section 1: Attention Queue ---------- */
+
+.wadm .aq-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.25rem;
+}
+
+.wadm .aq-card {
+  padding: 1.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  border-left: 3px solid var(--sev, var(--ink-3));
+}
+
+.wadm .aq-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.wadm .aq-title {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.wadm .aq-sev {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--sev, var(--ink-3));
+  border: 1px solid color-mix(in srgb, var(--sev, var(--ink-3)) 45%, transparent);
+  border-radius: 999px;
+  padding: 0.2em 0.7em;
+}
+
+.wadm .aq-headline {
+  font-family: var(--disp);
+  font-size: 1.5rem;
+  line-height: 1.15;
+}
+
+.wadm .aq-detail {
+  color: var(--ink-2);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  flex-grow: 1;
+}
+
+.wadm .aq-action {
+  align-self: flex-start;
+}
+
+/* ---------- Filter tabs (Priority Cases + Review Queues) ---------- */
+
+.wadm .pc-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.wadm .pc-tab {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.5em 1em;
+  border-radius: 999px;
+  border: 1px solid var(--gborder);
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.wadm .pc-tab.on {
+  background: var(--glass-bg-strong);
+  color: var(--ink);
+}
+
+.wadm .pc-empty {
+  padding: 2.25rem 1.5rem;
+  border-radius: 20px;
+  text-align: center;
+  color: var(--ink-2);
+}
+
+/* ---------- Section 2: Priority Cases (+ reused by Review Queues) ---------- */
+
+.wadm .pc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.wadm .pc-row {
+  padding: 1.1rem 1.4rem;
+  border-radius: 18px;
+  border-left: 3px solid var(--sev, var(--gborder));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+}
+
+.wadm .pc-row-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.wadm .pc-badge {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--sev, var(--ink-3));
+  border: 1px solid color-mix(in srgb, var(--sev, var(--ink-3)) 45%, transparent);
+  border-radius: 999px;
+  padding: 0.2em 0.7em;
+  flex-shrink: 0;
+}
+
+.wadm .pc-type {
+  color: var(--ink-3);
+  flex-shrink: 0;
+}
+
+.wadm .pc-person {
+  font-weight: 600;
+}
+
+.wadm .pc-role {
+  font-weight: 400;
+  color: var(--ink-3);
+}
+
+.wadm .pc-property {
+  color: var(--ink-3);
+  font-size: 0.88rem;
+}
+
+.wadm .pc-row-detail {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-basis: 100%;
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+
+.wadm .pc-age {
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.wadm .pc-action {
+  flex-shrink: 0;
+  padding: 0.6em 1.1em;
+  font-size: 0.85rem;
+}
+
+/* ---------- Section 3: Platform Snapshot ---------- */
+
+.wadm .snap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
+}
+
+.wadm .snap-card {
+  padding: 1.5rem;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  color: inherit;
+  font-family: inherit;
+  border: 1px solid var(--gborder);
+  cursor: default;
+}
+.wadm .snap-card.click {
+  cursor: pointer;
+  transition: transform 0.25s ease;
+}
+.wadm .snap-card.click:hover {
+  transform: translateY(-2px);
+}
+
+.wadm .snap-title {
+  color: var(--ink-3);
+  margin-bottom: 0.3rem;
+}
+
+.wadm .snap-headline {
+  font-family: var(--disp);
+  font-size: 1.4rem;
+}
+
+.wadm .snap-line {
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+
+/* ---------- Section 4: Rent Risk Monitor ---------- */
+
+.wadm .rr-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+}
+.wadm .rr-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.wadm .rr-summary .mono-l {
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.wadm .rr-summary b {
+  font-family: var(--disp);
+  font-size: 1.3rem;
+}
+
+.wadm .rr-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.wadm .rr-row {
+  padding: 1.1rem 1.4rem;
+  border-radius: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+}
+
+.wadm .rr-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: baseline;
+}
+.wadm .rr-tenant {
+  font-weight: 600;
+}
+.wadm .rr-landlord,
+.wadm .rr-property {
+  color: var(--ink-3);
+  font-size: 0.9rem;
+}
+.wadm .rr-sep {
+  color: var(--ink-3);
+}
+
+.wadm .rr-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+.wadm .rr-amount {
+  font-family: var(--disp);
+  font-size: 1.1rem;
+}
+.wadm .rr-due {
+  color: var(--ink-3);
+  font-size: 0.7rem;
+}
+.wadm .rr-days {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sev, var(--oxblood));
+  border: 1px solid color-mix(in srgb, var(--sev, var(--oxblood)) 45%, transparent);
+  border-radius: 999px;
+  padding: 0.2em 0.7em;
+}
+
+.wadm .rr-action {
+  padding: 0.6em 1.1em;
+  font-size: 0.85rem;
+}
+
+/* ---------- Section 6: System Health ---------- */
+
+.wadm .sh-card {
+  padding: 1.6rem 1.75rem;
+  border-radius: 20px;
+  border-left: 3px solid var(--green);
+}
+.wadm .sh-card.sh-warn {
+  border-left-color: var(--amber);
+}
+.wadm .sh-status {
+  font-family: var(--disp);
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+}
+.wadm .sh-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem 1.5rem;
+}
+.wadm .sh-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--gborder);
+  font-size: 0.9rem;
+}
+
+/* ---------- Section 7: Recent Important Activity ---------- */
+
+.wadm .ra-list {
+  border-radius: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.wadm .ra-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.4rem;
+  border-bottom: 1px solid var(--gborder);
+  background: none;
+  border-left: 3px solid transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.wadm .ra-row:last-child {
+  border-bottom: none;
+}
+.wadm .ra-row:hover {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+.wadm .ra-row.blood {
+  border-left-color: var(--oxblood);
+}
+.wadm .ra-row.warn {
+  border-left-color: var(--amber);
+}
+.wadm .ra-title {
+  font-weight: 500;
+}
+.wadm .ra-meta {
+  color: var(--ink-3);
+  font-size: 0.65rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .wadm .pc-row,
+  .wadm .rr-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .wadm .pc-action,
+  .wadm .rr-action {
+    align-self: stretch;
+    justify-content: center;
+  }
+}

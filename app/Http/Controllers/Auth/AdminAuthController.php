@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
@@ -203,6 +204,51 @@ class AdminAuthController extends Controller
         );
 
         return response()->json(['message' => 'Password updated successfully.']);
+    }
+
+    /**
+     * Update the authenticated admin's own display name and email.
+     *
+     * Self-service identity edit — available to every admin (super or scoped),
+     * not gated by any capability, since it only ever touches the caller's own
+     * record. Email is unique across `admins`; the DB constraint backs the
+     * validation rule below.
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        /** @var Admin $admin */
+        $admin = $request->user();
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => [
+                'required', 'string', 'email', 'max:255',
+                Rule::unique('admins', 'email')->ignore($admin->id),
+            ],
+        ]);
+
+        $email = strtolower(trim($validated['email']));
+        $oldValues = ['name' => $admin->name, 'email' => $admin->email];
+
+        $admin->name = trim($validated['name']);
+        $admin->email = $email;
+        $admin->save();
+
+        $newValues = ['name' => $admin->name, 'email' => $admin->email];
+
+        if ($newValues !== $oldValues) {
+            $this->auditService->log(
+                actor: $admin,
+                action: 'admin_profile_updated',
+                subject: $admin,
+                description: "Admin updated their profile: {$admin->email}",
+                oldValues: $oldValues,
+                newValues: $newValues,
+                severity: 'info'
+            );
+        }
+
+        return response()->json(['user' => $admin->toAuthPayload()]);
     }
 
     /**

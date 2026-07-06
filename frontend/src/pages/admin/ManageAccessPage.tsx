@@ -4,6 +4,7 @@ import { adminApi } from '@/lib/endpoints';
 import { timeAgo } from '@/lib/format';
 import { useApi } from '@/hooks/useApi';
 import { useAuth } from '@/context/auth';
+import { isSuperAdmin, adminHasCapability } from '@/lib/permissions';
 import type {
   AccessMatrixCapability,
   AccessRolesMatrix,
@@ -19,11 +20,18 @@ import './manage-access.css';
 
 /* ---- small helpers ------------------------------------------------------- */
 
+// Categorical role-identity colors (used as --rc for chips/badges/avatars).
+// admin/super_admin intentionally reuse the shared theme-aware warning/danger
+// tokens (they were already the same literal hexes as this page's --amber and
+// --oxblood). tenant/landlord have no shared token equivalent — they're a
+// page-local categorical pair, not a status color — so they use light-dark()
+// with the same hue lifted for legibility on a dark canvas, same approach as
+// the --wm-purple precedent in landlord/maintenance.css.
 const ROLE_COLOR: Record<string, string> = {
-  tenant: '#23596b',
-  landlord: '#163c47',
-  admin: '#9a6a1e',
-  super_admin: '#8a2436',
+  tenant: 'light-dark(#23596b, #7dc9da)',
+  landlord: 'light-dark(#163c47, #5fa9be)',
+  admin: 'var(--color-warning-600)',
+  super_admin: 'var(--color-danger-600)',
 };
 
 function cssVars(rc: string): React.CSSProperties {
@@ -63,7 +71,7 @@ interface ConfirmSpec {
 
 export function ManageAccessPage() {
   const { user } = useAuth();
-  const isSuper = user?.role === 'admin' && user.is_super_admin === true;
+  const isSuper = isSuperAdmin(user);
   const currentAdminId = user?.role === 'admin' ? user.id : -1;
 
   const summary = useApi(() => adminApi.accessSummary(), []);
@@ -235,7 +243,7 @@ export function ManageAccessPage() {
       <MemberDetailDrawer
         member={detailMember}
         isSuper={isSuper}
-        canManage={isSuper || (user?.role === 'admin' && !!user.capabilities?.includes('manage_users'))}
+        canManage={adminHasCapability(user, 'manage_users')}
         onClose={() => setDetailMember(null)}
         onConfirm={(spec) => {
           setDetailMember(null);
@@ -272,10 +280,10 @@ export function ManageAccessPage() {
 function SummaryCards({ summary }: { summary: ReturnType<typeof useApi<Awaited<ReturnType<typeof adminApi.accessSummary>>>> }) {
   const s = summary.data;
   const cards = [
-    { k: 'Total members', c: '#13161b', v: s?.members_total, d: 'across every role' },
-    { k: 'Admin team', c: '#8a2436', v: s?.admins, d: s ? `${s.super_admins} super · ${s.scoped_admins} scoped` : '—' },
-    { k: 'Landlords', c: '#163c47', v: s?.landlords, d: 'property owners' },
-    { k: 'Tenants', c: '#23596b', v: s?.tenants, d: 'renters & applicants' },
+    { k: 'Total members', c: 'var(--color-ink-900)', v: s?.members_total, d: 'across every role' },
+    { k: 'Admin team', c: ROLE_COLOR.super_admin, v: s?.admins, d: s ? `${s.super_admins} super · ${s.scoped_admins} scoped` : '—' },
+    { k: 'Landlords', c: ROLE_COLOR.landlord, v: s?.landlords, d: 'property owners' },
+    { k: 'Tenants', c: ROLE_COLOR.tenant, v: s?.tenants, d: 'renters & applicants' },
   ];
   return (
     <section className="stats">
@@ -558,7 +566,7 @@ function AdminDetailDrawer({
                     resize: 'vertical',
                   }}
                 />
-                {err && <div style={{ color: 'var(--oxblood)', fontSize: '0.8rem', marginTop: '0.4rem' }}>{err}</div>}
+                {err && <div style={{ color: 'var(--danger)', fontSize: '0.8rem', marginTop: '0.4rem' }}>{err}</div>}
                 <button
                   className="wbtn wbtn-blood"
                   style={{ marginTop: '0.7rem' }}
@@ -1052,7 +1060,7 @@ function InviteDrawer({
     >
       <div className="wacc">
         {formError && (
-          <div className="note-banner" style={{ margin: '0 0 1rem', borderColor: 'var(--oxblood)', color: 'var(--oxblood)' }}>
+          <div className="note-banner" style={{ margin: '0 0 1rem', borderColor: 'var(--danger)', color: 'var(--danger)' }}>
             {formError}
           </div>
         )}
@@ -1073,7 +1081,7 @@ function InviteDrawer({
             marginBottom: errors.email ? '0.3rem' : '1rem',
           }}
         />
-        {errors.email && <div style={{ color: 'var(--oxblood)', fontSize: '0.78rem', marginBottom: '0.8rem' }}>{errors.email}</div>}
+        {errors.email && <div style={{ color: 'var(--danger)', fontSize: '0.78rem', marginBottom: '0.8rem' }}>{errors.email}</div>}
 
         <label className="field-label">Name (optional)</label>
         <input

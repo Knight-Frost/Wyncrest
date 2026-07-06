@@ -76,7 +76,7 @@ class User extends Authenticatable implements CanResetPasswordContract
      * initials fallback. Backed by the eager-loadable `avatarAsset` relation, so
      * heavy endpoints can preload it to avoid an N+1.
      */
-    protected $appends = ['avatar_url'];
+    protected $appends = ['avatar_url', 'full_name'];
 
     /**
      * Check if user is a landlord
