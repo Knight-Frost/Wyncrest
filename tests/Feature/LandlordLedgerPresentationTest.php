@@ -15,7 +15,10 @@ use Tests\TestCase;
  * LandlordLedgerPresentationTest
  *
  * Feature 3: ledger entries are decorated with a deterministic `reference` and
- * a running `balance_after_cents` computed chronologically per contract.
+ * a running `running_balance_cents` computed chronologically per contract, via
+ * LedgerComputationEngine. PAYMENT fixtures use the canonical NEGATIVE sign
+ * (money received reduces balance) — the same convention PaymentService and
+ * the dev seeder use for real payments.
  */
 class LandlordLedgerPresentationTest extends TestCase
 {
@@ -57,7 +60,7 @@ class LandlordLedgerPresentationTest extends TestCase
         $payment = $this->entry([
             'type' => LedgerType::PAYMENT,
             'status' => LedgerStatus::PAID,
-            'amount_cents' => 150000,
+            'amount_cents' => -150000,
             'due_date' => now()->subDays(1),
             'created_at' => now()->subDays(1),
         ]);
@@ -67,7 +70,7 @@ class LandlordLedgerPresentationTest extends TestCase
         $response = $this->getJson('/api/landlord/ledger');
         $response->assertStatus(200);
 
-        $byId = collect($response->json())->keyBy('id');
+        $byId = collect($response->json('entries'))->keyBy('id');
 
         // Reference: deterministic prefix + Ymd of due_date + 6 uppercase id chars.
         $expectedRentRef = 'INV-'.now()->subDays(5)->format('Ymd').'-'.strtoupper(substr($rent->id, 0, 6));
@@ -76,9 +79,13 @@ class LandlordLedgerPresentationTest extends TestCase
         $this->assertSame($expectedRentRef, $byId[$rent->id]['reference']);
         $this->assertSame($expectedPayRef, $byId[$payment->id]['reference']);
 
+        // Display amount is always positive, regardless of internal sign.
+        $this->assertSame(150000, $byId[$payment->id]['display_amount_cents']);
+        $this->assertSame(-150000, $byId[$payment->id]['balance_impact_cents']);
+
         // Running balance: rent +150000, then payment brings it to 0.
-        $this->assertSame(150000, $byId[$rent->id]['balance_after_cents']);
-        $this->assertSame(0, $byId[$payment->id]['balance_after_cents']);
+        $this->assertSame(150000, $byId[$rent->id]['running_balance_cents']);
+        $this->assertSame(0, $byId[$payment->id]['running_balance_cents']);
     }
 
     public function test_show_returns_inclusive_balance(): void
@@ -93,7 +100,7 @@ class LandlordLedgerPresentationTest extends TestCase
         $payment = $this->entry([
             'type' => LedgerType::PAYMENT,
             'status' => LedgerStatus::PAID,
-            'amount_cents' => 30000,
+            'amount_cents' => -30000,
             'due_date' => now()->subDay(),
             'created_at' => now()->subDay(),
         ]);
@@ -102,12 +109,12 @@ class LandlordLedgerPresentationTest extends TestCase
 
         $this->getJson("/api/landlord/ledger/{$rent->id}")
             ->assertStatus(200)
-            ->assertJsonPath('balance_after_cents', 80000)
+            ->assertJsonPath('running_balance_cents', 80000)
             ->assertJsonPath('reference', 'INV-'.now()->subDays(3)->format('Ymd').'-'.strtoupper(substr($rent->id, 0, 6)));
 
         $this->getJson("/api/landlord/ledger/{$payment->id}")
             ->assertStatus(200)
-            ->assertJsonPath('balance_after_cents', 50000); // 80000 - 30000
+            ->assertJsonPath('running_balance_cents', 50000); // 80000 - 30000
     }
 
     public function test_waived_obligation_does_not_change_balance(): void
@@ -124,6 +131,6 @@ class LandlordLedgerPresentationTest extends TestCase
 
         $this->getJson("/api/landlord/ledger/{$waived->id}")
             ->assertStatus(200)
-            ->assertJsonPath('balance_after_cents', 0);
+            ->assertJsonPath('running_balance_cents', 0);
     }
 }

@@ -1,283 +1,137 @@
+/*
+ * Landlord Rent Ledger console — faithful rebuild of wyncrest-landlord-ledger.html.
+ * Three tabs (Balances · Transactions · Statements) over the real, immutable
+ * ledger, plus a scoped CSV export and an offline Record-Payment flow. Every
+ * money figure is server-computed (LedgerComputationEngine / LandlordLedgerService).
+ *
+ * Honesty notes vs. the mockup:
+ *  - The mockup's `pending` / `partial` / `failed` payment states and its
+ *    arbitrary "Record adjustment" action do not exist in Wyncrest's ledger, so
+ *    they are intentionally absent. The real write path is Record payment
+ *    (a full-amount offline settlement) — see ledgerShared RecordPaymentModal.
+ */
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { useNavigate } from 'react-router';
 import { useApi } from '@/hooks/useApi';
 import { landlordApi } from '@/lib/endpoints';
-import type { LedgerEntry, LedgerStatus, LedgerType } from '@/lib/types';
-import {
-  formatCents,
-  formatDate,
-  humanize,
-} from '@/lib/format';
-import {
-  ledgerTypeLabel,
-  ledgerIsCredit,
-  ledgerSignedTone,
-} from '@/lib/statusMaps';
-import { paginate, rangeLabel } from '@/lib/paginate';
-import { PageHeader } from '@/components/layout/PageHeader';
-import { Button } from '@/components/ui/Button';
-import { DetailDrawer } from '@/components/ui/Drawer';
-import { ResponsiveTable, type ResponsiveColumn } from '@/components/ui/ResponsiveTable';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
-import {
-  CommandBar,
-  SearchInput,
-  FilterTabs,
-  SortSelect,
-  Pagination,
-  ActionMenu,
-  type FilterTab as Tab,
-  type SelectOption,
-} from '@/components/landlord/primitives';
-import {
-  IconWallet,
-  IconAlertCircle,
-  IconCalendar,
-  IconDownload,
-  IconFileText,
-  IconCheckCircle,
-  IconClock,
-} from '@/components/ui/icons';
+import type { LedgerEntry, LedgerBalanceRow } from '@/lib/types';
+import { formatCents } from '@/lib/format';
 import { useToast } from '@/components/ui/toast';
+import { LoadingState, ErrorState } from '@/components/ui/states';
 import {
-  StatusCard,
-  CommandCard,
-  SemanticBadge,
-  DashboardSection,
-  DataCardGrid,
-  getCollectedVariant,
-  getLedgerHealthVariant,
-  getLedgerVariant,
-} from '@/components/cards';
+  I,
+  ENTRY,
+  STATUS,
+  cedis0,
+  fmtDShort,
+  initials,
+  avStyle,
+  amtToneClass,
+  contractStatusMeta,
+  isOpenObligation,
+} from './ledgerShared';
+import { Badge, RecordPaymentModal } from './ledgerComponents';
+import './ledger.css';
 
-/* ---- Types ---------------------------------------------------------------- */
-
-type StatusFilterKey = 'all' | LedgerStatus | 'fees';
-type DateRange = 'this_month' | 'last_30' | 'all';
-type SortKey = 'newest' | 'oldest' | 'amount_high';
-
-const DATE_RANGE_OPTIONS: SelectOption<DateRange>[] = [
-  { value: 'this_month', label: 'This month' },
-  { value: 'last_30', label: 'Last 30 days' },
-  { value: 'all', label: 'All time' },
-];
-
-const SORT_OPTIONS: SelectOption<SortKey>[] = [
-  { value: 'newest', label: 'Newest first' },
-  { value: 'oldest', label: 'Oldest first' },
-  { value: 'amount_high', label: 'Amount high → low' },
-];
-
-const PER_PAGE = 12;
-
-/* ---- Date helpers --------------------------------------------------------- */
-
-function startOfMonth(): Date {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1);
-}
-
-function isThisMonth(iso: string | null): boolean {
-  if (!iso) return false;
-  return new Date(iso) >= startOfMonth();
-}
-
-function isLast30Days(iso: string | null): boolean {
-  if (!iso) return false;
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 30);
-  return new Date(iso) >= cutoff;
-}
-
-function isWithinNextNDays(iso: string | null, n: number): boolean {
-  if (!iso) return false;
-  const d = new Date(iso);
-  const now = new Date();
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() + n);
-  return d >= now && d <= cutoff;
-}
-
-/* ---- KPI computation (single pass) --------------------------------------- */
-
-interface KpiTotals {
-  collectedThisMonth: number;
-  outstanding: number;
-  overdueTotal: number;
-  overdueContractCount: number;
-  upcomingWeek: number;
-}
-
-function computeKpis(entries: LedgerEntry[]): KpiTotals {
-  let collectedThisMonth = 0;
-  let outstanding = 0;
-  let overdueTotal = 0;
-  const overdueContracts = new Set<string>();
-  let upcomingWeek = 0;
-
-  for (const e of entries) {
-    if (e.type === 'rent' && e.status === 'paid' && isThisMonth(e.due_date)) {
-      collectedThisMonth += e.amount_cents;
-    }
-    if (e.status === 'pending') {
-      outstanding += e.amount_cents;
-    }
-    if (e.status === 'overdue') {
-      overdueTotal += e.amount_cents;
-      overdueContracts.add(e.contract_id);
-    }
-    if (
-      (e.status === 'pending' || e.status === 'overdue') &&
-      (e.type === 'rent' || e.type === 'late_fee') &&
-      isWithinNextNDays(e.due_date, 7)
-    ) {
-      upcomingWeek += e.amount_cents;
-    }
-  }
-
+/**
+ * Spread onto a clickable card <div> so keyboard users can reach and activate
+ * it: button semantics, Tab focus, Enter/Space fire the action. The keydown
+ * only reacts on the card itself so nested buttons keep their own behaviour.
+ */
+function pressable(action: () => void) {
   return {
-    collectedThisMonth,
-    outstanding,
-    overdueTotal,
-    overdueContractCount: overdueContracts.size,
-    upcomingWeek,
+    role: 'button' as const,
+    tabIndex: 0,
+    onClick: action,
+    onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.target !== e.currentTarget) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        action();
+      }
+    },
   };
 }
 
-/* ---- Entry type icon ------------------------------------------------------ */
+type Tab = 'balances' | 'transactions' | 'statements';
 
-function typeIcon(type: LedgerType) {
-  switch (type) {
-    case 'rent':
-      return <IconCalendar size={13} />;
-    case 'late_fee':
-      return <IconAlertCircle size={13} />;
-    case 'payment':
-      return <IconCheckCircle size={13} />;
-    case 'refund':
-      return <IconFileText size={13} />;
-  }
+interface Filters {
+  q: string;
+  property: string;
+  type: string;
+  status: string;
 }
 
-/* ---- Main component ------------------------------------------------------- */
+interface ExportState {
+  scope: 'all' | 'property' | 'contract';
+  target: string;
+  range: 'this' | 'last' | 'all';
+  reason: string;
+}
+
+/** Translate an export range into created_at date bounds. */
+function rangeBounds(range: ExportState['range']): { date_from?: string; date_to?: string } {
+  const now = new Date();
+  if (range === 'this') {
+    return {
+      date_from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(),
+      date_to: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString(),
+    };
+  }
+  if (range === 'last') {
+    return {
+      date_from: new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString(),
+      date_to: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).toISOString(),
+    };
+  }
+  return {};
+}
 
 export function LandlordLedger() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const { data, loading, error, reload } = useApi(() => landlordApi.ledger(), []);
 
-  // Filters / sort / pagination
-  const [search, setSearch] = useState('');
-  const [statusTab, setStatusTab] = useState<StatusFilterKey>('all');
-  const [propertyFilter, setPropertyFilter] = useState<string>('all');
-  const [dateRange, setDateRange] = useState<DateRange>('all');
-  const [sort, setSort] = useState<SortKey>('newest');
-  const [page, setPage] = useState(1);
+  const [tab, setTab] = useState<Tab>('balances');
+  const [filters, setFilters] = useState<Filters>({ q: '', property: 'all', type: 'all', status: 'all' });
+  const [expOpen, setExpOpen] = useState(false);
+  const [exp, setExp] = useState<ExportState>({ scope: 'all', target: '', range: 'this', reason: '' });
   const [exporting, setExporting] = useState(false);
+  const [payFor, setPayFor] = useState<{ obligations: LedgerEntry[]; tenantName?: string | null } | null>(null);
 
-  // Detail modal
-  const [viewing, setViewing] = useState<LedgerEntry | null>(null);
+  const entries = useMemo(() => data?.entries ?? [], [data]);
+  const balances = useMemo(() => data?.balances ?? [], [data]);
+  const summary = data?.summary;
 
-  const entries = useMemo(() => data ?? [], [data]);
-  const hasAny = entries.length > 0;
+  /* Distinct properties (for filters + export target) */
+  const properties = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const b of balances) if (b.property) seen.set(String(b.property.id), b.property.name);
+    return [...seen.entries()].map(([id, name]) => ({ id, name }));
+  }, [balances]);
 
-  /* KPIs */
-  const kpi = useMemo(() => computeKpis(entries), [entries]);
-
-  /* Distinct properties for the property filter dropdown */
-  const propertyOptions = useMemo<SelectOption<string>[]>(() => {
-    const seen = new Map<string, string>(); // id → name
-    for (const e of entries) {
-      const prop = e.contract?.listing?.unit?.property;
-      if (prop) seen.set(String(prop.id), prop.name);
-    }
-    const opts: SelectOption<string>[] = [{ value: 'all', label: 'All properties' }];
-    for (const [id, name] of seen) opts.push({ value: id, label: name });
-    return opts;
-  }, [entries]);
-
-  /* Status filter tab counts */
-  const tabCounts = useMemo(() => {
-    const c: Record<string, number> = { all: entries.length };
-    for (const e of entries) {
-      c[e.status] = (c[e.status] ?? 0) + 1;
-      if (e.type === 'late_fee') c['fees'] = (c['fees'] ?? 0) + 1;
-    }
-    return c;
-  }, [entries]);
-
-  const tabs: Tab<StatusFilterKey>[] = [
-    { key: 'all', label: 'All', count: tabCounts.all ?? 0 },
-    { key: 'paid', label: 'Paid', count: tabCounts.paid ?? 0, tone: 'success' },
-    { key: 'pending', label: 'Outstanding', count: tabCounts.pending ?? 0, tone: 'warning' },
-    { key: 'overdue', label: 'Overdue', count: tabCounts.overdue ?? 0, tone: 'danger' },
-    { key: 'fees', label: 'Fees', count: tabCounts.fees ?? 0, tone: 'danger' },
-  ];
-
-  /* Filtered + sorted entries */
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-
-    let rows = entries.filter((e) => {
-      if (statusTab !== 'all') {
-        if (statusTab === 'fees') {
-          if (e.type !== 'late_fee') return false;
-        } else {
-          if (e.status !== statusTab) return false;
-        }
-      }
-
-      if (propertyFilter !== 'all') {
-        const prop = e.contract?.listing?.unit?.property;
-        if (!prop || String(prop.id) !== propertyFilter) return false;
-      }
-
-      if (dateRange === 'this_month' && !isThisMonth(e.due_date)) return false;
-      if (dateRange === 'last_30' && !isLast30Days(e.due_date)) return false;
-
-      if (q) {
-        const unit = e.contract?.listing?.unit;
-        const prop = unit?.property;
-        const hay = [
-          e.tenant?.full_name,
-          unit ? `unit ${unit.unit_number}` : null,
-          prop?.name,
-          e.reference,
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-
-      return true;
-    });
-
-    rows = [...rows].sort((a, b) => {
-      switch (sort) {
-        case 'oldest':
-          return new Date(a.due_date ?? a.created_at).getTime() - new Date(b.due_date ?? b.created_at).getTime();
-        case 'amount_high':
-          return b.amount_cents - a.amount_cents;
-        case 'newest':
-        default:
-          return new Date(b.due_date ?? b.created_at).getTime() - new Date(a.due_date ?? a.created_at).getTime();
-      }
-    });
-
-    return rows;
-  }, [entries, statusTab, propertyFilter, dateRange, search, sort]);
-
-  const slice = paginate(filtered, page, PER_PAGE);
-
-  function handleFilterChange(fn: () => void) {
-    fn();
-    setPage(1);
+  function setFilter(patch: Partial<Filters>) {
+    setFilters((f) => ({ ...f, ...patch }));
   }
 
-  async function handleExport() {
+  /* Open obligations grouped by contract — powers the "Record payment" action */
+  function openObligationsForContract(contractId: string): LedgerEntry[] {
+    return entries.filter((e) => e.contract_id === contractId && isOpenObligation(e));
+  }
+
+  async function runExport() {
     setExporting(true);
     try {
-      await landlordApi.exportLedger();
+      const params: Record<string, string> = { ...rangeBounds(exp.range) } as Record<string, string>;
+      if (exp.scope === 'property' && exp.target) params.property_id = exp.target;
+      if (exp.scope === 'contract' && exp.target) params.contract_id = exp.target;
+      if (exp.reason.trim()) params.reason = exp.reason.trim();
+      if ((exp.scope === 'property' || exp.scope === 'contract') && !exp.target) {
+        toast(`Pick a ${exp.scope} to export`, 'error');
+        setExporting(false);
+        return;
+      }
+      await landlordApi.exportLedger(params);
       toast('Ledger exported', 'success');
     } catch {
       toast('Export failed', 'error');
@@ -286,352 +140,587 @@ export function LandlordLedger() {
     }
   }
 
-  // Semantic roles from real data
-  const collectedRole = getCollectedVariant(kpi.collectedThisMonth, kpi.overdueTotal);
-  const ledgerHealthRole = getLedgerHealthVariant(kpi.outstanding + kpi.overdueTotal, kpi.overdueTotal);
+  if (loading) {
+    return (
+      <div className="wled">
+        <LoadingState label="Loading ledger…" />
+      </div>
+    );
+  }
+  if (error || !summary) {
+    return (
+      <div className="wled">
+        <ErrorState message={error?.message ?? 'Could not load the ledger'} onRetry={reload} />
+      </div>
+    );
+  }
 
-  /* ── Ledger table columns (shared desktop table + mobile stacked cards) ── */
-  const columns: ResponsiveColumn<LedgerEntry>[] = [
-    {
-      key: 'date',
-      header: 'Date',
-      cell: (entry) => (
-        <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm text-ink-600">
-          <IconCalendar size={13} className="shrink-0 text-ink-400" />
-          {formatDate(entry.due_date ?? entry.created_at)}
-        </span>
-      ),
-    },
-    {
-      key: 'tenant',
-      header: 'Tenant / Unit',
-      primary: true,
-      cell: (entry) => {
-        const unit = entry.contract?.listing?.unit;
-        const prop = unit?.property;
-        return (
-          <div>
-            <p className="truncate text-sm font-medium text-ink-900">
-              {entry.tenant?.full_name ?? '—'}
-            </p>
-            {unit && (
-              <p className="mt-0.5 truncate text-xs text-ink-500">
-                Unit {unit.unit_number}
-                {prop ? ` · ${prop.name}` : ''}
-              </p>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      key: 'type',
-      header: 'Entry type',
-      cell: (entry) => (
-        <span className="inline-flex items-center gap-1.5 text-sm text-ink-700">
-          <span className="text-ink-400">{typeIcon(entry.type)}</span>
-          {ledgerTypeLabel[entry.type]}
-        </span>
-      ),
-    },
-    {
-      key: 'reference',
-      header: 'Reference',
-      hideBelow: 'lg',
-      cell: (entry) => (
-        <span className="font-mono text-xs text-ink-500">{entry.reference ?? '—'}</span>
-      ),
-    },
-    {
-      key: 'amount',
-      header: 'Amount',
-      align: 'right',
-      cell: (entry) => {
-        const amountTone = ledgerSignedTone(entry.type);
-        const amountClass =
-          amountTone === 'success'
-            ? 'text-success-600'
-            : amountTone === 'info'
-              ? 'text-info-600'
-              : 'text-danger-700';
-        return (
-          <span className={`font-mono text-sm font-semibold tabular-nums ${amountClass}`}>
-            {ledgerIsCredit(entry.type) ? '-' : ''}
-            {formatCents(entry.amount_cents)}
-          </span>
-        );
-      },
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      cell: (entry) => (
-        <SemanticBadge role={getLedgerVariant(entry.status)}>
-          {humanize(entry.status)}
-        </SemanticBadge>
-      ),
-    },
-    {
-      key: 'balance',
-      header: 'Balance after',
-      align: 'right',
-      hideBelow: 'xl',
-      cell: (entry) => (
-        <span className="font-mono text-sm tabular-nums text-ink-700">
-          {entry.balance_after_cents != null ? formatCents(entry.balance_after_cents) : '—'}
-        </span>
-      ),
-    },
-    {
-      key: 'actions',
-      header: '',
-      align: 'right',
-      cell: (entry) => (
-        <ActionMenu
-          items={[
-            {
-              label: 'View details',
-              icon: <IconFileText size={15} />,
-              onClick: () => setViewing(entry),
-            },
-          ]}
-        />
-      ),
-    },
-  ];
+  const card = (cls: string, k: string, v: string, n: string) => (
+    <div className={`card glass-2 ${cls}`}>
+      <span className="edge" />
+      <div className="k">{k}</div>
+      <div className="v">{v}</div>
+      <div className="n">{n}</div>
+    </div>
+  );
+
+  const od = summary.tenants_overdue;
 
   return (
-    <div className="animate-rise space-y-10">
-      {/* Page header */}
-      <PageHeader
-        eyebrow="Operations"
-        title="Rent Ledger"
-        description="Track charges, payments, and balances across your contracts."
-        action={
-          <Button
-            variant="secondary"
-            leftIcon={<IconDownload size={16} />}
-            onClick={handleExport}
-            loading={exporting}
-            disabled={!hasAny}
-          >
-            Export CSV
-          </Button>
-        }
-      />
-
-      {/* KPI row — CommandCard for overdue (most important), StatusCards for the rest */}
-      <DashboardSection eyebrow="LEDGER SUMMARY">
-        <DataCardGrid cols={4}>
-          <StatusCard
-            label="Collected this month"
-            value={formatCents(kpi.collectedThisMonth)}
-            sub="Rent paid in current calendar month"
-            role={collectedRole}
-            icon={<IconCheckCircle size={18} />}
-            loading={loading}
-          />
-          <StatusCard
-            label="Outstanding balance"
-            value={formatCents(kpi.outstanding)}
-            sub="Pending charges awaiting payment"
-            role={kpi.outstanding > 0 ? 'warning' : 'neutral'}
-            icon={<IconClock size={18} />}
-            loading={loading}
-          />
-          <CommandCard
-            label="Overdue amount"
-            value={kpi.overdueTotal > 0 ? formatCents(kpi.overdueTotal) : 'All clear'}
-            sub={
-              kpi.overdueContractCount > 0
-                ? `Across ${kpi.overdueContractCount} contract${kpi.overdueContractCount === 1 ? '' : 's'}`
-                : 'Nothing overdue'
-            }
-            icon={<IconAlertCircle size={20} />}
-            role={ledgerHealthRole}
-            loading={loading}
-          />
-          <StatusCard
-            label="Due this week"
-            value={formatCents(kpi.upcomingWeek)}
-            sub="Pending & overdue rent/fees, next 7 days"
-            role={kpi.upcomingWeek > 0 ? 'warning' : 'neutral'}
-            icon={<IconCalendar size={18} />}
-            loading={loading}
-          />
-        </DataCardGrid>
-      </DashboardSection>
-
-      {/* Command bar */}
-      <CommandBar>
-        <SearchInput
-          value={search}
-          onChange={(v) => handleFilterChange(() => setSearch(v))}
-          placeholder="Search by tenant, unit, property or reference…"
-          label="Search ledger entries"
-        />
-        <FilterTabs
-          tabs={tabs}
-          value={statusTab}
-          onChange={(k) => handleFilterChange(() => setStatusTab(k))}
-        />
-        <SortSelect
-          value={propertyFilter}
-          onChange={(v) => handleFilterChange(() => setPropertyFilter(v))}
-          options={propertyOptions}
-        />
-        <SortSelect
-          value={dateRange}
-          onChange={(v) => handleFilterChange(() => setDateRange(v as DateRange))}
-          options={DATE_RANGE_OPTIONS}
-        />
-        <SortSelect
-          value={sort}
-          onChange={(v) => setSort(v as SortKey)}
-          options={SORT_OPTIONS}
-        />
-      </CommandBar>
-
-      {/* Main content */}
-      {loading ? (
-        <LoadingState label="Loading ledger…" />
-      ) : error ? (
-        <ErrorState message={error.message} onRetry={reload} />
-      ) : !hasAny ? (
-        <EmptyState
-          icon={<IconWallet />}
-          title="No ledger activity yet"
-          description="Charges and payments appear here once a contract is active."
-          action={
-            <Link to="/app/tenants">
-              <Button variant="secondary">View tenants</Button>
-            </Link>
-          }
-        />
-      ) : slice.total === 0 ? (
-        <EmptyState
-          icon={<IconWallet />}
-          title="No entries match"
-          description="Try adjusting your search, filter, or date range."
-        />
-      ) : (
-        <div className="space-y-4">
-          {/* Result count */}
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-ink-800">Ledger entries</p>
-            <p className="text-xs text-ink-500">
-              Showing {slice.from} to {slice.to} of {slice.total} {slice.total === 1 ? 'entry' : 'entries'}
+    <div className="wled">
+      <div className="app" style={{ maxWidth: 'none', padding: 0 }}>
+        {/* ---- page head ---- */}
+        <div className="pagehead glass">
+          <header>
+            <div className="eyebrow">Operations</div>
+            <h1 className="page">Rent ledger</h1>
+            <p className="lede">
+              Track every rent charge, payment, fee, and balance by tenant, property, unit, and contract. Each entry
+              traces back to who was charged, what for, when, and how it was paid.
             </p>
-          </div>
-
-          <ResponsiveTable
-            caption="Ledger entries"
-            columns={columns}
-            rows={slice.items}
-            keyFn={(entry) => entry.id}
-          />
-
-          {/* Footer */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-ink-500">{rangeLabel(slice, 'entry', 'entries')}</p>
-            <Pagination slice={slice} onPage={setPage} />
+          </header>
+          <div className="acts">
+            <button className="btn btn-g" onClick={() => setTab('statements')}>
+              {I.download} Statements
+            </button>
+            <button className="btn btn-p" onClick={() => setExpOpen((o) => !o)}>
+              {I.export} Export
+            </button>
           </div>
         </div>
-      )}
 
-      {/* Read-only entry detail drawer */}
-      <DetailDrawer
-        open={viewing !== null}
-        onClose={() => setViewing(null)}
-        eyebrow="LEDGER"
-        title="Ledger entry"
-        footer={
-          <Button variant="secondary" onClick={() => setViewing(null)}>
-            Close
-          </Button>
-        }
-      >
-        {viewing && (() => {
-          const e = viewing;
-          const unit = e.contract?.listing?.unit;
-          const prop = unit?.property;
-          const isCredit = ledgerIsCredit(e.type);
-          const amountTone = ledgerSignedTone(e.type);
-          const amountClass =
-            amountTone === 'success'
-              ? 'text-success-600'
-              : amountTone === 'info'
-                ? 'text-info-600'
-                : 'text-danger-700';
+        {/* ---- summary cards ---- */}
+        <section className="cards">
+          {card(summary.outstanding_cents > 0 ? 'bad' : 'good', 'Total outstanding', cedis0(summary.outstanding_cents), 'across active contracts')}
+          {card(summary.overdue_cents > 0 ? 'bad' : 'good', 'Overdue balance', cedis0(summary.overdue_cents), 'past the due date')}
+          {card('good', `Collected · ${summary.month_label.split(' ')[0]}`, cedis0(summary.collected_month_cents), 'payments received')}
+          {card('info', `Charged · ${summary.month_label.split(' ')[0]}`, cedis0(summary.charged_month_cents), 'rent and fees posted')}
+          {card(od > 0 ? 'warn' : 'good', 'Tenants overdue', String(od), od === 1 ? 'needs follow-up' : 'need follow-up')}
+        </section>
 
-          return (
-            <div className="space-y-5">
-              {/* Type + status */}
-              <div className="flex flex-wrap items-center gap-2">
-                <SemanticBadge role={getLedgerVariant(e.status)}>
-                  {humanize(e.status)}
-                </SemanticBadge>
-                <span className="inline-flex items-center gap-1 text-xs text-ink-500">
-                  {typeIcon(e.type)}
-                  {ledgerTypeLabel[e.type]}
-                </span>
-              </div>
+        {/* ---- tabs ---- */}
+        <div className="tabs glass-2">
+          <button className={tab === 'balances' ? 'on' : ''} onClick={() => setTab('balances')}>
+            {I.scale}Balances
+          </button>
+          <button className={tab === 'transactions' ? 'on' : ''} onClick={() => setTab('transactions')}>
+            {I.doc}Transactions <span className="n">{entries.length}</span>
+          </button>
+          <button className={tab === 'statements' ? 'on' : ''} onClick={() => setTab('statements')}>
+            {I.doc2}Statements
+          </button>
+        </div>
 
-              {/* Amount prominent */}
-              <div className="rounded-xl bg-ink-50 px-4 py-4 text-center">
-                <p className="text-xs font-medium uppercase tracking-widest text-ink-400">Amount</p>
-                <p className={`font-display mt-1 text-3xl font-semibold tabular-nums ${amountClass}`}>
-                  {isCredit ? '-' : ''}{formatCents(e.amount_cents)}
+        {/* ---- export panel ---- */}
+        <div className={`exp glass ${expOpen ? 'open' : ''}`}>
+          <div className="exp-inner">
+            <div className="ph" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3>Export ledger</h3>
+                <p style={{ fontSize: '12.5px', color: 'var(--slate)', marginTop: 2 }}>
+                  Generate a CSV records file with references, balances, and signed amounts. Every export is written to
+                  the audit log with the reason you give.
                 </p>
               </div>
-
-              {/* Detail grid */}
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
-                <div>
-                  <dt className="text-xs text-ink-400">Reference</dt>
-                  <dd className="mt-0.5 font-mono text-sm text-ink-800">{e.reference ?? '—'}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-ink-400">Due date</dt>
-                  <dd className="mt-0.5 text-sm text-ink-800">{formatDate(e.due_date ?? e.created_at)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-ink-400">Tenant</dt>
-                  <dd className="mt-0.5 text-sm font-medium text-ink-800">{e.tenant?.full_name ?? '—'}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-ink-400">Unit / Property</dt>
-                  <dd className="mt-0.5 text-sm text-ink-800">
-                    {unit ? `Unit ${unit.unit_number}` : '—'}
-                    {prop ? ` · ${prop.name}` : ''}
-                  </dd>
-                </div>
-                {e.billing_period_start && (
-                  <div className="col-span-2">
-                    <dt className="text-xs text-ink-400">Billing period</dt>
-                    <dd className="mt-0.5 text-sm text-ink-800">
-                      {formatDate(e.billing_period_start)} to {formatDate(e.billing_period_end ?? e.billing_period_start)}
-                    </dd>
-                  </div>
-                )}
-                {e.balance_after_cents != null && (
-                  <div className="col-span-2">
-                    <dt className="text-xs text-ink-400">Contract balance after this entry</dt>
-                    <dd className="mt-0.5 font-display text-sm font-semibold tabular-nums text-ink-900">
-                      {formatCents(e.balance_after_cents)}
-                    </dd>
-                  </div>
-                )}
-              </dl>
-
-              {/* Immutability note */}
-              <p className="rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-500">
-                Ledger entries are immutable. Corrections are handled via compensating entries.
-              </p>
+              <button className="iconbtn" aria-label="Close" onClick={() => setExpOpen(false)}>
+                {I.x}
+              </button>
             </div>
-          );
-        })()}
-      </DetailDrawer>
+            <div className="exp-grid">
+              <div className="field">
+                <label>What to export</label>
+                <select value={exp.scope} onChange={(e) => setExp((s) => ({ ...s, scope: e.target.value as ExportState['scope'], target: '' }))}>
+                  <option value="all">Full ledger — every entry</option>
+                  <option value="property">One property</option>
+                  <option value="contract">One contract</option>
+                </select>
+                {exp.scope === 'property' && (
+                  <div className="field" style={{ marginTop: 12 }}>
+                    <label>Property</label>
+                    <select value={exp.target} onChange={(e) => setExp((s) => ({ ...s, target: e.target.value }))}>
+                      <option value="">Select a property…</option>
+                      {properties.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {exp.scope === 'contract' && (
+                  <div className="field" style={{ marginTop: 12 }}>
+                    <label>Contract</label>
+                    <select value={exp.target} onChange={(e) => setExp((s) => ({ ...s, target: e.target.value }))}>
+                      <option value="">Select a contract…</option>
+                      {balances.map((b) => (
+                        <option key={b.contract_id} value={b.contract_id}>
+                          {b.tenant?.full_name ?? '—'} · {b.property?.name} {b.unit_number}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+              <div>
+                <div className="field">
+                  <label>Date range</label>
+                  <select value={exp.range} onChange={(e) => setExp((s) => ({ ...s, range: e.target.value as ExportState['range'] }))}>
+                    <option value="this">This month ({summary.month_label})</option>
+                    <option value="last">Last month</option>
+                    <option value="all">All time</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label>Reason for export (recorded)</label>
+                  <input value={exp.reason} onChange={(e) => setExp((s) => ({ ...s, reason: e.target.value }))} placeholder="e.g. Monthly accounting, dispute record, audit" />
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+              <button className="btn btn-p" onClick={runExport} disabled={exporting}>
+                {I.export} {exporting ? 'Generating…' : 'Generate CSV'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ---- filters ---- */}
+        <div className="filters glass-2">
+          <div className="fsearch">
+            <span className="fi">{I.search}</span>
+            <input
+              value={filters.q}
+              onChange={(e) => setFilter({ q: e.target.value })}
+              placeholder={tab === 'transactions' ? 'Search tenant, property, unit, contract, or reference…' : 'Search tenant, property, unit, or contract…'}
+              autoComplete="off"
+            />
+          </div>
+          <Sel value={filters.property} onChange={(v) => setFilter({ property: v })} options={[['all', 'All properties'], ...properties.map((p) => [p.id, p.name] as [string, string])]} />
+          {tab === 'transactions' && (
+            <>
+              <Sel
+                value={filters.type}
+                onChange={(v) => setFilter({ type: v })}
+                options={[
+                  ['all', 'All types'],
+                  ['rent', 'Rent charge'],
+                  ['payment', 'Payment'],
+                  ['late_fee', 'Late fee'],
+                ]}
+              />
+              <Sel
+                value={filters.status}
+                onChange={(v) => setFilter({ status: v })}
+                options={[
+                  ['all', 'All statuses'],
+                  ['paid', 'Paid'],
+                  ['pending', 'Pending'],
+                  ['overdue', 'Overdue'],
+                  ['waived', 'Waived'],
+                ]}
+              />
+            </>
+          )}
+          {tab === 'balances' && (
+            <Sel
+              value={filters.status}
+              onChange={(v) => setFilter({ status: v })}
+              options={[
+                ['all', 'All statuses'],
+                ['paid', 'Current'],
+                ['open', 'Due soon'],
+                ['overdue', 'Overdue'],
+              ]}
+            />
+          )}
+        </div>
+
+        {/* ---- content ---- */}
+        {tab === 'balances' && (
+          <BalancesView
+            balances={balances}
+            filters={filters}
+            onStatement={(cid) => navigate(`/app/ledger/statement/${cid}`)}
+            onRecord={(row) => {
+              const obligations = openObligationsForContract(row.contract_id);
+              if (!obligations.length) {
+                toast('No open charge to record a payment against', 'info');
+                return;
+              }
+              setPayFor({ obligations, tenantName: row.tenant?.full_name });
+            }}
+            openCount={openObligationsForContract}
+          />
+        )}
+        {tab === 'transactions' && <TransactionsView entries={entries} filters={filters} onOpen={(id) => navigate(`/app/ledger/tx/${id}`)} />}
+        {tab === 'statements' && (
+          <StatementsView
+            balances={balances}
+            filters={filters}
+            onContract={(cid) => navigate(`/app/ledger/statement/${cid}`)}
+            onProperty={(pid) => navigate(`/app/ledger/property/${pid}`)}
+          />
+        )}
+
+        {/* ---- footer note ---- */}
+        <div className="foot glass-2">
+          {I.shield}
+          <div>
+            The ledger is append-only and immutable: corrections are added as new compensating entries, never edits to
+            the past. Running balances, references, and totals are derived server-side by the ledger computation engine —
+            the same figures the tenant and admin see.
+          </div>
+        </div>
+      </div>
+
+      {payFor && (
+        <RecordPaymentModal
+          obligations={payFor.obligations}
+          tenantName={payFor.tenantName}
+          onClose={() => setPayFor(null)}
+          onDone={() => {
+            setPayFor(null);
+            reload();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/* ---------- select control ------------------------------------------------ */
+function Sel({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: [string, string][] }) {
+  return (
+    <div className="sel">
+      <select value={value} onChange={(e) => onChange(e.target.value)}>
+        {options.map(([v, l]) => (
+          <option key={v} value={v}>
+            {l}
+          </option>
+        ))}
+      </select>
+      <span className="cv">{I.down}</span>
+    </div>
+  );
+}
+
+function Empty({ title, message }: { title: string; message: string }) {
+  return (
+    <div className="empty glass">
+      <div className="ei">{I.search}</div>
+      <div className="et">{title}</div>
+      <div className="em">{message}</div>
+    </div>
+  );
+}
+
+/* ---------- BALANCES ------------------------------------------------------ */
+function BalancesView({
+  balances,
+  filters,
+  onStatement,
+  onRecord,
+  openCount,
+}: {
+  balances: LedgerBalanceRow[];
+  filters: Filters;
+  onStatement: (cid: string) => void;
+  onRecord: (row: LedgerBalanceRow) => void;
+  openCount: (cid: string) => LedgerEntry[];
+}) {
+  const rows = useMemo(() => {
+    const q = filters.q.trim().toLowerCase();
+    return balances.filter((b) => {
+      if (filters.property !== 'all' && String(b.property?.id) !== filters.property) return false;
+      if (filters.status !== 'all' && b.status !== filters.status) return false;
+      if (q) {
+        const hay = [b.tenant?.full_name, b.property?.name, b.unit_number, b.contract_id, b.tenant?.email].filter(Boolean).join(' ').toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [balances, filters]);
+
+  if (!rows.length) return <Empty title="No matching balances" message="Try a different property, status, or clear your search." />;
+
+  return (
+    <div className="blist">
+      {rows.map((b) => {
+        const owed = b.balance_cents > 0;
+        const st = contractStatusMeta(b.status);
+        const name = b.tenant?.full_name ?? 'Unknown tenant';
+        const canRecord = openCount(b.contract_id).length > 0;
+        return (
+          <div className="brow glass" key={b.contract_id} {...pressable(() => onStatement(b.contract_id))}>
+            <div className="bt">
+              <div className="bav" style={avStyle(name)}>
+                {initials(name)}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div className="nm">{name}</div>
+                <div className="meta">
+                  {b.property?.name} · Unit {b.unit_number}
+                </div>
+              </div>
+            </div>
+            <div className="bcell hm">
+              <div className="lbl">Contract</div>
+              <div className="val" style={{ fontSize: '12.5px' }}>
+                {b.rent_cents ? `${formatCents(b.rent_cents)}/mo` : '—'}
+              </div>
+              <div className="sub">
+                {fmtDShort(b.start_date)} – {fmtDShort(b.end_date)}
+              </div>
+            </div>
+            <div className="bcell">
+              <div className="lbl">Balance</div>
+              <div className={`val big ${owed ? 'owed' : ''}`}>{owed ? formatCents(b.balance_cents) : 'GH₵ 0'}</div>
+              <div className="sub" style={b.status === 'overdue' ? { color: 'var(--oxblood)' } : undefined}>
+                {b.status === 'overdue' ? 'overdue' : owed ? 'outstanding' : 'settled'}
+              </div>
+            </div>
+            <div className="bcell hm">
+              <div className="lbl">{owed ? 'Due' : 'Next due'}</div>
+              <div className="val" style={{ fontSize: '13px' }}>
+                {fmtDShort(b.next_due)}
+              </div>
+              <div className="sub">last paid {fmtDShort(b.last_payment_at)}</div>
+            </div>
+            <div className="bact" onClick={(e) => e.stopPropagation()}>
+              <Badge badge={st.badge}>
+                <span className="dot" />
+                {st.label}
+              </Badge>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {canRecord && (
+                  <button className="btn btn-g sm" onClick={() => onRecord(b)}>
+                    {I.cash} Record
+                  </button>
+                )}
+                <button className="btn btn-g sm" onClick={() => onStatement(b.contract_id)}>
+                  {I.doc2} Statement
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ---------- TRANSACTIONS -------------------------------------------------- */
+function TransactionsView({ entries, filters, onOpen }: { entries: LedgerEntry[]; filters: Filters; onOpen: (id: string) => void }) {
+  const rows = useMemo(() => {
+    const q = filters.q.trim().toLowerCase();
+    return entries.filter((e) => {
+      if (filters.property !== 'all' && String(e.contract?.listing?.unit?.property?.id) !== filters.property) return false;
+      if (filters.type !== 'all' && e.type !== filters.type) return false;
+      if (filters.status !== 'all' && e.status !== filters.status) return false;
+      if (q) {
+        const unit = e.contract?.listing?.unit;
+        const hay = [e.reference, e.display_label, e.tenant?.full_name, unit?.property?.name, unit ? `unit ${unit.unit_number}` : null]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [entries, filters]);
+
+  if (!rows.length) return <Empty title="No transactions in this view" message="Clear a filter or widen your search to see more entries." />;
+
+  return (
+    <>
+      <div className="filtered-note">
+        {I.info}
+        <div>
+          <b>{rows.length}</b> {rows.length === 1 ? 'entry' : 'entries'}. Click any row for full details, running balance,
+          and audit trail.
+        </div>
+      </div>
+      <div className="glass" style={{ padding: '6px 8px' }}>
+        <div className="tblwrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Tenant</th>
+                <th>Property / Unit</th>
+                <th className="r">Amount</th>
+                <th className="r">Balance after</th>
+                <th>Status</th>
+                <th className="r">Reference</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((e) => {
+                const m = ENTRY[e.type];
+                const st = STATUS[e.status] ?? { badge: 'b-gray', label: e.status };
+                const unit = e.contract?.listing?.unit;
+                return (
+                  <tr key={e.id} onClick={() => onOpen(e.id)}>
+                    <td className="tdate">
+                      {fmtDShort(e.due_date ?? e.occurred_at)}
+                      <div className="tsmall">{new Date(e.occurred_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</div>
+                    </td>
+                    <td>
+                      <span className="ttype">
+                        <span className="ti" style={m.tint}>
+                          {m.icon}
+                        </span>
+                        {m.label}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="tten">{e.tenant?.full_name ?? '—'}</div>
+                    </td>
+                    <td>
+                      {unit?.property?.name ?? '—'}
+                      <div className="tsmall">Unit {unit?.unit_number}</div>
+                    </td>
+                    <td className="r">
+                      <span className={`amt ${amtToneClass(e)}`}>
+                        {e.direction === 'payment' ? '− ' : ''}
+                        {formatCents(e.display_amount_cents)}
+                      </span>
+                    </td>
+                    <td className="r">
+                      <span className="bal">{e.running_balance_cents != null ? formatCents(e.running_balance_cents) : '—'}</span>
+                    </td>
+                    <td>
+                      <Badge badge={st.badge}>{st.label}</Badge>
+                    </td>
+                    <td className="r">
+                      <span className="ref">{e.reference}</span> <span className="chev">{I.chev}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ---------- STATEMENTS ---------------------------------------------------- */
+function StatementsView({
+  balances,
+  filters,
+  onContract,
+  onProperty,
+}: {
+  balances: LedgerBalanceRow[];
+  filters: Filters;
+  onContract: (cid: string) => void;
+  onProperty: (pid: number) => void;
+}) {
+  const q = filters.q.trim().toLowerCase();
+  const list = balances.filter((b) => {
+    if (filters.property !== 'all' && String(b.property?.id) !== filters.property) return false;
+    if (q) {
+      const hay = [b.tenant?.full_name, b.property?.name, b.unit_number, b.contract_id].filter(Boolean).join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const propsMap = new Map<number, { name: string; count: number; outstanding: number }>();
+  for (const b of list) {
+    if (!b.property) continue;
+    const cur = propsMap.get(b.property.id) ?? { name: b.property.name, count: 0, outstanding: 0 };
+    cur.count += 1;
+    cur.outstanding += Math.max(0, b.balance_cents);
+    propsMap.set(b.property.id, cur);
+  }
+
+  if (!list.length) return <Empty title="No statements match" message="Clear your search or pick a different property." />;
+
+  return (
+    <>
+      <div className="panel glass" style={{ marginBottom: 16 }}>
+        <div className="ph">
+          <h3>Property statements</h3>
+          <p>Money by property, broken down by unit</p>
+        </div>
+        <div className="stmt-cards">
+          {[...propsMap.entries()].map(([id, p]) => (
+            <div className="scard glass" key={id} {...pressable(() => onProperty(id))}>
+              <div className="st">
+                <div className="sav" style={avStyle(p.name)}>
+                  {I.building}
+                </div>
+                <div>
+                  <div className="snm">{p.name}</div>
+                  <div className="sm">
+                    {p.count} unit{p.count > 1 ? 's' : ''} · property statement
+                  </div>
+                </div>
+              </div>
+              <div className="srow">
+                <span className="k">Active contracts</span>
+                <span className="v">{p.count}</span>
+              </div>
+              <div className="srow">
+                <span className="k">Outstanding</span>
+                <span className="v" style={p.outstanding > 0 ? { color: 'var(--oxblood)' } : undefined}>
+                  {formatCents(p.outstanding)}
+                </span>
+              </div>
+              <div className="srow">
+                <span className="k">Statement</span>
+                <span className="v" style={{ color: 'var(--petrol-2)' }}>
+                  View →
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="panel glass">
+        <div className="ph">
+          <h3>Tenant statements</h3>
+          <p>One clean financial record per contract, ready to download</p>
+        </div>
+        <div className="stmt-cards">
+          {list.map((b) => {
+            const st = contractStatusMeta(b.status);
+            const name = b.tenant?.full_name ?? 'Unknown tenant';
+            return (
+              <div className="scard glass" key={b.contract_id} {...pressable(() => onContract(b.contract_id))}>
+                <div className="st">
+                  <div className="sav" style={avStyle(name)}>
+                    {initials(name)}
+                  </div>
+                  <div>
+                    <div className="snm">{name}</div>
+                    <div className="sm">
+                      {b.property?.name} · Unit {b.unit_number}
+                    </div>
+                  </div>
+                </div>
+                <div className="srow">
+                  <span className="k">Balance</span>
+                  <span className="v" style={b.balance_cents > 0 ? { color: 'var(--oxblood)' } : undefined}>
+                    {formatCents(b.balance_cents)}
+                  </span>
+                </div>
+                <div className="srow">
+                  <span className="k">Status</span>
+                  <span className="v">
+                    <Badge badge={st.badge}>{st.label}</Badge>
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
   );
 }

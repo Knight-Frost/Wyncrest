@@ -98,7 +98,8 @@ class LandlordExportTest extends TestCase
         $this->assertStringContainsString('attachment', $response->headers->get('Content-Disposition'));
 
         $body = $this->csvBody($response);
-        $this->assertStringContainsString('Date,Tenant,Unit,Property,Type,Reference,Amount,Status,', $body);
+        $this->assertStringContainsString('Date,Tenant,Unit,Property,Type,Direction,Reference,Amount,', $body);
+        $this->assertStringContainsString('Balance Impact', $body);
         $this->assertStringContainsString('Balance after', $body);
         $this->assertStringContainsString('Ama Mensah', $body);
         $this->assertStringContainsString('Cantonments Court', $body);

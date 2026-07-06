@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useAuth } from '@/context/auth';
 import { useApi } from '@/hooks/useApi';
-import { adminApi, landlordApi, tenantApi } from '@/lib/endpoints';
-import { formatCents, formatDate, humanize } from '@/lib/format';
+import { adminApi, tenantApi } from '@/lib/endpoints';
+import { formatCents, formatDate } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { ResponsiveTable, type ResponsiveColumn } from '@/components/ui/ResponsiveTable';
-import { EmptyState, ErrorState, LoadingState, SkeletonCard } from '@/components/ui/states';
+import { EmptyState, ErrorState, ForbiddenState, LoadingState, SkeletonCard } from '@/components/ui/states';
 import {
   IconChevronRight,
   IconLedger,
@@ -13,6 +13,8 @@ import {
   IconAlertCircle,
   IconClock,
   IconWallet,
+  IconShield,
+  IconCalendar,
 } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import {
@@ -21,9 +23,8 @@ import {
   DashboardSection,
   DataCardGrid,
   getLedgerVariant,
-  getCollectedVariant,
 } from '@/components/cards';
-import type { LedgerEntry, LedgerStatus } from '@/lib/types';
+import type { LedgerEntry, LedgerStatus, LedgerFinancialSummary } from '@/lib/types';
 
 function isPayable(entry: LedgerEntry): boolean {
   return (
@@ -32,17 +33,15 @@ function isPayable(entry: LedgerEntry): boolean {
   );
 }
 
-function computeSummary(entries: LedgerEntry[]) {
-  let collected = 0;
-  let pending = 0;
-  let overdue = 0;
-  for (const e of entries) {
-    if (e.status === 'paid') collected += e.amount_cents;
-    else if (e.status === 'pending') pending += e.amount_cents;
-    else if (e.status === 'overdue') overdue += e.amount_cents;
-  }
-  return { collected, pending, overdue };
-}
+const EMPTY_SUMMARY: LedgerFinancialSummary = {
+  rent_charged_cents: 0,
+  fees_charged_cents: 0,
+  collected_cents: 0,
+  outstanding_cents: 0,
+  overdue_cents: 0,
+  due_soon_cents: 0,
+  entry_count: 0,
+};
 
 type FilterTab = 'all' | LedgerStatus;
 
@@ -54,9 +53,21 @@ const STATUS_TABS: { value: FilterTab; label: string }[] = [
   { value: 'waived', label: 'Waived' },
 ];
 
+/**
+ * Shared ledger view for tenant and admin roles. Landlords get the richer
+ * dedicated LandlordLedger page (see App.tsx routing) — this component is
+ * never reached for role === 'landlord'.
+ *
+ * Every financial figure shown here (the summary cards) comes directly from
+ * LedgerComputationEngine via the backend response. This page does not sum
+ * amount_cents itself — that client-side summation over a single paginated
+ * page is what previously produced a negative "Total Collected" figure.
+ */
 export function LedgerPage() {
   const { user } = useAuth();
   const role = user?.role;
+  const isTenant = role === 'tenant';
+  const isAdmin = role === 'admin';
 
   const [page, setPage] = useState(1);
   const [payingId, setPayingId] = useState<string | null>(null);
@@ -64,27 +75,36 @@ export function LedgerPage() {
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [payResult, setPayResult] = useState<{ id: string; success: boolean } | null>(null);
 
-  const ledger = useApi<{ entries: LedgerEntry[]; currentPage: number; lastPage: number }>(
-    async () => {
-      if (role === 'tenant') {
-        const entries = await tenantApi.ledger();
-        return { entries, currentPage: 1, lastPage: 1 };
-      }
-      if (role === 'landlord') {
-        const entries = await landlordApi.ledger();
-        return { entries, currentPage: 1, lastPage: 1 };
-      }
-      if (role === 'admin') {
-        const res = await adminApi.ledger({ page });
-        return { entries: res.data, currentPage: res.current_page, lastPage: res.last_page };
-      }
-      return { entries: [], currentPage: 1, lastPage: 1 };
-    },
-    [role, page],
-  );
+  const ledger = useApi<{
+    entries: LedgerEntry[];
+    summary: LedgerFinancialSummary;
+    currentPage: number;
+    lastPage: number;
+  }>(async () => {
+    if (isTenant) {
+      const res = await tenantApi.ledger();
+      return { entries: res.entries, summary: res.summary, currentPage: 1, lastPage: 1 };
+    }
+    if (isAdmin) {
+      const res = await adminApi.ledger({ page });
+      return {
+        entries: res.data,
+        summary: res.summary,
+        currentPage: res.current_page,
+        lastPage: res.last_page,
+      };
+    }
+    return { entries: [], summary: EMPTY_SUMMARY, currentPage: 1, lastPage: 1 };
+  }, [role, page]);
 
   const balance = useApi(
-    () => (role === 'tenant' ? tenantApi.balance() : Promise.resolve(null)),
+    () => (isTenant ? tenantApi.balance() : Promise.resolve(null)),
+    [role],
+  );
+
+  // Admin-only integrity check — a lightweight pass/warning/fail indicator.
+  const integrity = useApi(
+    () => (isAdmin ? adminApi.ledgerReconciliation() : Promise.resolve(null)),
     [role],
   );
 
@@ -102,24 +122,14 @@ export function LedgerPage() {
     }
   }
 
-  const title =
-    role === 'tenant' ? 'Payments' :
-    role === 'admin' ? 'Ledger' :
-    'Rent Ledger';
-
-  const description =
-    role === 'tenant'
-      ? 'Your rent charges, fees, and payment history.'
-      : role === 'landlord'
-        ? 'All rent entries and fees across your contracts.'
-        : 'Platform-wide rent entries, fees, and payments.';
-
-  const eyebrow =
-    role === 'admin' ? 'Governance' : role === 'landlord' ? 'Operations' : 'My Rental';
+  const title = isTenant ? 'Payments' : 'Ledger';
+  const description = isTenant
+    ? 'Your rent charges, fees, and payment history.'
+    : 'Platform-wide rent entries, fees, and payments.';
+  const eyebrow = isAdmin ? 'Governance' : 'My Rental';
 
   const allEntries = ledger.data?.entries ?? [];
-  const summary = computeSummary(allEntries);
-  const isTenant = role === 'tenant';
+  const summary = ledger.data?.summary ?? EMPTY_SUMMARY;
 
   const filtered =
     activeFilter === 'all'
@@ -132,14 +142,14 @@ export function LedgerPage() {
       key: 'type',
       header: 'Type',
       primary: true,
-      cell: (entry) => <span className="font-medium text-ink-900">{humanize(entry.type)}</span>,
+      cell: (entry) => <span className="font-medium text-ink-900">{entry.display_label}</span>,
     },
     {
       key: 'date',
       header: 'Date',
       cell: (entry) => (
         <span className="whitespace-nowrap text-ink-600">
-          {formatDate(entry.due_date ?? entry.created_at)}
+          {formatDate(entry.due_date ?? entry.occurred_at)}
         </span>
       ),
     },
@@ -164,7 +174,18 @@ export function LedgerPage() {
           className="font-mono font-semibold tabular-nums"
           style={{ color: 'var(--color-money)' }}
         >
-          {formatCents(entry.amount_cents)}
+          {formatCents(entry.display_amount_cents)}
+        </span>
+      ),
+    },
+    {
+      key: 'balance_impact',
+      header: 'Balance Impact',
+      align: 'right',
+      hideBelow: 'xl',
+      cell: (entry) => (
+        <span className="whitespace-nowrap font-mono text-xs tabular-nums text-ink-500">
+          {formatCents(entry.balance_impact_cents)}
         </span>
       ),
     },
@@ -218,21 +239,49 @@ export function LedgerPage() {
   return (
     <div className="animate-rise space-y-10">
 
-      {/* ── Page header ── */}
-      <div>
-        <span className="eyebrow mb-2.5">{eyebrow}</span>
-        <h1 className="font-display text-[clamp(28px,3vw,40px)] font-semibold leading-tight tracking-tight text-ink-950">
-          {title}
-        </h1>
-        <p className="mt-2.5 text-[15px] text-ink-500 max-w-[64ch]">{description}</p>
+      {/* ── Page header (on a glass card, matching the other admin pages) ── */}
+      <div className="glass-panel flex flex-wrap items-start justify-between gap-4 p-6 sm:p-8">
+        <div>
+          <span className="eyebrow mb-2.5">{eyebrow}</span>
+          <h1 className="font-display text-[clamp(28px,3vw,40px)] font-semibold leading-tight tracking-tight text-ink-950">
+            {title}
+          </h1>
+          <p className="mt-2.5 text-[15px] text-ink-500 max-w-[64ch]">{description}</p>
+        </div>
+
+        {/* ── Ledger integrity indicator (admin only) ── */}
+        {isAdmin && integrity.data && (
+          <div
+            className={cn(
+              'flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-semibold',
+              integrity.data.status === 'pass'
+                ? 'border-success-200 bg-success-50 text-success-700'
+                : integrity.data.status === 'warning'
+                  ? 'border-warning-200 bg-warning-50 text-warning-700'
+                  : 'border-danger-200 bg-danger-50 text-danger-700',
+            )}
+            title={
+              integrity.data.issues.length > 0
+                ? integrity.data.issues.map((i) => i.message).join('\n')
+                : 'All reconciliation checks passed'
+            }
+          >
+            <IconShield size={14} />
+            Ledger integrity:{' '}
+            {integrity.data.status === 'pass'
+              ? 'Passed'
+              : `${integrity.data.issues.length} ${integrity.data.status === 'fail' ? 'issue' : 'warning'}${integrity.data.issues.length === 1 ? '' : 's'}`}
+          </div>
+        )}
       </div>
 
-      {/* ── Summary stat cards (only shown when entries exist or still loading) ── */}
+      {/* ── Summary stat cards (server-computed — never client-summed) ── */}
       {(statsLoading || allEntries.length > 0) && (
         <DashboardSection eyebrow="Summary" title="Financial Overview">
-          <DataCardGrid cols={3}>
+          <DataCardGrid cols={4}>
             {statsLoading ? (
               <>
+                <SkeletonCard />
                 <SkeletonCard />
                 <SkeletonCard />
                 <SkeletonCard />
@@ -240,25 +289,32 @@ export function LedgerPage() {
             ) : (
               <>
                 <StatusCard
-                  label={isTenant ? 'Total paid' : 'Total collected'}
-                  value={formatCents(summary.collected)}
-                  sub="Paid entries"
+                  label="Collected"
+                  value={formatCents(summary.collected_cents)}
+                  sub="Successful payments received"
                   icon={<IconCheckCircle size={18} />}
-                  role={getCollectedVariant(summary.collected, summary.overdue)}
+                  role={summary.collected_cents > 0 ? 'success' : 'neutral'}
                 />
                 <StatusCard
-                  label="Pending"
-                  value={formatCents(summary.pending)}
-                  sub="Due but not yet paid"
-                  icon={<IconClock size={18} />}
-                  role={summary.pending > 0 ? 'warning' : 'neutral'}
+                  label="Outstanding"
+                  value={formatCents(summary.outstanding_cents)}
+                  sub="Total unpaid balance"
+                  icon={<IconWallet size={18} />}
+                  role={summary.outstanding_cents > 0 ? 'warning' : 'neutral'}
                 />
                 <StatusCard
                   label="Overdue"
-                  value={formatCents(summary.overdue)}
-                  sub={summary.overdue > 0 ? 'Requires attention' : 'Nothing overdue'}
+                  value={formatCents(summary.overdue_cents)}
+                  sub={summary.overdue_cents > 0 ? 'Unpaid, past due' : 'Nothing overdue'}
                   icon={<IconAlertCircle size={18} />}
-                  role={summary.overdue > 0 ? 'danger' : 'success'}
+                  role={summary.overdue_cents > 0 ? 'danger' : 'success'}
+                />
+                <StatusCard
+                  label="Due Soon"
+                  value={formatCents(summary.due_soon_cents)}
+                  sub="Unpaid, not yet due"
+                  icon={<IconClock size={18} />}
+                  role={summary.due_soon_cents > 0 ? 'info' : 'neutral'}
                 />
               </>
             )}
@@ -304,10 +360,15 @@ export function LedgerPage() {
       <DashboardSection
         eyebrow="Entries"
         title="Ledger"
-        description="Individual charges, fees, and payments."
+        description="Individual charges, fees, and payments. Amount is always shown positive; Balance Impact is the signed effect on the running balance."
       >
         {ledger.loading ? (
           <LoadingState />
+        ) : ledger.error?.status === 403 ? (
+          <ForbiddenState
+            title="You don't have access to the ledger"
+            message="Viewing the platform ledger needs a permission your account hasn't been granted. Ask a super admin if you need it."
+          />
         ) : ledger.error ? (
           <ErrorState message={ledger.error.message} onRetry={ledger.reload} />
         ) : allEntries.length === 0 ? (
@@ -398,7 +459,7 @@ export function LedgerPage() {
 
       {/* ── Ledger integrity note ── */}
       <div className="flex items-center gap-3 rounded-xl border border-ink-200 bg-surface px-5 py-4 shadow-sm">
-        <IconWallet size={18} className="shrink-0 text-ink-400" />
+        <IconCalendar size={18} className="shrink-0 text-ink-400" />
         <p className="text-sm text-ink-500">
           The ledger is immutable. All charges are recorded as they occur and can never be
           edited. Corrections are made as compensating entries.

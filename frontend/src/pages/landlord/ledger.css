@@ -1,0 +1,357 @@
+/*
+ * Landlord Rent Ledger — White-Liquid-Glass port of wyncrest-landlord-ledger.html.
+ * All selectors scoped under `.wled`; the mockup's :root vars live on `.wled`.
+ * Fonts referenced via vars only (no external @import) — app fonts / fallbacks apply.
+ * Ported 1:1 from the mockup, matching the properties.css convention.
+ *
+ * All local aliases below resolve to the SHARED design tokens (index.css),
+ * never a literal hex/rgba — that's what makes this page re-theme correctly
+ * in dark mode. Tinted badge/notice backgrounds use
+ * color-mix(in srgb, <token> N%, transparent) instead of a hand-picked rgba,
+ * so the tint always tracks its paired text color in both themes.
+ */
+
+.wled{
+  --petrol:var(--color-action-600); --petrol-2:var(--color-action-500);
+  --oxblood:var(--color-danger-600); --oxblood-solid:var(--color-danger-solid);
+  --purple:light-dark(#4B3A6B, #c9aef0);
+  --green:var(--color-success-600); --amber:var(--color-warning-600); --slate:var(--color-ink-500);
+  --ink:var(--color-ink-900); --ink-2:var(--color-ink-700); --mute:var(--color-ink-400);
+  --line:var(--color-ink-200); --line-2:var(--color-ink-100);
+  --paper:var(--color-surface); --paper-2:var(--color-surface);
+  --glass:var(--glass-bg-strong); --glass-2:var(--glass-bg); --glass-border:var(--glass-border);
+  --white:var(--color-surface);
+  --shadow:var(--shadow-sm);
+  --shadow-lg:var(--shadow-lg);
+  --r:16px; --r-sm:11px; --r-lg:22px;
+  --serif:"Fraunces",Georgia,serif;
+  --disp:"Big Shoulders Display",var(--serif);
+  --sans:"Inter",system-ui,-apple-system,sans-serif;
+
+  font-family:var(--sans); color:var(--ink); line-height:1.5;
+  background:
+    radial-gradient(1200px 620px at 82% -8%, color-mix(in srgb, var(--petrol-2) 20%, transparent), transparent 60%),
+    radial-gradient(940px 520px at 6% 8%, color-mix(in srgb, var(--petrol) 16%, transparent), transparent 55%),
+    radial-gradient(700px 700px at 60% 118%, color-mix(in srgb, var(--oxblood) 8%, transparent), transparent 60%),
+    linear-gradient(168deg, var(--paper), var(--paper-2));
+  background-attachment:fixed; min-height:100vh;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+.wled *{box-sizing:border-box;margin:0;padding:0}
+.wled a{color:inherit;text-decoration:none}
+.wled button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+.wled input,.wled select,.wled textarea{font-family:inherit;font-size:14px;color:inherit}
+.wled ::selection{background:color-mix(in srgb, var(--petrol-2) 18%, transparent)}
+
+.wled .glass{background:var(--glass);border:1px solid var(--glass-border);box-shadow:var(--shadow), var(--glass-highlight);border-radius:var(--r)}
+@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .wled .glass{-webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);background:var(--glass)}
+  .wled .glass-2{-webkit-backdrop-filter:blur(18px) saturate(150%);backdrop-filter:blur(18px) saturate(150%);background:var(--glass-2)}
+}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .wled .glass{background:var(--color-surface)} .wled .glass-2{background:var(--color-surface)}
+}
+
+.wled .app{max-width:1280px;margin:0 auto;padding:22px 24px 96px}
+
+.wled .eyebrow{font-family:var(--disp);font-weight:700;font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--petrol-2)}
+.wled h1.page{font-family:var(--serif);font-weight:600;font-size:34px;letter-spacing:-.02em;line-height:1.05;color:var(--petrol);margin:6px 0 4px}
+.wled .lede{color:var(--ink-2);font-size:15px;max-width:70ch}
+.wled .data{font-family:var(--disp);font-weight:700;letter-spacing:.01em;font-variant-numeric:tabular-nums}
+.wled .pagehead{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;padding:22px 24px}
+.wled .pagehead .acts{display:flex;gap:9px;flex-wrap:wrap;padding-top:6px}
+
+/* ---------- summary cards ---------- */
+.wled .cards{display:grid;grid-template-columns:repeat(5,1fr);gap:13px;margin:22px 0 18px}
+.wled .cards.six{grid-template-columns:repeat(6,1fr)}
+.wled .card{padding:15px 16px 14px;position:relative;overflow:hidden}
+.wled .card .k{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--mute)}
+.wled .card .v{font-family:var(--disp);font-weight:800;font-size:25px;line-height:1;margin-top:10px;color:var(--petrol);font-variant-numeric:tabular-nums}
+.wled .card .n{font-size:11.5px;color:var(--slate);margin-top:7px}
+.wled .card.bad .v{color:var(--oxblood)} .wled .card.warn .v{color:var(--amber)} .wled .card.good .v{color:var(--green)}
+.wled .card .edge{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:3px}
+.wled .card.bad .edge{background:var(--oxblood)} .wled .card.warn .edge{background:var(--amber)} .wled .card.good .edge{background:var(--green)} .wled .card.info .edge{background:var(--petrol-2)}
+
+/* ---------- tabs ---------- */
+.wled .tabs{display:inline-flex;gap:3px;padding:5px;margin-bottom:16px}
+.wled .tabs button{font-size:13.5px;font-weight:500;color:var(--slate);padding:9px 16px;border-radius:9px;white-space:nowrap;transition:.15s;display:inline-flex;align-items:center;gap:8px}
+.wled .tabs button:hover{background:color-mix(in srgb, var(--petrol) 6%, transparent);color:var(--ink)}
+.wled .tabs button.on{background:var(--petrol);color:var(--color-on-action);font-weight:600}
+.wled .tabs button svg{width:15px;height:15px}
+.wled .tabs button .n{font-size:11px;font-weight:700;padding:1px 7px;border-radius:9px;background:color-mix(in srgb, currentColor 14%, transparent);color:var(--oxblood)}
+.wled .tabs button.on .n{background:color-mix(in srgb, var(--color-on-action) 22%, transparent);color:var(--color-on-action)}
+
+/* ---------- filters ---------- */
+.wled .filters{display:flex;gap:10px;align-items:center;padding:11px 12px;margin-bottom:16px;flex-wrap:wrap}
+.wled .fsearch{flex:1;min-width:250px;display:flex;align-items:center;gap:10px;padding:10px 13px;border-radius:12px;border:1px solid var(--line);background:var(--glass-bg-strong);transition:.15s}
+.wled .fsearch:focus-within{border-color:var(--petrol-2);box-shadow:0 0 0 3px color-mix(in srgb, var(--petrol-2) 10%, transparent)}
+.wled .fsearch .fi{flex:none;width:18px;height:18px;color:var(--mute)}
+.wled .fsearch input{border:none;background:none;outline:none;width:100%;font-size:14px}
+.wled .sel{position:relative;display:inline-flex;align-items:center}
+.wled .sel select{appearance:none;-webkit-appearance:none;font-size:13px;font-weight:500;color:var(--ink-2);padding:10px 32px 10px 13px;border-radius:11px;border:1px solid var(--line);background:var(--glass-bg-strong);cursor:pointer;transition:.15s}
+.wled .sel select:hover{border-color:var(--color-ink-300)}
+.wled .sel select:focus{outline:none;border-color:var(--petrol-2)}
+.wled .sel .cv{position:absolute;right:11px;pointer-events:none;color:var(--slate);width:14px;height:14px;display:grid;place-items:center}
+.wled .filtered-note{font-size:12px;color:var(--slate);padding:2px 4px 10px;display:flex;align-items:center;gap:8px}
+.wled .filtered-note svg{flex:none;width:16px;height:16px;color:var(--petrol-2)}
+.wled .filtered-note b{color:var(--petrol)}
+
+/* ---------- badges ---------- */
+.wled .badge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:20px;letter-spacing:.01em;white-space:nowrap}
+.wled .badge .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.wled .badge svg{width:12px;height:12px;flex:none;margin-right:-1px}
+.wled .b-green{color:var(--green);background:color-mix(in srgb, currentColor 13%, transparent)}
+.wled .b-amber{color:var(--amber);background:color-mix(in srgb, currentColor 15%, transparent)}
+.wled .b-red{color:var(--oxblood);background:color-mix(in srgb, currentColor 13%, transparent)}
+.wled .b-blue{color:var(--color-info-600);background:color-mix(in srgb, currentColor 13%, transparent)}
+.wled .b-gray{color:var(--color-ink-600);background:color-mix(in srgb, currentColor 13%, transparent)}
+.wled .b-purple{color:var(--purple);background:color-mix(in srgb, currentColor 14%, transparent)}
+
+/* ---------- buttons ---------- */
+.wled .btn{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;padding:9px 15px;border-radius:10px;transition:.15s;border:1px solid transparent;white-space:nowrap}
+.wled .btn svg{width:15px;height:15px}
+.wled .btn-p{background:var(--petrol);color:var(--color-on-action);box-shadow:0 8px 18px -10px color-mix(in srgb, var(--petrol) 55%, transparent)}
+.wled .btn-p:hover{background:var(--color-action-700)}
+.wled .btn-g{background:var(--glass-bg-strong);border-color:var(--line);color:var(--ink-2)}
+.wled .btn-g:hover{border-color:var(--color-ink-300);background:var(--color-ink-50)}
+.wled .btn-d{background:var(--oxblood-solid);color:#fff}
+.wled .btn-d:hover{background:var(--color-danger-solid-hover)}
+.wled .btn-ghost{color:var(--slate);padding:9px 12px}
+.wled .btn-ghost:hover{background:color-mix(in srgb, var(--petrol) 6%, transparent);color:var(--ink)}
+.wled .btn.sm{font-size:12px;padding:7px 11px;border-radius:9px}
+.wled .btn.sm svg{width:13px;height:13px}
+.wled .iconbtn{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:var(--slate);border:1px solid var(--line);background:var(--glass-bg);transition:.15s}
+.wled .iconbtn:hover{color:var(--ink);border-color:var(--color-ink-300)}
+.wled .iconbtn svg{width:16px;height:16px}
+
+/* ---------- balances ---------- */
+.wled .blist{display:flex;flex-direction:column;gap:11px}
+.wled .brow{display:grid;grid-template-columns:minmax(200px,1.4fr) 1.2fr .9fr .9fr auto;gap:16px;align-items:center;padding:15px 18px;transition:.16s;cursor:pointer}
+.wled .brow:hover{transform:translateY(-1px);box-shadow:var(--shadow-lg)}
+.wled .brow:focus-visible,.wled .scard:focus-visible,.wled .relrow:focus-visible{outline:2px solid var(--color-brand-500);outline-offset:2px}
+.wled .bt{display:flex;align-items:center;gap:12px;min-width:0}
+/* .bav gets its fill color set inline per-tenant (initials avatar); the inset
+   highlight + white initials work over any such color in both themes, so
+   they're intentionally left as fixed literals (same exception as a photo
+   caption chip). */
+.wled .bav{width:44px;height:44px;border-radius:12px;flex:none;display:grid;place-items:center;font-weight:600;font-size:15px;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.3)}
+.wled .bt .nm{font-weight:600;font-size:15px;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wled .bt .meta{font-size:12.5px;color:var(--mute);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wled .bcell .lbl{font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--mute)}
+.wled .bcell .val{font-size:14px;font-weight:600;margin-top:3px;font-variant-numeric:tabular-nums}
+.wled .bcell .val.big{font-family:var(--disp);font-weight:800;font-size:18px}
+.wled .bcell .val.owed{color:var(--oxblood)}
+.wled .bcell .sub{font-size:11.5px;color:var(--slate);margin-top:2px}
+.wled .bact{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+
+/* ---------- transactions table ---------- */
+.wled .tblwrap{overflow-x:auto;border-radius:var(--r);-webkit-overflow-scrolling:touch}
+.wled .tbl{width:100%;border-collapse:collapse;min-width:920px}
+.wled .tbl thead th{font-family:var(--disp);font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);text-align:left;padding:13px 14px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:color-mix(in srgb, var(--color-surface) 86%, transparent);backdrop-filter:blur(8px)}
+.wled .tbl thead th.r{text-align:right}
+.wled .tbl tbody td{padding:13px 14px;border-bottom:1px solid var(--line-2);font-size:13.5px;vertical-align:middle}
+.wled .tbl tbody tr{cursor:pointer;transition:background .13s}
+.wled .tbl tbody tr:hover{background:color-mix(in srgb, var(--petrol-2) 5%, transparent)}
+.wled .tbl tbody tr:last-child td{border-bottom:none}
+.wled .tbl .r{text-align:right}
+.wled .tbl .tdate{color:var(--slate);white-space:nowrap;font-size:12.5px}
+.wled .tbl .ttype{display:inline-flex;align-items:center;gap:8px;font-weight:600;white-space:nowrap}
+.wled .tbl .ttype .ti{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;flex:none}
+.wled .tbl .ttype .ti svg{width:14px;height:14px}
+.wled .tbl .tten{font-weight:600}
+.wled .tbl .tsmall{font-size:12px;color:var(--slate);white-space:nowrap}
+.wled .tbl .amt{font-family:var(--disp);font-weight:700;font-size:14.5px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.wled .tbl .amt.cr{color:var(--green)} .wled .tbl .amt.db{color:var(--ink)} .wled .tbl .amt.fee{color:var(--amber)} .wled .tbl .amt.void{color:var(--mute);text-decoration:line-through}
+.wled .tbl .bal{font-family:var(--disp);font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink-2)}
+.wled .tbl .ref{font-family:var(--disp);font-weight:600;font-size:12px;letter-spacing:.03em;color:var(--slate)}
+.wled .tbl .chev{color:var(--mute)}
+.wled .tbl .chev svg{width:16px;height:16px}
+
+/* ---------- panels ---------- */
+.wled .panel{padding:20px 22px}
+.wled .panel h3{font-family:var(--serif);font-weight:600;font-size:17px;color:var(--petrol);letter-spacing:-.01em}
+.wled .panel .ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap}
+.wled .panel .ph p{font-size:12.5px;color:var(--slate)}
+.wled .grid2{display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start}
+.wled .kv-row{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--line-2)}
+.wled .kv-row:last-child{border-bottom:none}
+.wled .kv-row .k{color:var(--slate);font-size:13.5px}
+.wled .kv-row .v{font-weight:600;font-size:13.5px;text-align:right;font-variant-numeric:tabular-nums}
+.wled .kv-row .v a{color:var(--petrol-2)}
+
+.wled .back{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:var(--slate);margin-bottom:14px;transition:.15s}
+.wled .back:hover{color:var(--petrol);gap:9px}
+
+/* case-file header */
+.wled .cfhead{display:flex;align-items:flex-start;gap:18px;padding:22px 24px;margin-bottom:16px;flex-wrap:wrap}
+.wled .cfhead .cfic{width:56px;height:56px;border-radius:15px;flex:none;display:grid;place-items:center}
+.wled .cfhead .cfic svg{width:26px;height:26px}
+.wled .cfhead .cfmain{flex:1;min-width:0}
+.wled .cfhead .cfamt{font-family:var(--disp);font-weight:800;font-size:34px;line-height:1;letter-spacing:.01em;color:var(--petrol);font-variant-numeric:tabular-nums}
+.wled .cfhead .cfamt.cr{color:var(--green)}
+.wled .cfhead .cfsub{font-size:14px;color:var(--ink-2);margin-top:6px}
+.wled .cfhead .cftags{display:flex;gap:7px;margin-top:11px;flex-wrap:wrap}
+.wled .cfhead .cfside{display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+
+/* chain */
+.wled .chain{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:14px 16px;border-radius:var(--r-sm);background:color-mix(in srgb, var(--petrol-2) 6%, transparent);border:1px solid color-mix(in srgb, var(--petrol-2) 13%, transparent);margin-bottom:16px}
+.wled .chain .node{font-size:12.5px;font-weight:600;color:var(--petrol);background:var(--glass-bg-strong);border:1px solid var(--line);padding:6px 11px;border-radius:9px;white-space:nowrap}
+.wled .chain .node .cl{display:block;font-size:9.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin-bottom:1px}
+.wled .chain .arw{color:var(--slate);flex:none}
+.wled .chain .arw svg{width:14px;height:14px;display:block}
+
+/* related entries mini table */
+.wled .rel{display:flex;flex-direction:column}
+.wled .relrow{display:grid;grid-template-columns:auto 1fr auto auto;gap:12px;align-items:center;padding:11px 2px;border-bottom:1px solid var(--line-2);cursor:pointer;transition:.12s;border-radius:8px}
+.wled .relrow:hover{background:color-mix(in srgb, var(--petrol-2) 5%, transparent)}
+.wled .relrow:last-child{border-bottom:none}
+.wled .relrow .rt{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;flex:none}
+.wled .relrow .rt svg{width:15px;height:15px}
+.wled .relrow .rd1{font-weight:600;font-size:13px}
+.wled .relrow .rd2{font-size:11.5px;color:var(--slate)}
+.wled .relrow .ra{font-family:var(--disp);font-weight:700;font-variant-numeric:tabular-nums;font-size:13.5px}
+.wled .relrow.self{background:color-mix(in srgb, var(--amber) 8%, transparent);cursor:default}
+.wled .relrow.self:hover{background:color-mix(in srgb, var(--amber) 8%, transparent)}
+
+/* timeline / audit */
+.wled .tl{position:relative;padding-left:26px}
+.wled .tl::before{content:"";position:absolute;left:8px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.wled .tl .ev{position:relative;padding:0 0 17px}
+.wled .tl .ev:last-child{padding-bottom:0}
+.wled .tl .ev::before{content:"";position:absolute;left:-22px;top:3px;width:12px;height:12px;border-radius:50%;background:var(--white);border:2px solid var(--petrol-2)}
+.wled .tl .ev.done::before{background:var(--green);border-color:var(--green)}
+.wled .tl .ev.warn::before{background:var(--amber);border-color:var(--amber)}
+.wled .tl .ev.bad::before{background:var(--oxblood);border-color:var(--oxblood)}
+.wled .tl .ev .et{font-weight:600;font-size:13.5px}
+.wled .tl .ev .em{font-size:12.5px;color:var(--slate);margin-top:2px;line-height:1.45}
+.wled .tl .ev .ed{font-size:11px;color:var(--mute);margin-top:3px;font-weight:600;font-variant-numeric:tabular-nums}
+
+/* notices */
+.wled .notice{display:flex;gap:11px;padding:13px 15px;border-radius:var(--r-sm);margin-bottom:16px}
+.wled .notice svg{flex:none;width:18px;height:18px;margin-top:1px}
+.wled .notice .nt{font-size:12.5px;line-height:1.5}
+.wled .notice.info{background:color-mix(in srgb, var(--petrol-2) 8%, transparent);border:1px solid color-mix(in srgb, var(--petrol-2) 16%, transparent)}
+.wled .notice.info svg{color:var(--petrol-2)} .wled .notice.info .nt{color:var(--ink-2)} .wled .notice.info b{color:var(--petrol)}
+.wled .notice.warn{background:color-mix(in srgb, var(--amber) 10%, transparent);border:1px solid color-mix(in srgb, var(--amber) 20%, transparent)}
+.wled .notice.warn svg{color:var(--amber)} .wled .notice.warn .nt{color:var(--ink-2)}
+.wled .notice.bad{background:color-mix(in srgb, var(--oxblood) 9%, transparent);border:1px solid color-mix(in srgb, var(--oxblood) 18%, transparent)}
+.wled .notice.bad svg{color:var(--oxblood)} .wled .notice.bad .nt{color:var(--ink-2)}
+
+/* statement */
+.wled .stmt-doc{padding:26px 28px;max-width:800px}
+.wled .stmt-top{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;padding-bottom:18px;border-bottom:2px solid var(--petrol);margin-bottom:18px}
+.wled .stmt-top .lg{display:flex;align-items:center;gap:10px;font-family:var(--serif);font-weight:600;font-size:18px;color:var(--petrol)}
+.wled .stmt-top .lg .mark{width:34px;height:34px;border-radius:9px;background:linear-gradient(150deg,var(--petrol),var(--petrol-2));display:grid;place-items:center;color:var(--color-on-action);font-weight:700}
+.wled .stmt-top .meta{text-align:right;font-size:12px;color:var(--slate);line-height:1.6}
+.wled .stmt-title{font-family:var(--serif);font-weight:600;font-size:22px;color:var(--petrol);margin-bottom:3px}
+.wled .stmt-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin:16px 0 20px}
+.wled .stmt-grid .si{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--line-2);font-size:13px}
+.wled .stmt-grid .si .k{color:var(--slate)} .wled .stmt-grid .si .v{font-weight:600;font-variant-numeric:tabular-nums}
+.wled .stmt-sum{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--line);border-radius:var(--r-sm);overflow:hidden;margin:6px 0 20px}
+.wled .stmt-sum .cell{background:var(--white);padding:14px 16px}
+.wled .stmt-sum .cell .k{font-size:11.5px;color:var(--slate);font-weight:500}
+.wled .stmt-sum .cell .v{font-family:var(--disp);font-weight:800;font-size:20px;margin-top:5px;font-variant-numeric:tabular-nums;color:var(--petrol)}
+.wled .stmt-sum .cell.end{grid-column:1/-1;background:var(--petrol);color:var(--color-on-action)}
+.wled .stmt-sum .cell.end .k{color:color-mix(in srgb, var(--color-on-action) 75%, transparent)} .wled .stmt-sum .cell.end .v{color:var(--color-on-action)}
+.wled .stmt-sum .cell.owed .v{color:var(--oxblood)}
+
+/* property statement units table */
+.wled .units-tbl{width:100%;border-collapse:collapse;margin-top:6px}
+.wled .units-tbl th{font-family:var(--disp);font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
+.wled .units-tbl th.r{text-align:right}
+.wled .units-tbl td{padding:12px;border-bottom:1px solid var(--line-2);font-size:13.5px}
+.wled .units-tbl td.r{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.wled .units-tbl tr:last-child td{border-bottom:none}
+
+/* statements list */
+.wled .stmt-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:13px}
+.wled .scard{padding:17px 18px;cursor:pointer;transition:.16s}
+.wled .scard:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+.wled .scard .st{display:flex;align-items:center;gap:11px;margin-bottom:12px}
+/* .sav gets its fill color set inline per-tenant (initials avatar), same
+   exception as .bav above — white initials are legible over any such color. */
+.wled .scard .sav{width:40px;height:40px;border-radius:11px;flex:none;display:grid;place-items:center;font-weight:600;color:#fff;font-size:14px}
+.wled .scard .snm{font-weight:600;font-size:14.5px}
+.wled .scard .sm{font-size:12px;color:var(--slate);margin-top:1px}
+.wled .scard .srow{display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;border-top:1px solid var(--line-2)}
+.wled .scard .srow .k{color:var(--slate)} .wled .scard .srow .v{font-weight:600;font-variant-numeric:tabular-nums}
+
+/* ---------- export inline panel ---------- */
+.wled .exp{overflow:hidden;max-height:0;opacity:0;transition:max-height .3s ease, opacity .25s, margin .3s}
+.wled .exp.open{max-height:1200px;opacity:1;margin-bottom:16px}
+.wled .exp-inner{padding:20px 22px}
+.wled .exp h3{font-family:var(--serif);font-weight:600;font-size:18px;color:var(--petrol);margin-bottom:3px}
+.wled .exp-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+.wled .opts{display:flex;flex-direction:column;gap:8px}
+.wled .opt{display:flex;gap:11px;align-items:flex-start;padding:11px 13px;border-radius:11px;border:1px solid var(--line);background:var(--glass-bg);cursor:pointer;transition:.15s}
+.wled .opt:hover{border-color:var(--color-ink-300)}
+.wled .opt.on{border-color:var(--petrol);background:color-mix(in srgb, var(--petrol) 5%, transparent)}
+.wled .opt .rd{width:18px;height:18px;border-radius:50%;border:2px solid var(--line);flex:none;margin-top:1px;display:grid;place-items:center;transition:.15s}
+.wled .opt.on .rd{border-color:var(--petrol)}
+.wled .opt.on .rd::after{content:"";width:9px;height:9px;border-radius:50%;background:var(--petrol)}
+.wled .opt .ot{font-size:13.5px;font-weight:600}
+.wled .opt .od{font-size:12px;color:var(--slate);margin-top:2px}
+.wled .seg{display:flex;gap:6px}
+.wled .seg button{flex:1;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--glass-bg);font-size:13px;font-weight:600;color:var(--ink-2);transition:.15s}
+.wled .seg button.on{border-color:var(--petrol);background:var(--petrol);color:var(--color-on-action)}
+.wled .field label{display:block;font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:6px}
+.wled .field input,.wled .field select,.wled .field textarea{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--glass-bg-strong);outline:none;transition:.15s}
+.wled .field input:focus,.wled .field select:focus,.wled .field textarea:focus{border-color:var(--petrol-2);background:var(--color-surface)}
+.wled .field textarea{resize:vertical;min-height:70px;line-height:1.5}
+.wled .field+.field{margin-top:12px}
+
+/* export certificate */
+.wled .cert{border:1px dashed color-mix(in srgb, var(--petrol) 30%, transparent);border-radius:var(--r-sm);padding:18px;margin-top:16px;background:var(--glass-bg-strong)}
+.wled .cert .ct{display:flex;align-items:center;gap:9px;font-family:var(--serif);font-weight:600;font-size:15px;color:var(--petrol);margin-bottom:12px}
+.wled .cert .ct svg{width:18px;height:18px}
+.wled .cert .crow{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--line-2);font-size:12.5px}
+.wled .cert .crow:last-of-type{border-bottom:none}
+.wled .cert .crow .k{color:var(--slate)} .wled .cert .crow .v{font-weight:600;font-variant-numeric:tabular-nums;text-align:right;word-break:break-all}
+.wled .cert .cksum{font-family:var(--disp);letter-spacing:.03em}
+
+/* ---------- modal ---------- */
+.wled .scrim{position:fixed;inset:0;background:var(--color-scrim);z-index:90;display:flex;align-items:center;justify-content:center;padding:24px;opacity:0;pointer-events:none;transition:.2s}
+.wled .scrim.on{opacity:1;pointer-events:auto}
+@supports ((backdrop-filter:blur(1px))){.wled .scrim{-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}}
+.wled .modal{width:100%;max-width:490px;max-height:88vh;overflow-y:auto;background:var(--white);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);border:1px solid var(--glass-border);transform:translateY(10px) scale(.99);transition:.2s}
+.wled .scrim.on .modal{transform:none}
+.wled .mhead{padding:20px 22px 4px}
+.wled .mhead h3{font-family:var(--serif);font-weight:600;font-size:21px;color:var(--petrol);margin-top:6px;letter-spacing:-.01em}
+.wled .mhead p{font-size:13px;color:var(--slate);margin-top:5px;line-height:1.5}
+.wled .mbody{padding:16px 22px}
+.wled .mfoot{padding:14px 22px 20px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid var(--line-2);position:sticky;bottom:0;background:var(--white)}
+.wled .pick{display:flex;gap:8px;flex-wrap:wrap}
+.wled .pick button{flex:1;min-width:calc(50% - 4px);padding:11px;border-radius:11px;border:1px solid var(--line);background:var(--glass-bg-strong);font-size:13px;font-weight:500;color:var(--ink-2);transition:.15s;text-align:left}
+.wled .pick button:hover{border-color:var(--color-ink-300)}
+.wled .pick button.on{border-color:var(--petrol);background:color-mix(in srgb, var(--petrol) 6%, transparent);color:var(--petrol);font-weight:600}
+.wled .mnote{font-size:12px;color:var(--ink-2);background:color-mix(in srgb, var(--amber) 10%, transparent);border:1px solid color-mix(in srgb, var(--amber) 20%, transparent);border-radius:10px;padding:11px 13px;line-height:1.5;display:flex;gap:9px}
+.wled .mnote svg{flex:none;width:16px;height:16px;color:var(--amber);margin-top:1px}
+
+.wled .empty{text-align:center;padding:46px 24px;color:var(--slate)}
+.wled .empty .ei{width:52px;height:52px;border-radius:14px;background:color-mix(in srgb, var(--petrol) 7%, transparent);display:grid;place-items:center;margin:0 auto 14px;color:var(--petrol-2)}
+.wled .empty .ei svg{width:24px;height:24px}
+.wled .empty .et{font-family:var(--serif);font-size:18px;font-weight:600;color:var(--petrol)}
+.wled .empty .em{font-size:13.5px;margin-top:5px;max-width:42ch;margin-inline:auto}
+
+.wled .foot{margin-top:24px;padding:16px 20px;font-size:12px;color:var(--slate);line-height:1.6;display:flex;gap:11px;align-items:flex-start}
+.wled .foot svg{flex:none;width:16px;height:16px;color:var(--mute);margin-top:1px}
+
+.wled .toasts{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:120;display:flex;flex-direction:column;gap:9px;align-items:center}
+.wled .toast{display:flex;align-items:center;gap:10px;padding:12px 17px;border-radius:12px;background:var(--petrol);color:var(--color-on-action);font-size:13.5px;font-weight:500;box-shadow:var(--shadow-lg);transform:translateY(12px);opacity:0;transition:.25s}
+.wled .toast.on{transform:none;opacity:1}
+.wled .toast svg{width:17px;height:17px;flex:none}
+.wled .toast.good{background:var(--green)} .wled .toast.warn{background:var(--amber)} .wled .toast.bad{background:var(--oxblood-solid)}
+
+@media(max-width:1080px){ .wled .cards,.wled .cards.six{grid-template-columns:repeat(3,1fr)} }
+@media(max-width:860px){
+  .wled .grid2{grid-template-columns:1fr}
+  .wled .brow{grid-template-columns:1fr auto;gap:12px} .wled .brow .bcell.hm{display:none}
+  .wled .stmt-grid{grid-template-columns:1fr}
+}
+@media(max-width:560px){
+  .wled .app{padding:16px 14px 80px} .wled h1.page{font-size:27px}
+  .wled .cards,.wled .cards.six{grid-template-columns:1fr 1fr}
+  .wled .exp-grid{grid-template-columns:1fr} .wled .stmt-sum{grid-template-columns:1fr}
+}
+@media(prefers-reduced-motion:reduce){.wled *{transition:none!important;animation:none!important}}
+
