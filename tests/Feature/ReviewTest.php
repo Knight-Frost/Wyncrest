@@ -475,6 +475,130 @@ class ReviewTest extends TestCase
             ->assertJsonFragment(['status' => ReviewStatus::FLAGGED->value]);
     }
 
+    public function test_admin_review_queue_defaults_to_pending_and_flagged_with_counts(): void
+    {
+        $admin = Admin::factory()->create();
+        $tenant = User::factory()->tenant()->create();
+        $landlord = User::factory()->landlord()->create();
+        [$property, $unit, $listing] = $this->createPropertyStack($landlord);
+
+        $pendingContract = $this->createContract($tenant, $landlord, $listing);
+        $pending = Review::create([
+            'reviewer_user_id' => $tenant->id,
+            'property_id' => $property->id,
+            'unit_id' => $unit->id,
+            'landlord_id' => $landlord->id,
+            'contract_id' => $pendingContract->id,
+            'rating' => 1,
+            'body' => 'Not great.',
+            'status' => ReviewStatus::PENDING,
+        ]);
+
+        $tenant2 = User::factory()->tenant()->create();
+        [, , $listing2] = $this->createPropertyStack($landlord);
+        $approvedContract = $this->createContract($tenant2, $landlord, $listing2);
+        Review::create([
+            'reviewer_user_id' => $tenant2->id,
+            'property_id' => $property->id,
+            'unit_id' => $unit->id,
+            'landlord_id' => $landlord->id,
+            'contract_id' => $approvedContract->id,
+            'rating' => 5,
+            'body' => 'Loved it.',
+            'status' => ReviewStatus::APPROVED,
+        ]);
+
+        $this->actingAs($admin, 'admin');
+
+        $response = $this->getJson('/api/admin/reviews');
+
+        $response->assertStatus(200);
+        $this->assertSame(1, $response->json('counts.pending'));
+        $this->assertSame(1, $response->json('counts.awaiting'));
+        $this->assertSame(1, $response->json('counts.low_rated_awaiting'));
+        $this->assertSame(1, $response->json('counts.approved'));
+        $this->assertCount(1, $response->json('data'));
+        $this->assertSame($pending->id, $response->json('data.0.id'));
+        // The 1★ pending review earns a real, computed low-rating signal.
+        $this->assertContains('low_rating', array_column($response->json('data.0.signals'), 'key'));
+    }
+
+    public function test_admin_review_queue_status_filter_and_search(): void
+    {
+        $admin = Admin::factory()->create();
+        $tenant = User::factory()->tenant()->create();
+        $landlord = User::factory()->landlord()->create();
+        [$property, $unit, $listing] = $this->createPropertyStack($landlord);
+        $contract = $this->createContract($tenant, $landlord, $listing);
+
+        Review::create([
+            'reviewer_user_id' => $tenant->id,
+            'property_id' => $property->id,
+            'unit_id' => $unit->id,
+            'landlord_id' => $landlord->id,
+            'contract_id' => $contract->id,
+            'rating' => 4,
+            'title' => 'A quiet retreat',
+            'body' => 'Very peaceful stay.',
+            'status' => ReviewStatus::APPROVED,
+        ]);
+
+        $this->actingAs($admin, 'admin');
+
+        $this->getJson('/api/admin/reviews?status=pending')
+            ->assertStatus(422); // 'pending' isn't a valid status filter — use 'queue'.
+
+        $this->getJson('/api/admin/reviews?status=approved')
+            ->assertStatus(200)
+            ->assertJsonCount(1, 'data');
+
+        $this->getJson('/api/admin/reviews?status=approved&search=quiet')
+            ->assertStatus(200)
+            ->assertJsonCount(1, 'data');
+
+        $this->getJson('/api/admin/reviews?status=approved&search=nonexistent')
+            ->assertStatus(200)
+            ->assertJsonCount(0, 'data');
+    }
+
+    public function test_admin_review_detail_includes_timeline_and_reviewer_stats(): void
+    {
+        $admin = Admin::factory()->create();
+        $tenant = User::factory()->tenant()->create();
+        $landlord = User::factory()->landlord()->create();
+        [$property, $unit, $listing] = $this->createPropertyStack($landlord);
+        $contract = $this->createContract($tenant, $landlord, $listing);
+
+        $review = Review::create([
+            'reviewer_user_id' => $tenant->id,
+            'property_id' => $property->id,
+            'unit_id' => $unit->id,
+            'landlord_id' => $landlord->id,
+            'contract_id' => $contract->id,
+            'rating' => 3,
+            'body' => 'It was fine.',
+            'status' => ReviewStatus::PENDING,
+        ]);
+
+        $this->actingAs($admin, 'admin');
+
+        $this->postJson("/api/admin/reviews/{$review->id}/moderate", [
+            'action' => 'approve',
+            'reason' => 'Looks genuine.',
+        ])->assertStatus(200);
+
+        $response = $this->getJson("/api/admin/reviews/{$review->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonFragment(['status' => ReviewStatus::APPROVED->value]);
+        $this->assertSame(1, $response->json('reviewer_stats.review_count'));
+        $this->assertEquals(3.0, $response->json('reviewer_stats.average_rating'));
+
+        $timelineActions = array_column($response->json('timeline'), 'key');
+        $this->assertContains('review_submitted', $timelineActions);
+        $this->assertContains('review_approved', $timelineActions);
+    }
+
     public function test_non_admin_cannot_moderate_a_review(): void
     {
         $tenant = User::factory()->tenant()->create();

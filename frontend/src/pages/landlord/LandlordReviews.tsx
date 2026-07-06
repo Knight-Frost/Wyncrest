@@ -13,7 +13,6 @@ import { useApi } from '@/hooks/useApi';
 import { landlordApi } from '@/lib/endpoints';
 import type { ApiError, Review, ReviewSummary, ReviewWithReviewer } from '@/lib/types';
 import { formatDate, timeAgo } from '@/lib/format';
-import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
@@ -233,11 +232,11 @@ export function LandlordReviews() {
     <div className="animate-rise space-y-10">
       <style>{LR_CSS}</style>
 
-      <PageHeader
-        eyebrow="Reputation"
-        title="Reviews"
-        description="Approved tenant reviews on your properties. Respond to build trust with prospective renters."
-      />
+      <div className="lr-hero">
+        <p className="lr-eyebrow">Reputation</p>
+        <h1 className="lr-title">Reviews</h1>
+        <p className="lr-sub">Approved tenant reviews on your properties. Respond to build trust with prospective renters.</p>
+      </div>
 
       {loading && <LoadingState label="Loading reviews…" />}
       {error && <ErrorState message={error.message} onRetry={reload} />}
@@ -306,6 +305,37 @@ export function LandlordReviews() {
 /* ── Styles ──────────────────────────────────────────────────────────────── */
 
 const LR_CSS = `
+.lr-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-ink-200, #E5E7EB);
+  border-radius: var(--radius-2xl, 20px);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,.05));
+  padding: clamp(1.4rem, 3vw, 2.1rem);
+}
+.lr-eyebrow {
+  font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  font-size: 0.6rem;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--color-brand-700, #4338CA);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+}
+.lr-eyebrow::before { content: ''; width: 24px; height: 1px; background: var(--color-brand-700, #4338CA); }
+.lr-title {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: clamp(2.1rem, 4.4vw, 3rem);
+  font-weight: 400;
+  color: var(--color-ink-950, #0C0A09);
+  line-height: 1.02;
+  margin: 0.6rem 0 0.4rem;
+}
+.lr-sub { font-size: 0.9375rem; color: var(--color-ink-500, #6B7280); margin: 0; max-width: 64ch; }
+
 .lr-section-eyebrow {
   font-size: 0.6875rem;
   font-weight: 700;
@@ -319,8 +349,9 @@ const LR_CSS = `
 /* Summary grid */
 .lr-summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 12px;
+  align-items: stretch;
 }
 
 .lr-overall-card {
@@ -348,7 +379,7 @@ const LR_CSS = `
   color: var(--color-ink-900, #111827);
   line-height: 1;
 }
-.lr-overall-count { font-size: 0.8125rem; color: var(--color-ink-500, #6B7280); }
+.lr-overall-count { font-size: 0.8125rem; color: var(--color-ink-500, #6B7280); white-space: nowrap; }
 
 .lr-summary-card {
   border-radius: 14px;
@@ -369,9 +400,9 @@ const LR_CSS = `
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.lr-summary-rating { display: flex; align-items: center; gap: 6px; }
+.lr-summary-rating { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .lr-summary-avg { font-size: 0.9375rem; font-weight: 700; color: var(--color-ink-900, #111827); }
-.lr-summary-count { font-size: 0.8125rem; color: var(--color-ink-400, #9CA3AF); }
+.lr-summary-count { font-size: 0.8125rem; color: var(--color-ink-400, #9CA3AF); white-space: nowrap; }
 
 /* Reviews list */
 .lr-reviews-list { display: flex; flex-direction: column; }

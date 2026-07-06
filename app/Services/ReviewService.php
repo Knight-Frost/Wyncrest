@@ -148,11 +148,11 @@ class ReviewService
      */
     public function moderate(Review $review, Admin $admin, string $action, ?string $reason): Review
     {
-        $newStatus = match ($action) {
-            'approve' => ReviewStatus::APPROVED,
-            'reject' => ReviewStatus::REJECTED,
-            'hide' => ReviewStatus::HIDDEN,
-            'flag' => ReviewStatus::FLAGGED,
+        [$newStatus, $auditAction] = match ($action) {
+            'approve' => [ReviewStatus::APPROVED, 'review_approved'],
+            'reject' => [ReviewStatus::REJECTED, 'review_rejected'],
+            'hide' => [ReviewStatus::HIDDEN, 'review_hidden'],
+            'flag' => [ReviewStatus::FLAGGED, 'review_flagged'],
             default => throw new \InvalidArgumentException("Invalid moderation action: {$action}"),
         };
 
@@ -163,7 +163,7 @@ class ReviewService
 
         $this->auditService->log(
             actor: $admin,
-            action: "review_{$action}d",
+            action: $auditAction,
             subject: $review,
             description: "Admin {$action}d review {$review->id}",
             metadata: ['reason' => $reason],

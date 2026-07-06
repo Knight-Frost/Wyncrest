@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Enums\ReviewStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ModerateReviewRequest;
 use App\Models\Admin;
 use App\Models\Review;
+use App\Services\ReviewModerationService;
 use App\Services\ReviewService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,34 +19,32 @@ use Illuminate\Http\Request;
 class AdminReviewController extends Controller
 {
     public function __construct(
-        protected ReviewService $reviewService
+        protected ReviewService $reviewService,
+        protected ReviewModerationService $moderationService
     ) {}
 
     /**
-     * List reviews pending moderation (pending + flagged), filterable by status.
+     * The moderation queue: truthful counts plus a filtered, sorted,
+     * searchable list of review summaries. Defaults to pending + flagged.
      */
     public function index(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'status' => ['nullable', 'string', 'in:pending,approved,rejected,hidden,flagged'],
-            'property_id' => ['nullable', 'integer', 'exists:properties,id'],
+            'status' => ['nullable', 'string', 'in:queue,approved,rejected,hidden,flagged,all'],
+            'search' => ['nullable', 'string', 'max:200'],
+            'sort' => ['nullable', 'string', 'in:risk,newest,oldest,lowrating'],
         ]);
 
-        $query = Review::with(['reviewer', 'property', 'moderator'])
-            ->latest();
+        return response()->json($this->moderationService->queue($validated));
+    }
 
-        if (isset($validated['status'])) {
-            $query->where('status', $validated['status']);
-        } else {
-            // Default: show the moderation queue (pending + flagged)
-            $query->whereIn('status', [ReviewStatus::PENDING->value, ReviewStatus::FLAGGED->value]);
-        }
-
-        if (isset($validated['property_id'])) {
-            $query->where('property_id', $validated['property_id']);
-        }
-
-        return response()->json($query->paginate(20));
+    /**
+     * Full moderation detail for a single review: reviewer history, contract
+     * context, and the real audit-log-backed decision timeline.
+     */
+    public function show(Review $review): JsonResponse
+    {
+        return response()->json($this->moderationService->detail($review));
     }
 
     /**
@@ -68,6 +66,6 @@ class AdminReviewController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        return response()->json($updated->load(['reviewer', 'property', 'moderator']));
+        return response()->json($this->moderationService->detail($updated));
     }
 }

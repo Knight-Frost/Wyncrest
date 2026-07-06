@@ -202,8 +202,8 @@ function ReviewCard({
 
       <div className="mr-card-foot">
         <span className="mr-date">{formatDate(review.created_at)}</span>
-        {review.property && (
-          <Link to={`/app/listing/${review.property_id}`} className="mr-view-link">
+        {review.contract?.listing_id != null && (
+          <Link to={`/app/listing/${review.contract.listing_id}`} className="mr-view-link">
             View listing <IconChevronRight size={13} />
           </Link>
         )}
@@ -237,6 +237,7 @@ export function MyReviews() {
       <style>{MR_CSS}</style>
 
       <div className="mr-page-header">
+        <p className="mr-eyebrow">Reputation</p>
         <h1 className="mr-page-title">My Reviews</h1>
         <p className="mr-page-desc">
           Reviews you've written for properties you've rented. Pending reviews can be edited.
@@ -282,15 +283,36 @@ const MR_CSS = `
   flex-direction: column;
   gap: 24px;
 }
-.mr-page-header { display: flex; flex-direction: column; gap: 6px; }
+.mr-page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-ink-200, #E5E7EB);
+  border-radius: var(--radius-2xl, 20px);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,.05));
+  padding: clamp(1.4rem, 3vw, 2.1rem);
+}
+.mr-eyebrow {
+  font-family: var(--font-mono, ui-monospace);
+  font-size: 0.6rem;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--color-brand-700, #4338CA);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+}
+.mr-eyebrow::before { content: ''; width: 24px; height: 1px; background: var(--color-brand-700, #4338CA); }
 .mr-page-title {
   font-family: 'Fraunces', Georgia, serif;
-  font-size: 2rem;
-  font-weight: 700;
+  font-size: clamp(2.1rem, 4.4vw, 3rem);
+  font-weight: 400;
   color: var(--color-ink-950, #0C0A09);
-  line-height: 1.15;
+  line-height: 1.02;
+  margin: 0.6rem 0 0.4rem;
 }
-.mr-page-desc { font-size: 0.9375rem; color: var(--color-ink-500, #6B7280); }
+.mr-page-desc { font-size: 0.9375rem; color: var(--color-ink-500, #6B7280); margin: 0; }
 
 .mr-list { display: flex; flex-direction: column; gap: 16px; }
 

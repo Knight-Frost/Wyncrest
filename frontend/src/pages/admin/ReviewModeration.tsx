@@ -1,132 +1,218 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useApi } from '@/hooks/useApi';
 import { adminApi } from '@/lib/endpoints';
 import { normalizeError } from '@/lib/api';
-import { formatDate } from '@/lib/format';
+import { formatDateTime, humanize } from '@/lib/format';
 import { useToast } from '@/components/ui/toast';
-import { PageHeader } from '@/components/layout/PageHeader';
-import { Button } from '@/components/ui/Button';
-import { DetailDrawer } from '@/components/ui/Drawer';
-import { Field, Textarea } from '@/components/ui/Field';
-import { LoadingState, ErrorState, EmptyState } from '@/components/ui/states';
-import { Spinner } from '@/components/ui/Spinner';
+import { Avatar } from '@/components/ui/Avatar';
 import { StarRating } from '@/components/ui/StarRating';
-import { RecordList, RecordCard } from '@/components/ui/RecordCard';
-import {
-  IconStar,
-  IconAlertTriangle,
-  IconChevronLeft,
-  IconChevronRight,
-} from '@/components/ui/icons';
-import {
-  SemanticBadge,
-  CommandCard,
-} from '@/components/cards';
 import type {
-  AdminReview,
+  AdminReviewSummary,
+  AdminReviewDetail,
+  AdminReviewSignal,
   ApiError,
-  ReviewStatus,
 } from '@/lib/types';
+import './review-moderation.css';
 
-/* ---- Helpers ---------------------------------------------------------------- */
+/* ============================================================================
+   REVIEW MODERATION — ported from the approved standalone mockup
+   (wyncrest-reviews.html) and wired to 100% real backend data.
 
-type FilterKey = 'queue' | 'approved' | 'rejected' | 'hidden' | 'all';
+   The mockup invented toxicity/spam/PII scoring, a "reported by host" flow,
+   free-text moderator notes, and an admin edit/redact tool — none of that
+   exists in this platform (landlords can only respond to a review, never
+   report one; admins can't edit a tenant's words). None of it is reproduced
+   here. What IS real and shown: computed signals (flagged / low rating /
+   long-pending / reviewer's first review), reviewer history, the real
+   contract backing every review, and the actual audit-log decision history.
 
-const FILTER_TABS: { key: FilterKey; label: string }[] = [
-  { key: 'queue',    label: 'Queue' },
-  { key: 'approved', label: 'Approved' },
-  { key: 'rejected', label: 'Rejected' },
-  { key: 'hidden',   label: 'Hidden' },
-  { key: 'all',      label: 'All' },
-];
+   The mockup's toy dataset never needed durable status browsing (its demo
+   queue just shrinks as you decide), but real reviews persist across five
+   statuses — so a status-tab row was added under the panel head; the top
+   stat tiles stay purely informational (matching the same convention used
+   on Listing Review), while the tabs do the actual filtering.
 
-function filterToApiStatus(key: FilterKey): ReviewStatus | undefined {
-  switch (key) {
-    case 'queue':    return undefined; // pending + flagged — we filter client-side
-    case 'approved': return 'approved';
-    case 'rejected': return 'rejected';
-    case 'hidden':   return 'hidden';
-    case 'all':      return undefined;
-  }
-}
+   Styling lives in review-moderation.css, scoped under `.revmod`.
+   ============================================================================ */
 
-function reviewStatusBadgeRole(
-  status: ReviewStatus,
-): 'warning' | 'success' | 'danger' | 'neutral' {
-  switch (status) {
-    case 'pending':  return 'warning';
-    case 'approved': return 'success';
-    case 'rejected': return 'danger';
-    case 'hidden':   return 'neutral';
-    case 'flagged':  return 'warning';
-    default:         return 'neutral';
-  }
-}
-
-function reviewStatusLabel(status: ReviewStatus): string {
-  switch (status) {
-    case 'pending':  return 'Pending';
-    case 'approved': return 'Approved';
-    case 'rejected': return 'Rejected';
-    case 'hidden':   return 'Hidden';
-    case 'flagged':  return 'Flagged';
-    default:         return status;
-  }
-}
-
-function isQueueStatus(status: ReviewStatus): boolean {
-  return status === 'pending' || status === 'flagged';
-}
-
-/* ---- Moderation action ----------------------------------------------------- */
-
+type StatusTab = 'queue' | 'approved' | 'rejected' | 'hidden' | 'all';
+type ChipFilter = 'all' | 'flagged' | 'low_rating' | 'long_pending';
+type SortKey = 'risk' | 'newest' | 'oldest' | 'lowrating';
 type ModerationAction = 'approve' | 'reject' | 'hide' | 'flag';
 
-interface ModerationDrawerProps {
-  review: AdminReview;
-  onClose: () => void;
-  onDone: () => void;
+const TABS: { key: StatusTab; label: string }[] = [
+  { key: 'queue', label: 'Queue' },
+  { key: 'approved', label: 'Approved' },
+  { key: 'rejected', label: 'Rejected' },
+  { key: 'hidden', label: 'Hidden' },
+  { key: 'all', label: 'All' },
+];
+
+const CHIPS: { key: ChipFilter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'flagged', label: 'Flagged' },
+  { key: 'low_rating', label: 'Low rating' },
+  { key: 'long_pending', label: 'Long-pending' },
+];
+
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: 'risk', label: 'Highest risk first' },
+  { key: 'oldest', label: 'Oldest first' },
+  { key: 'newest', label: 'Newest first' },
+  { key: 'lowrating', label: 'Lowest rating' },
+];
+
+const ACTIONS: { key: ModerationAction; label: string; cls: string }[] = [
+  { key: 'approve', label: 'Approve & publish', cls: 'btn-ok' },
+  { key: 'reject', label: 'Reject', cls: 'btn-danger' },
+  { key: 'hide', label: 'Hide', cls: 'btn-warn' },
+  { key: 'flag', label: 'Flag', cls: 'btn-ghost' },
+];
+
+const PAST_TENSE: Record<ModerationAction, string> = {
+  approve: 'approved',
+  reject: 'rejected',
+  hide: 'hidden',
+  flag: 'flagged',
+};
+
+function reasonRequired(action: ModerationAction): boolean {
+  return action === 'reject' || action === 'hide';
 }
 
-function actionLabel(action: ModerationAction): string {
-  switch (action) {
-    case 'approve': return 'Approve';
-    case 'reject':  return 'Reject';
-    case 'hide':    return 'Hide';
-    case 'flag':    return 'Flag';
+/** Highest-severity signal on a review sets the card's left risk stripe. */
+function riskColor(signals: AdminReviewSignal[]): string {
+  if (signals.some((s) => s.severity === 'high')) return 'var(--oxblood)';
+  if (signals.some((s) => s.severity === 'medium')) return 'var(--amber)';
+  return 'var(--slate)';
+}
+
+/* ── icons (inlined to match the mockup's stroke-icon set exactly) ─────────── */
+
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M21 21l-4-4" />
+    </svg>
+  );
+}
+function GuideIcon() {
+  return (
+    <svg viewBox="0 0 24 24">
+      <path d="M12 3v18M6 8h12M6 16h12" strokeLinecap="round" />
+    </svg>
+  );
+}
+function ContextChevron() {
+  return (
+    <svg viewBox="0 0 24 24">
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  );
+}
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24">
+      <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/* ── expandable "context" panel: reviewer history + real audit-log timeline ── */
+
+function ContextPanel({ detail, loading }: { detail: AdminReviewDetail | null; loading: boolean }) {
+  if (loading || !detail) {
+    return <div className="rc-skel" />;
   }
+  return (
+    <div className="ctx-pad">
+      <div>
+        <div className="dl">Reviewer</div>
+        <div className="kv">
+          <span className="kk">Reviews written (all-time)</span>
+          <span>{detail.reviewer_stats?.review_count ?? 1}</span>
+        </div>
+        <div className="kv">
+          <span className="kk">Average rating given</span>
+          <span>{detail.reviewer_stats ? `${detail.reviewer_stats.average_rating.toFixed(1)} / 5` : '—'}</span>
+        </div>
+        <div className="dl" style={{ marginTop: '1.2rem' }}>Property</div>
+        <div className="kv">
+          <span className="kk">Home</span>
+          <span>{detail.property?.name ?? '—'}</span>
+        </div>
+        <div className="kv">
+          <span className="kk">Location</span>
+          <span>{detail.property?.city ?? '—'}</span>
+        </div>
+        <div className="kv">
+          <span className="kk">Host</span>
+          <span>{detail.landlord?.name ?? '—'}</span>
+        </div>
+        <div className="kv">
+          <span className="kk">Lease status</span>
+          <span>{detail.contract_status ? humanize(detail.contract_status) : '—'}</span>
+        </div>
+      </div>
+      <div>
+        {detail.landlord_response && (
+          <div className="note-box">
+            <div className="nn">Landlord response</div>
+            <p>{detail.landlord_response}</p>
+          </div>
+        )}
+        <div className="dl">Moderation history</div>
+        <div className="tl">
+          {detail.timeline.map((event, i) => (
+            <div key={`${event.key}-${i}`} className={`tl-item ${event.severity}`}>
+              <div className="t">
+                <b>{event.label}</b>
+                {event.actor && ` · ${event.actor}`}
+              </div>
+              {event.detail && <div className="td">{event.detail}</div>}
+              <div className="tm">{formatDateTime(event.at)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function actionButtonVariant(action: ModerationAction): 'primary' | 'secondary' | 'danger' {
-  switch (action) {
-    case 'approve': return 'primary';
-    case 'reject':  return 'danger';
-    case 'hide':    return 'secondary';
-    case 'flag':    return 'secondary';
-  }
+/* ── one review card ─────────────────────────────────────────────────────── */
+
+interface ReviewRowProps {
+  item: AdminReviewSummary;
+  contextOpen: boolean;
+  detail: AdminReviewDetail | null;
+  detailLoading: boolean;
+  onToggleContext: () => void;
+  onModerated: (updated: AdminReviewDetail) => void;
 }
 
-function ModerationDrawer({ review, onClose, onDone }: ModerationDrawerProps) {
+function ReviewRow({ item, contextOpen, detail, detailLoading, onToggleContext, onModerated }: ReviewRowProps) {
   const { toast } = useToast();
-  const [selectedAction, setSelectedAction] = useState<ModerationAction | null>(null);
+  const [action, setAction] = useState<ModerationAction | null>(null);
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const reviewerName =
-    review.reviewer
-      ? review.reviewer.full_name ?? `User #${review.reviewer_user_id}`
-      : `User #${review.reviewer_user_id}`;
+  const reviewerName = item.reviewer?.name ?? 'Unknown reviewer';
+  const propertyName = item.property?.name ?? 'Unknown property';
 
-  const propertyTitle =
-    review.property?.name ?? `Property #${review.property_id}`;
-
-  async function handleModerate() {
-    if (!selectedAction) return;
+  async function submit() {
+    if (!action) return;
+    if (reasonRequired(action) && !reason.trim()) {
+      toast('A reason is required for this action.', 'error');
+      return;
+    }
     setSubmitting(true);
     try {
-      await adminApi.moderateReview(review.id, selectedAction, reason.trim() || undefined);
-      toast(`Review ${actionLabel(selectedAction).toLowerCase()}d successfully.`, 'success');
-      onDone();
+      const updated = await adminApi.moderateReview(item.id, action, reason.trim() || undefined);
+      toast(`Review ${PAST_TENSE[action]}.`, 'success');
+      setAction(null);
+      setReason('');
+      onModerated(updated);
     } catch (err) {
       const e = normalizeError(err) as ApiError;
       toast(e.message || 'Moderation action failed.', 'error');
@@ -135,294 +221,292 @@ function ModerationDrawer({ review, onClose, onDone }: ModerationDrawerProps) {
     }
   }
 
-  const ACTIONS: ModerationAction[] = ['approve', 'reject', 'hide', 'flag'];
+  return (
+    <div className="rcard" style={{ ['--risk' as string]: riskColor(item.signals) }}>
+      <div className="rc-top">
+        <Avatar name={reviewerName} size={40} className="rc-ava" />
+        <div className="rc-who">
+          <div className="rc-line1">
+            <b>{reviewerName}</b> reviewed <span className="prop">{propertyName}</span>
+          </div>
+          <div className="rc-line2">
+            {item.property?.city && <span>{item.property.city}</span>}
+            {item.landlord && <span>· host {item.landlord.name}</span>}
+            {item.contract_status && <span className="stay">{humanize(item.contract_status)} lease</span>}
+            {item.moderator && <span>· last decided by {item.moderator.name}</span>}
+          </div>
+        </div>
+        <div className="rc-rate">
+          <StarRating value={item.rating} readOnly size={15} />
+          <span className="rnum">{item.rating}.0 / 5</span>
+        </div>
+      </div>
+
+      {item.signals.length > 0 && (
+        <div className="sigs">
+          {item.signals.map((s) => (
+            <span key={s.key} className={`sig ${s.severity}`}>
+              <span className="sd" />
+              {s.label}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {item.title && <div className="rc-title">{item.title}</div>}
+      <div className="rc-text">{item.body}</div>
+
+      <div className="rc-foot">
+        {ACTIONS.map((a) => (
+          <button
+            key={a.key}
+            type="button"
+            className={`btn ${a.cls} btn-sm`}
+            onClick={() => setAction(a.key)}
+            disabled={submitting}
+          >
+            {a.key === 'approve' && <CheckIcon />}
+            {a.label}
+          </button>
+        ))}
+        <span className="spacer" />
+        <button type="button" className={`rc-more ${contextOpen ? 'open' : ''}`} onClick={onToggleContext}>
+          Context <ContextChevron />
+        </button>
+      </div>
+
+      {action && (
+        <div className="actionbar">
+          <p className="al">{reasonRequired(action) ? 'Reason (required)' : 'Reason (optional)'}</p>
+          <div className="reason-box">
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Explain the decision — this is written to the audit log."
+            />
+            <div className="reason-actions">
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAction(null)} disabled={submitting}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={`btn ${ACTIONS.find((a) => a.key === action)!.cls} btn-sm`}
+                onClick={submit}
+                disabled={submitting}
+              >
+                {submitting ? 'Saving…' : `Confirm ${ACTIONS.find((a) => a.key === action)!.label.toLowerCase()}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {contextOpen && <ContextPanel detail={detail} loading={detailLoading} />}
+    </div>
+  );
+}
+
+/* ── main page ────────────────────────────────────────────────────────────── */
+
+export function ReviewModeration() {
+  const [tab, setTab] = useState<StatusTab>('queue');
+  const [chip, setChip] = useState<ChipFilter>('all');
+  const [sort, setSort] = useState<SortKey>('risk');
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [details, setDetails] = useState<Record<number, AdminReviewDetail>>({});
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const { data, loading, error, reload } = useApi(
+    () => adminApi.adminReviewQueue({ status: tab, sort, search: search || undefined }),
+    [tab, sort, search],
+  );
+
+  const counts = data?.counts;
+  const rows = (data?.data ?? []).filter((r) => {
+    if (chip === 'flagged') return r.signals.some((s) => s.key === 'flagged');
+    if (chip === 'low_rating') return r.signals.some((s) => s.key === 'low_rating');
+    if (chip === 'long_pending') return r.signals.some((s) => s.key === 'long_pending');
+    return true;
+  });
+
+  async function toggleContext(id: number) {
+    if (expandedId === id) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(id);
+    if (!details[id]) {
+      setDetailLoading(true);
+      try {
+        const detail = await adminApi.adminReviewDetail(id);
+        setDetails((d) => ({ ...d, [id]: detail }));
+      } catch {
+        // The panel just clears its skeleton; the row's summary fields still show.
+      } finally {
+        setDetailLoading(false);
+      }
+    }
+  }
+
+  function handleModerated(updated: AdminReviewDetail) {
+    setDetails((d) => ({ ...d, [updated.id]: updated }));
+    reload();
+  }
 
   return (
-    <DetailDrawer
-      open
-      onClose={submitting ? () => {} : onClose}
-      eyebrow="REVIEW"
-      title={propertyTitle}
-      description={`By ${reviewerName}`}
-      dismissibleOnOutside={!submitting}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose} disabled={submitting}>
-            Cancel
-          </Button>
-          <Button
-            variant={selectedAction ? actionButtonVariant(selectedAction) : 'primary'}
-            onClick={handleModerate}
-            disabled={!selectedAction || submitting}
-            loading={submitting}
-          >
-            {selectedAction ? `${actionLabel(selectedAction)} review` : 'Select an action'}
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-5">
-        {/* Review preview */}
-        <div className="rounded-xl border border-ink-200 bg-ink-50/40 px-4 py-4 space-y-2">
-          <div className="flex items-center gap-3 flex-wrap">
-            <StarRating value={review.rating} readOnly size={18} />
-            <SemanticBadge role={reviewStatusBadgeRole(review.status as ReviewStatus)} dot={false}>
-              {reviewStatusLabel(review.status as ReviewStatus)}
-            </SemanticBadge>
-          </div>
-          {review.title && (
-            <p className="font-display font-semibold text-ink-900">{review.title}</p>
-          )}
-          <p className="text-sm text-ink-700">{review.body}</p>
-          {review.moderation_reason && (
-            <p className="text-xs text-ink-500">
-              <span className="font-medium">Previous decision: </span>
-              {review.moderation_reason}
+    <div className="revmod">
+      <section className="pagehead glass reveal">
+        <div className="ph-top">
+          <div>
+            <span className="ph-eyebrow">Trust &amp; safety</span>
+            <h1 className="ph-title">
+              Review <span className="it">moderation.</span>
+            </h1>
+            <p className="ph-sub">
+              Keep property reviews honest. Every review a tenant leaves is queued for a decision when submitted;
+              nothing publishes without one.
             </p>
-          )}
-          <p className="text-xs text-ink-400">
-            Submitted {formatDate(review.created_at)}
-          </p>
+          </div>
+          <div className="ph-controls">
+            <button type="button" className="btn btn-glass" onClick={() => setGuideOpen((v) => !v)}>
+              <GuideIcon /> Guidelines
+            </button>
+          </div>
         </div>
+        <div className={`guide ${guideOpen ? 'open' : ''}`}>
+          <div className="guide-in">
+            <div className="guide-pad">
+              <b>Remove a review when it contains:</b>
+              <ul>
+                <li>Harassment, hate, or threats toward a host or tenant</li>
+                <li>Personal contact details shared in the review text (phone, email, address)</li>
+                <li>Spam, advertising, or content unrelated to the stay</li>
+                <li>A clear, verifiable violation of platform policy</li>
+              </ul>
+              <b style={{ display: 'block', marginTop: '0.6rem' }}>Keep it published</b> when it&apos;s an honest
+              opinion, even a harshly negative one. A low rating is not a reason to remove.
+            </div>
+          </div>
+        </div>
+      </section>
 
-        {/* Action picker */}
-        <div>
-          <p className="text-sm font-medium text-ink-700 mb-2">Choose an action</p>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {ACTIONS.map((action) => (
+      <section className="stats">
+        <div className="stat glass alert reveal">
+          <div className="k"><i style={{ background: 'var(--oxblood)' }} />Awaiting decision</div>
+          <div className="v">{counts?.awaiting ?? 0}</div>
+          <div className="d">pending + flagged</div>
+        </div>
+        <div className="stat glass reveal">
+          <div className="k"><i style={{ background: 'var(--amber)' }} />Flagged</div>
+          <div className="v">{counts?.flagged ?? 0}</div>
+          <div className="d">held for a second look</div>
+        </div>
+        <div className="stat glass reveal">
+          <div className="k"><i style={{ background: 'var(--petrol-2)' }} />Low-rated, awaiting</div>
+          <div className="v">{counts?.low_rated_awaiting ?? 0}</div>
+          <div className="d">2 stars or fewer</div>
+        </div>
+        <div className="stat glass reveal">
+          <div className="k"><i style={{ background: 'var(--green)' }} />Approved · 7 days</div>
+          <div className="v">{counts?.approved_week ?? 0}</div>
+          <div className="d">published &amp; live</div>
+        </div>
+      </section>
+
+      <section className="glass reveal">
+        <div className="panel-head">
+          <div>
+            <h2>Moderation queue</h2>
+            <div className="ph2-sub">{rows.length} of {counts?.[tab === 'queue' ? 'awaiting' : tab] ?? rows.length} in view</div>
+          </div>
+          <div className="tabs">
+            {TABS.map((t) => (
               <button
-                key={action}
+                key={t.key}
                 type="button"
-                onClick={() => setSelectedAction(action)}
-                className={[
-                  'rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors text-center',
-                  selectedAction === action
-                    ? action === 'reject'
-                      ? 'border-danger-300 bg-danger-50 text-danger-700'
-                      : action === 'approve'
-                      ? 'border-success-300 bg-success-50 text-success-700'
-                      : 'border-brand-300 bg-brand-50 text-brand-700'
-                    : 'border-ink-200 bg-surface text-ink-700 hover:bg-ink-50',
-                ].join(' ')}
+                className={`tab ${tab === t.key ? 'on' : ''}`}
+                onClick={() => { setTab(t.key); setExpandedId(null); }}
               >
-                {actionLabel(action)}
+                {t.label}
+                {counts && <span className="n">{t.key === 'queue' ? counts.awaiting : counts[t.key]}</span>}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Reason field */}
-        <Field label={selectedAction === 'approve' || selectedAction === 'flag' ? 'Reason (optional)' : 'Reason'}>
-          {(id) => (
-            <Textarea
-              id={id}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder={
-                selectedAction === 'approve'
-                  ? 'Optionally note why this review is approved…'
-                  : selectedAction === 'reject'
-                  ? 'Explain why this review is rejected…'
-                  : selectedAction === 'hide'
-                  ? 'Explain why this review is hidden…'
-                  : 'Describe why this review is flagged…'
-              }
+        <div className="toolbar">
+          <label className="search">
+            <SearchIcon />
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search reviewer, property or text…"
+              aria-label="Search reviews"
             />
-          )}
-        </Field>
-      </div>
-    </DetailDrawer>
-  );
-}
-
-/* ---- Main page -------------------------------------------------------------- */
-
-export function ReviewModeration() {
-  const [filter, setFilter] = useState<FilterKey>('queue');
-  const [page, setPage] = useState(1);
-  const [moderating, setModerating] = useState<AdminReview | null>(null);
-
-  const apiStatus = filter === 'queue' ? undefined : filterToApiStatus(filter);
-  const apiParams = { status: apiStatus, page };
-
-  const { data, loading, error, reload } = useApi(
-    () => adminApi.adminReviews(apiParams),
-    [filter, page],
-  );
-
-  const items = (data?.data ?? []).filter((r) => {
-    if (filter === 'queue') return isQueueStatus(r.status as ReviewStatus);
-    return true;
-  });
-
-  const currentPage = data?.current_page ?? 1;
-  const lastPage = data?.last_page ?? 1;
-  const total = data?.total ?? 0;
-
-  const queueCount = filter === 'queue' ? items.length : undefined;
-
-  function changeFilter(key: FilterKey) {
-    setFilter(key);
-    setPage(1);
-  }
-
-  return (
-    <div className="animate-rise space-y-8">
-      <PageHeader
-        eyebrow="Platform"
-        title="Review Moderation"
-        description="Moderate tenant reviews on rental properties."
-      />
-
-      {/* Queue callout */}
-      {!loading && !error && filter === 'queue' && queueCount !== undefined && queueCount > 0 && (
-        <CommandCard
-          role="warning"
-          label="Reviews awaiting moderation"
-          value={String(queueCount)}
-          sub={
-            queueCount === 1
-              ? 'One review needs your decision'
-              : `${queueCount} reviews need your decision`
-          }
-          icon={<IconAlertTriangle size={20} />}
-        />
-      )}
-
-      {/* Filter tabs */}
-      <div className="mb-5 flex gap-0 border-b border-ink-200" role="tablist" aria-label="Filter reviews">
-        {FILTER_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            role="tab"
-            onClick={() => changeFilter(tab.key)}
-            aria-selected={filter === tab.key}
-            className={[
-              'inline-flex items-center gap-2 mr-6 py-2.5 px-1 text-sm font-medium border-b-2 -mb-px transition-colors',
-              filter === tab.key
-                ? 'border-brand-600 text-brand-700'
-                : 'border-transparent text-ink-500 hover:text-ink-800',
-            ].join(' ')}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Content */}
-      {loading ? (
-        <LoadingState label="Loading reviews…" />
-      ) : error ? (
-        <ErrorState message={error.message} onRetry={reload} />
-      ) : items.length === 0 ? (
-        <EmptyState
-          icon={<IconStar />}
-          title="Nothing here"
-          description={
-            filter === 'queue'
-              ? 'No reviews awaiting moderation.'
-              : 'No reviews match this filter.'
-          }
-        />
-      ) : (
-        <>
-          <RecordList>
-            {items.map((review: AdminReview) => {
-              const reviewerName =
-                review.reviewer?.full_name ?? `User #${review.reviewer_user_id}`;
-              const propertyTitle =
-                review.property?.name ?? `Property #${review.property_id}`;
-
-              return (
-                <RecordCard
-                  key={review.id}
-                  title={propertyTitle}
-                  subtitle={reviewerName}
-                  indicator={<StarRating value={review.rating} readOnly size={15} />}
-                  related={
-                    review.body ? (
-                      <p className="text-xs text-ink-500 line-clamp-2">{review.body}</p>
-                    ) : undefined
-                  }
-                  status={
-                    <SemanticBadge
-                      role={reviewStatusBadgeRole(review.status as ReviewStatus)}
-                      dot={false}
-                    >
-                      {reviewStatusLabel(review.status as ReviewStatus)}
-                    </SemanticBadge>
-                  }
-                  timestamp={
-                    review.moderator
-                      ? `By ${review.moderator.name}`
-                      : formatDate(review.created_at)
-                  }
-                  primaryAction={
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setModerating(review)}
-                    >
-                      Moderate
-                    </Button>
-                  }
-                />
-              );
-            })}
-          </RecordList>
-
-          {/* Pagination */}
-          <div className="flex items-center justify-between gap-4">
-            <p className="text-xs text-ink-500">
-              {loading ? (
-                <span className="inline-flex items-center gap-2">
-                  <Spinner size={14} /> Loading…
-                </span>
-              ) : (
-                `${total} ${total === 1 ? 'review' : 'reviews'} total`
-              )}
-            </p>
-            {lastPage > 1 && (
-              <div className="flex items-center gap-4">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={currentPage <= 1 || loading}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  leftIcon={<IconChevronLeft className="h-4 w-4" />}
-                >
-                  Previous
-                </Button>
-                <span className="text-sm text-ink-500">
-                  Page {currentPage} of {lastPage}
-                </span>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={currentPage >= lastPage || loading}
-                  onClick={() => setPage((p) => p + 1)}
-                  leftIcon={<IconChevronRight className="h-4 w-4" />}
-                >
-                  Next
-                </Button>
-              </div>
-            )}
+          </label>
+          <div className="chips">
+            {CHIPS.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                className={`chip ${chip === c.key ? 'on' : ''}`}
+                onClick={() => setChip(c.key)}
+              >
+                {c.label}
+              </button>
+            ))}
           </div>
-        </>
-      )}
+          <select className="sel-input" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort">
+            {SORTS.map((s) => (
+              <option key={s.key} value={s.key}>{s.label}</option>
+            ))}
+          </select>
+        </div>
 
-      {/* Moderation drawer */}
-      {moderating && (
-        <ModerationDrawer
-          review={moderating}
-          onClose={() => setModerating(null)}
-          onDone={() => {
-            setModerating(null);
-            reload();
-          }}
-        />
-      )}
+        {loading && !data ? (
+          <div className="queue">
+            {[0, 1, 2].map((i) => <div key={i} className="rc-skel" />)}
+          </div>
+        ) : error ? (
+          <div className="empty">
+            <span className="it">Something went wrong</span>
+            {error.message}
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="empty">
+            <CheckIcon />
+            <span className="it">
+              {tab === 'queue' ? 'Queue clear.' : 'Nothing here.'}
+            </span>
+            {tab === 'queue' ? 'Every review has been moderated. Nice work.' : 'No reviews match this filter.'}
+          </div>
+        ) : (
+          <div className="queue">
+            {rows.map((item) => (
+              <ReviewRow
+                key={item.id}
+                item={item}
+                contextOpen={expandedId === item.id}
+                detail={details[item.id] ?? null}
+                detailLoading={expandedId === item.id && detailLoading && !details[item.id]}
+                onToggleContext={() => toggleContext(item.id)}
+                onModerated={handleModerated}
+              />
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
+
+export default ReviewModeration;
