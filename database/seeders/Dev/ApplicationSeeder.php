@@ -4,7 +4,10 @@ namespace Database\Seeders\Dev;
 
 use App\Enums\ApplicationStatus;
 use App\Models\Application;
+use App\Models\ApplicationEvent;
+use App\Models\ApplicationRequest;
 use App\Models\Listing;
+use App\Models\User;
 
 /**
  * ApplicationSeeder — rental applications, all tied to real listings and tenants.
@@ -28,6 +31,8 @@ class ApplicationSeeder extends DevSeeder
     private const LIVE = [
         ['tenant.good2', 'ridge-court', '1B-07', ApplicationStatus::IN_REVIEW],
         ['tenant.good4', 'garden-villas', 'DX-B', ApplicationStatus::SUBMITTED],
+        ['tenant.good1', 'ridge-court', '1B-07', ApplicationStatus::NEEDS_ACTION],
+        ['tenant.good3', 'garden-villas', 'DX-B', ApplicationStatus::DRAFT],
     ];
 
     public function run(): void
@@ -38,12 +43,12 @@ class ApplicationSeeder extends DevSeeder
         $this->command?->info("  ✓ Applications: {$count} ({$this->summary()}).");
     }
 
-    /** Approved application for each leased unit, from its current tenant. */
+    /** Approved application behind every lease (active AND former), from its tenant. */
     protected function seedApprovedHistories(): int
     {
         $count = 0;
 
-        foreach (SeedCatalog::leasedUnits() as $u) {
+        foreach (SeedCatalog::contractedUnits() as $u) {
             $unit = $this->unitFromCatalog($u);
             $tenant = $this->user($u['tenant']);
             if (! $unit || ! $tenant || ! ($listing = $this->listingForUnit($unit))) {
@@ -83,6 +88,7 @@ class ApplicationSeeder extends DevSeeder
             }
 
             $this->upsert($tenant->id, $listing, $this->fieldsForStatus($status));
+            $this->seedTimeline($tenant, $listing, $status);
             $count++;
         }
 
@@ -105,8 +111,84 @@ class ApplicationSeeder extends DevSeeder
                 'reviewed_at' => now()->subDay(),
                 'landlord_notes' => 'Reviewing references. Internal note (never shown to tenant).',
             ]),
+            ApplicationStatus::NEEDS_ACTION => array_merge($base, [
+                'reviewed_at' => now()->subDays(2),
+            ]),
+            ApplicationStatus::DRAFT => [
+                'status' => ApplicationStatus::DRAFT->value,
+                'submitted_at' => null,
+                'form_data' => [
+                    'personal' => ['first' => 'Ama', 'last' => 'Owusu'],
+                    'rental' => ['curType' => 'Apartment', 'moveIn' => '1 Sep 2026'],
+                ],
+            ],
             default => $base,
         };
+    }
+
+    /**
+     * Give live applications a truthful, tenant-visible timeline (and, for a
+     * NEEDS_ACTION application, an open landlord request the demo tenant can
+     * resolve). Idempotent so re-seeding never stacks duplicates.
+     */
+    protected function seedTimeline(User $tenant, Listing $listing, ApplicationStatus $status): void
+    {
+        $application = Application::where('tenant_id', $tenant->id)
+            ->where('listing_id', $listing->id)
+            ->first();
+        if (! $application) {
+            return;
+        }
+
+        $landlord = $listing->landlord;
+
+        $this->event($application, 'started', 'Application started', $tenant, now()->subDays(4));
+
+        if ($status === ApplicationStatus::DRAFT) {
+            return; // A draft has only been started.
+        }
+
+        $this->event($application, 'submitted', 'Application submitted to landlord', $tenant, now()->subDays(3));
+
+        if (in_array($status, [ApplicationStatus::IN_REVIEW, ApplicationStatus::NEEDS_ACTION], true)) {
+            $this->event($application, 'opened', 'Landlord opened the application', $landlord, now()->subDays(2));
+        }
+
+        if ($status === ApplicationStatus::NEEDS_ACTION && $landlord) {
+            ApplicationRequest::firstOrCreate(
+                ['application_id' => $application->id, 'type' => 'document_replacement'],
+                [
+                    'requested_by_type' => $landlord->getMorphClass(),
+                    'requested_by_id' => $landlord->id,
+                    'requester_role' => 'landlord',
+                    'document_type' => 'proof_of_income',
+                    'message' => 'Please upload a clearer proof of income.',
+                    'reason' => 'The uploaded document was too blurry to read.',
+                    'due_at' => now()->addDays(5),
+                ],
+            );
+
+            $this->event(
+                $application,
+                'info_requested',
+                'The landlord requested more information',
+                $landlord,
+                now()->subDay(),
+            );
+        }
+    }
+
+    protected function event(Application $application, string $event, string $description, ?User $actor, $at): void
+    {
+        ApplicationEvent::firstOrCreate(
+            ['application_id' => $application->id, 'event' => $event],
+            [
+                'actor_type' => $actor?->getMorphClass(),
+                'actor_id' => $actor?->id,
+                'description' => $description,
+                'created_at' => $at,
+            ],
+        );
     }
 
     protected function upsert(int $tenantId, Listing $listing, array $attributes): void
@@ -119,7 +201,7 @@ class ApplicationSeeder extends DevSeeder
 
     protected function summary(): string
     {
-        $histories = count(SeedCatalog::leasedUnits());
+        $histories = count(SeedCatalog::contractedUnits());
 
         return "{$histories} approved histories, ".count(self::LIVE).' live applicants';
     }

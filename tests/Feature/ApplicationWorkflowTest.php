@@ -120,7 +120,43 @@ class ApplicationWorkflowTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-            ->assertJson(['message' => 'You already have an active application for this listing']);
+            ->assertJson(['message' => 'You already have an application for this listing']);
+    }
+
+    public function test_tenant_cannot_reapply_after_approval(): void
+    {
+        Application::factory()->approved()->create([
+            'tenant_id' => $this->tenant->id,
+            'listing_id' => $this->listing->id,
+            'landlord_id' => $this->landlord->id,
+        ]);
+
+        Sanctum::actingAs($this->tenant, [], 'sanctum');
+
+        $response = $this->postJson('/api/tenant/applications', [
+            'listing_id' => $this->listing->id,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'You already have an application for this listing']);
+    }
+
+    public function test_tenant_cannot_reapply_after_rejection(): void
+    {
+        Application::factory()->rejected()->create([
+            'tenant_id' => $this->tenant->id,
+            'listing_id' => $this->listing->id,
+            'landlord_id' => $this->landlord->id,
+        ]);
+
+        Sanctum::actingAs($this->tenant, [], 'sanctum');
+
+        $response = $this->postJson('/api/tenant/applications', [
+            'listing_id' => $this->listing->id,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'You already have an application for this listing']);
     }
 
     // =========================================================================

@@ -1,327 +1,101 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { useNavigate } from 'react-router';
 import { useApi } from '@/hooks/useApi';
 import { landlordApi } from '@/lib/endpoints';
-import { fieldErrors } from '@/lib/api';
-import type { ApiError, Application, ApplicationStatus } from '@/lib/types';
-import { formatDate, timeAgo, storageUrl } from '@/lib/format';
-import { paginate, rangeLabel } from '@/lib/paginate';
-import { applicationStatusLabel, applicationStatusTone } from '@/lib/statusMaps';
-import { PageHeader } from '@/components/layout/PageHeader';
-import { Button } from '@/components/ui/Button';
-import { Avatar } from '@/components/ui/Avatar';
-import { RecordList, RecordCard, RecordRelated } from '@/components/ui/RecordCard';
-import { DetailDrawer } from '@/components/ui/Drawer';
-import { Field, Textarea } from '@/components/ui/Field';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
-import {
-  CommandBar,
-  SearchInput,
-  FilterTabs,
-  SortSelect,
-  Pagination,
-  ActionMenu,
-  Thumbnail,
-  type FilterTab,
-  type SelectOption,
-} from '@/components/landlord/primitives';
-import {
-  IconUsers,
-  IconCheckCircle,
-  IconXCircle,
-  IconAlertCircle,
-  IconShield,
-  IconMail,
-  IconPhone,
-  IconCheck,
-  IconX,
-} from '@/components/ui/icons';
+import type { Application, ApplicationStatus } from '@/lib/types';
+import { formatDate, formatCedisDecimal } from '@/lib/format';
+import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/toast';
-import { cn } from '@/lib/cn';
 import {
-  StatusCard,
-  SemanticBadge,
-  DashboardSection,
-  DataCardGrid,
-  getApplicationVariant,
-  getReviewQueueVariant,
-} from '@/components/cards';
+  IconStar,
+  IconMessage,
+  IconSearch,
+  IconShield,
+  IconCompare,
+  IconPerson,
+} from './applicants-ui';
+import {
+  APPLICANT_TABS,
+  affordability,
+  AFFORD_LABEL,
+  canShortlist,
+  completenessPercent,
+  householdSummary,
+  isDecidable,
+  isFullyVerified,
+  matchesApplicantTab,
+  type ApplicantTab,
+} from './applicantHelpers';
+import './applicants.css';
 
-/* ---- Constants ----------------------------------------------------------- */
-const PER_PAGE = 10;
+type SortKey = 'newest' | 'oldest' | 'income' | 'afford' | 'complete' | 'name';
 
-type FilterKey = 'all' | ApplicationStatus;
-type SortKey = 'newest' | 'oldest' | 'readiness_high';
-
-const SORT_OPTIONS: SelectOption<SortKey>[] = [
-  { value: 'newest', label: 'Newest first' },
-  { value: 'oldest', label: 'Oldest first' },
-  { value: 'readiness_high', label: 'Readiness (high → low)' },
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: 'newest', label: 'Newest first' },
+  { key: 'oldest', label: 'Oldest first' },
+  { key: 'income', label: 'Highest income' },
+  { key: 'afford', label: 'Best affordability' },
+  { key: 'complete', label: 'Most complete' },
+  { key: 'name', label: 'Name (A–Z)' },
 ];
 
-const DECIDABLE_STATUSES: ApplicationStatus[] = ['submitted', 'in_review', 'landlord_review'];
+const EDGE: Record<string, string> = {
+  submitted: 'var(--wla-amber)',
+  in_review: 'var(--wla-petrol-2)',
+  needs_action: 'var(--wla-amber)',
+  approved: 'var(--wla-green)',
+  rejected: 'var(--wla-oxblood)',
+  withdrawn: 'color-mix(in srgb, var(--wla-ink) 25%, transparent)',
+};
 
-function isDecidable(status: ApplicationStatus): boolean {
-  return (DECIDABLE_STATUSES as string[]).includes(status);
+const STATUS_LABEL: Record<ApplicationStatus, string> = {
+  draft: 'Draft',
+  submitted: 'New',
+  in_review: 'Under review',
+  landlord_review: 'Under review',
+  needs_action: 'Needs info',
+  approved: 'Approved',
+  rejected: 'Not selected',
+  withdrawn: 'Withdrawn',
+};
+
+function initials(name: string): string {
+  return name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 }
 
-/* ---- Avatar (photo when available, else initials) ------------------------ */
-function AvatarCircle({ name, src }: { name: string; src?: string | null }) {
-  return (
-    <Avatar
-      name={name}
-      src={src}
-      className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-100 text-sm font-semibold text-brand-700 select-none"
-    />
-  );
-}
-
-/* ---- Readiness column ---------------------------------------------------- */
-function ReadinessCell({
-  readiness,
-}: {
-  readiness?: Application['readiness'];
-}) {
-  if (!readiness) return <span className="text-xs text-ink-400">—</span>;
-
-  const { percentage, items } = readiness;
-  const scoreColor =
-    percentage >= 80
-      ? 'text-success-600'
-      : percentage >= 50
-      ? 'text-warning-600'
-      : 'text-danger-600';
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className={cn('font-display text-sm font-semibold tabular-nums', scoreColor)}>
-        Ready {percentage}%
-      </span>
-      <ul className="flex flex-col gap-0.5">
-        {items.map((item) => (
-          <li
-            key={item.key}
-            title={item.label}
-            className="flex items-center gap-1 text-xs text-ink-500 leading-tight"
-          >
-            {item.complete ? (
-              <IconCheckCircle size={12} className="shrink-0 text-success-500" />
-            ) : (
-              <IconXCircle size={12} className="shrink-0 text-ink-300" />
-            )}
-            <span className="truncate max-w-[9rem]">{item.label}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-/* ========================================================================= */
 export function Applicants() {
   const { data, loading, error, reload } = useApi(() => landlordApi.applications(), []);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
-  /* ---- State ------------------------------------------------------------ */
   const [apps, setApps] = useState<Application[] | null>(null);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<FilterKey>('all');
+  const [q, setQ] = useState('');
+  const [tab, setTab] = useState<ApplicantTab>('all');
   const [listingFilter, setListingFilter] = useState('all');
   const [sort, setSort] = useState<SortKey>('newest');
-  const [page, setPage] = useState(1);
+  const [group, setGroup] = useState(false);
+  const [shortlistingId, setShortlistingId] = useState<number | null>(null);
+  const [fairOpen, setFairOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  // Review / decision modal
-  const [reviewTarget, setReviewTarget] = useState<Application | null>(null);
-  const [modalDecision, setModalDecision] = useState<'approve' | 'reject' | null>(null);
-  const [rejectReason, setRejectReason] = useState('');
-  const [rejectError, setRejectError] = useState('');
-  const [decidingId, setDecidingId] = useState<number | null>(null);
-
-  /* ---- Derived list (server data + local optimistic updates) ------------ */
   const list = useMemo<Application[]>(() => apps ?? data ?? [], [apps, data]);
 
-  function applyDecision(updated: Application) {
-    setApps((prev) => {
-      const base = prev ?? data ?? [];
-      return base.map((a) => (a.id === updated.id ? updated : a));
-    });
+  function patch(updated: Application) {
+    setApps((prev) => (prev ?? data ?? []).map((a) => (a.id === updated.id ? updated : a)));
   }
 
-  /* ---- KPIs (all real) -------------------------------------------------- */
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-
-  const kpi = useMemo(() => {
-    const total = list.length;
-    const readyToReview = list.filter((a) => a.status === 'landlord_review').length;
-    const pendingDecision = list.filter((a) =>
-      (['submitted', 'in_review', 'landlord_review'] as ApplicationStatus[]).includes(a.status),
-    ).length;
-    const approvedThisMonth = list.filter(
-      (a) =>
-        a.status === 'approved' &&
-        a.decided_at != null &&
-        new Date(a.decided_at).getTime() >= startOfMonth,
-    ).length;
-    return { total, readyToReview, pendingDecision, approvedThisMonth };
-  }, [list, startOfMonth]);
-
-  /* ---- Listing filter options ------------------------------------------ */
-  const listingOptions = useMemo<SelectOption<string>[]>(() => {
-    const seen = new Map<string, string>();
-    for (const a of list) {
-      const key = String(a.listing_id);
-      if (!seen.has(key)) {
-        seen.set(key, a.listing?.title ?? `Listing #${a.listing_id}`);
-      }
-    }
-    const opts: SelectOption<string>[] = [{ value: 'all', label: 'All listings' }];
-    for (const [value, label] of seen) opts.push({ value, label });
-    return opts;
-  }, [list]);
-
-  /* ---- Status tab counts ------------------------------------------------ */
-  const tabCounts = useMemo(() => {
-    const c: Record<string, number> = {};
-    for (const a of list) c[a.status] = (c[a.status] ?? 0) + 1;
-    return c;
-  }, [list]);
-
-  const filterTabs: FilterTab<FilterKey>[] = [
-    { key: 'all', label: 'All', count: list.length },
-    {
-      key: 'submitted',
-      label: applicationStatusLabel.submitted,
-      count: tabCounts.submitted ?? 0,
-      tone: applicationStatusTone.submitted,
-    },
-    {
-      key: 'landlord_review',
-      label: applicationStatusLabel.landlord_review,
-      count: tabCounts.landlord_review ?? 0,
-      tone: applicationStatusTone.landlord_review,
-    },
-    {
-      key: 'approved',
-      label: applicationStatusLabel.approved,
-      count: tabCounts.approved ?? 0,
-      tone: applicationStatusTone.approved,
-    },
-    {
-      key: 'rejected',
-      label: applicationStatusLabel.rejected,
-      count: tabCounts.rejected ?? 0,
-      tone: applicationStatusTone.rejected,
-    },
-    {
-      key: 'withdrawn',
-      label: applicationStatusLabel.withdrawn,
-      count: tabCounts.withdrawn ?? 0,
-      tone: applicationStatusTone.withdrawn,
-    },
-  ];
-
-  /* ---- Filter + sort pipeline ------------------------------------------ */
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    let rows = list.filter((a) => {
-      if (statusFilter !== 'all' && a.status !== statusFilter) return false;
-      if (listingFilter !== 'all' && String(a.listing_id) !== listingFilter) return false;
-      if (q) {
-        const hay = [
-          a.tenant?.full_name ?? '',
-          a.tenant?.email ?? '',
-          a.tenant?.phone ?? '',
-          a.listing?.title ?? '',
-        ]
-          .join(' ')
-          .toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
-
-    rows = [...rows].sort((a, b) => {
-      switch (sort) {
-        case 'oldest':
-          return (
-            new Date(a.submitted_at ?? a.created_at).getTime() -
-            new Date(b.submitted_at ?? b.created_at).getTime()
-          );
-        case 'readiness_high':
-          return (b.readiness?.percentage ?? 0) - (a.readiness?.percentage ?? 0);
-        case 'newest':
-        default:
-          return (
-            new Date(b.submitted_at ?? b.created_at).getTime() -
-            new Date(a.submitted_at ?? a.created_at).getTime()
-          );
-      }
-    });
-    return rows;
-  }, [list, search, statusFilter, listingFilter, sort]);
-
-  const slice = paginate(filtered, page, PER_PAGE);
-
-  function resetPage() {
-    setPage(1);
-  }
-
-  /* ---- Decision handlers ------------------------------------------------ */
-  async function decide(
-    app: Application,
-    decision: 'approved' | 'rejected',
-    reason?: string,
-  ): Promise<boolean> {
-    setDecidingId(app.id);
+  async function toggleShortlist(app: Application, e?: React.MouseEvent) {
+    e?.stopPropagation();
+    setShortlistingId(app.id);
     try {
-      const updated = await landlordApi.decideApplication(app.id, decision, reason);
-      applyDecision(updated);
-      toast(decision === 'approved' ? 'Application approved.' : 'Application rejected.', 'success');
-      return true;
-    } catch (err) {
-      const apiErr = err as ApiError;
-      const flat = fieldErrors(apiErr);
-      const message =
-        flat.decision_reason ||
-        flat.decision ||
-        apiErr.message ||
-        'Could not record the decision. Please try again.';
-      if (decision === 'rejected') setRejectError(message);
-      else toast(message, 'error');
-      reload();
-      return false;
+      const updated = await landlordApi.toggleApplicationShortlist(app.id);
+      patch(updated);
+      toast(updated.is_shortlisted ? 'Added to shortlist' : 'Removed from shortlist', 'success');
+    } catch {
+      toast('Could not update the shortlist.', 'error');
     } finally {
-      setDecidingId(null);
+      setShortlistingId(null);
     }
-  }
-
-  function openReview(app: Application, preset?: 'approve' | 'reject') {
-    setReviewTarget(app);
-    setModalDecision(preset ?? null);
-    setRejectReason('');
-    setRejectError('');
-  }
-
-  function closeReview() {
-    if (decidingId !== null) return;
-    setReviewTarget(null);
-    setModalDecision(null);
-    setRejectReason('');
-    setRejectError('');
-  }
-
-  async function handleModalApprove() {
-    if (!reviewTarget) return;
-    const ok = await decide(reviewTarget, 'approved');
-    if (ok) closeReview();
-  }
-
-  async function handleModalReject() {
-    if (!reviewTarget) return;
-    const ok = await decide(reviewTarget, 'rejected', rejectReason.trim() || undefined);
-    if (ok) closeReview();
   }
 
   async function handleExport() {
@@ -336,384 +110,370 @@ export function Applicants() {
     }
   }
 
-  /* ---- Loading / error states ------------------------------------------ */
-  if (loading) return <LoadingState label="Loading applicants…" />;
+  const listingOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const a of list) {
+      const key = String(a.listing_id);
+      if (!seen.has(key)) seen.set(key, a.listing?.title ?? `Listing #${a.listing_id}`);
+    }
+    return Array.from(seen.entries());
+  }, [list]);
 
-  if (error) {
-    return (
-      <ErrorState
-        title="Couldn't load applicants"
-        message={error.message}
-        onRetry={reload}
-      />
-    );
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const t of APPLICANT_TABS) c[t.key] = list.filter((a) => matchesApplicantTab(a, t.key)).length;
+    return c;
+  }, [list]);
+
+  const kpi = useMemo(
+    () => ({
+      total: list.filter((a) => a.status !== 'withdrawn').length,
+      newCount: list.filter((a) => a.status === 'submitted').length,
+      review: list.filter((a) => a.status === 'in_review' || a.status === 'needs_action').length,
+      shortlisted: list.filter((a) => a.is_shortlisted).length,
+      approved: list.filter((a) => a.status === 'approved').length,
+    }),
+    [list],
+  );
+
+  const rows = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    let out = list.filter((a) => {
+      if (!matchesApplicantTab(a, tab)) return false;
+      if (listingFilter !== 'all' && String(a.listing_id) !== listingFilter) return false;
+      if (query) {
+        const hay = [a.tenant?.full_name, a.tenant?.email, a.tenant?.phone, a.listing?.title, a.form_data?.employment?.employer]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!hay.includes(query)) return false;
+      }
+      return true;
+    });
+
+    out = [...out].sort((a, b) => {
+      switch (sort) {
+        case 'oldest':
+          return new Date(a.submitted_at ?? a.created_at).getTime() - new Date(b.submitted_at ?? b.created_at).getTime();
+        case 'income':
+          return (parseFloat(b.form_data?.employment?.income ?? '0') || 0) - (parseFloat(a.form_data?.employment?.income ?? '0') || 0);
+        case 'afford':
+          return (affordability(b)?.ratio ?? -1) - (affordability(a)?.ratio ?? -1);
+        case 'complete':
+          return completenessPercent(b) - completenessPercent(a);
+        case 'name':
+          return (a.tenant?.full_name ?? '').localeCompare(b.tenant?.full_name ?? '');
+        default:
+          return new Date(b.submitted_at ?? b.created_at).getTime() - new Date(a.submitted_at ?? a.created_at).getTime();
+      }
+    });
+    return out;
+  }, [list, q, tab, listingFilter, sort]);
+
+  function openApplicant(app: Application, action?: 'approve' | 'reject') {
+    navigate(`/app/applicants/${app.id}${action ? `?action=${action}` : ''}`);
   }
 
-  /* ---- Empty (zero data) ------------------------------------------------ */
-  if (list.length === 0) {
+  if (loading) {
     return (
-      <div className="animate-rise space-y-6">
-        <PageHeader
-          eyebrow="Operations"
-          title="Applicants"
-          description="Review and decide on tenant applications for your listings."
-          action={
-            <Button variant="secondary" onClick={handleExport} loading={exporting} disabled>
-              Export
-            </Button>
-          }
-        />
-        <EmptyState
-          icon={<IconUsers size={26} />}
-          title="No applicants yet"
-          description="When tenants apply to your active listings, they'll appear here for review."
-          action={
-            <Link to="/app/listings">
-              <Button variant="secondary">View listings</Button>
-            </Link>
-          }
-        />
+      <div className="wla">
+        <section className="glass" style={{ padding: '3rem', textAlign: 'center', color: 'var(--wla-ink-3)' }}>Loading applicants…</section>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="wla">
+        <section className="glass empty">
+          <span className="et">Couldn't load applicants</span>
+          <p>{error.message}</p>
+          <button className="btn btn-dark" onClick={reload}>Retry</button>
+        </section>
       </div>
     );
   }
 
-  /* ---- Main render ------------------------------------------------------ */
   return (
-    <div className="animate-rise space-y-10">
-      {/* Page header */}
-      <PageHeader
-        eyebrow="Operations"
-        title="Applicants"
-        description="Review and decide on tenant applications for your listings."
-        action={
-          <>
-            <Button
-              variant="secondary"
-              onClick={handleExport}
-              loading={exporting}
-              disabled={list.length === 0}
-            >
-              Export
-            </Button>
-            <Button
-              onClick={() => {
-                setStatusFilter('landlord_review');
-                resetPage();
-              }}
-            >
-              Review queue
-            </Button>
-          </>
-        }
-      />
+    <div className="wla animate-rise">
+      <section className="glass pagehead">
+        <div>
+          <span className="ph-eyebrow">Leasing</span>
+          <h1 className="ph-title">
+            Tenant <b>applications.</b>
+          </h1>
+          <p className="ph-sub">
+            Review prospective tenants for your listings. Wyncrest verifies each applicant's identity and documents, so you can
+            focus on the fit.
+          </p>
+        </div>
+        <div className="ph-actions">
+          <button className="btn" onClick={handleExport} disabled={exporting || list.length === 0}>
+            {exporting ? 'Exporting…' : 'Export'}
+          </button>
+          {kpi.shortlisted > 1 && (
+            <button className="btn" onClick={() => navigate('/app/applicants/compare')}>
+              <IconCompare /> Compare shortlist ({kpi.shortlisted})
+            </button>
+          )}
+        </div>
+      </section>
 
-      {/* KPI row — semantic roles from real data */}
-      <DashboardSection eyebrow="APPLICANT OVERVIEW">
-        <DataCardGrid cols={4}>
-          <StatusCard
-            label="Total applicants"
-            value={kpi.total}
-            sub="Across all listings"
-            icon={<IconUsers size={18} />}
-            role="neutral"
-          />
-          <StatusCard
-            label="Ready to review"
-            value={kpi.readyToReview}
-            sub="Status: landlord review"
-            role={getReviewQueueVariant(kpi.readyToReview)}
-            icon={<IconAlertCircle size={18} />}
-          />
-          <StatusCard
-            label="Pending decision"
-            value={kpi.pendingDecision}
-            sub="Submitted + in review"
-            role={kpi.pendingDecision > 0 ? 'warning' : 'neutral'}
-            icon={<IconAlertCircle size={18} />}
-          />
-          <StatusCard
-            label="Approved this month"
-            value={kpi.approvedThisMonth}
-            sub="Successful applications"
-            role={kpi.approvedThisMonth > 0 ? 'success' : 'neutral'}
-            icon={<IconCheckCircle size={18} />}
-          />
-        </DataCardGrid>
-      </DashboardSection>
+      <div className="sumcards">
+        <div className="scard glass">
+          <div className="sl"><i style={{ background: 'var(--wla-petrol-2)' }} />Total applications</div>
+          <div className="sv">{kpi.total}</div>
+          <div className="ss">across your listings</div>
+        </div>
+        <div className="scard glass new">
+          <div className="sl"><i style={{ background: 'var(--wla-amber)' }} />New</div>
+          <div className="sv">{kpi.newCount}</div>
+          <div className="ss">need first review</div>
+        </div>
+        <div className="scard glass">
+          <div className="sl"><i style={{ background: 'var(--wla-petrol-2)' }} />Under review</div>
+          <div className="sv">{kpi.review}</div>
+          <div className="ss">in progress</div>
+        </div>
+        <div className="scard glass short">
+          <div className="sl"><i style={{ background: 'var(--wla-indigo)' }} />Shortlisted</div>
+          <div className="sv">{kpi.shortlisted}</div>
+          <div className="ss">strong candidates</div>
+        </div>
+        <div className="scard glass appr">
+          <div className="sl"><i style={{ background: 'var(--wla-green)' }} />Approved</div>
+          <div className="sv">{kpi.approved}</div>
+          <div className="ss">moving to lease</div>
+        </div>
+      </div>
 
-      {/* Command bar */}
-      <CommandBar>
-        <SearchInput
-          value={search}
-          onChange={(v) => { setSearch(v); resetPage(); }}
-          placeholder="Search by name, email, phone or listing…"
-          label="Search applicants"
-        />
-        <SortSelect
-          value={listingFilter}
-          onChange={(v) => { setListingFilter(v); resetPage(); }}
-          options={listingOptions}
-          label="Filter by listing"
-          prefix=""
-        />
-        <FilterTabs
-          tabs={filterTabs}
-          value={statusFilter}
-          onChange={(k) => { setStatusFilter(k); resetPage(); }}
-        />
-        <SortSelect
-          value={sort}
-          onChange={setSort}
-          options={SORT_OPTIONS}
-          label="Sort applicants"
-        />
-      </CommandBar>
+      <button type="button" className="glass fairbar" onClick={() => setFairOpen(true)}>
+        <div className="fi"><IconShield /></div>
+        <div>
+          Review every applicant on the same objective basis: affordability, verification, and rental history. Wyncrest
+          records your decisions to support fair, consistent leasing. <span className="link">Fair housing guidance</span>
+        </div>
+      </button>
 
-      {/* Record list — one standalone card per applicant. No table shell, no
-          horizontal scroll: identity + listing + readiness + status + action
-          all stay visible (stacking on mobile, inline columns on desktop). */}
-      {slice.total === 0 ? (
-        <EmptyState
-          icon={<IconUsers size={26} />}
-          title="No applicants match"
-          description="Try adjusting the search term or filter."
-        />
-      ) : (
-        <div className="space-y-5">
-          <RecordList>
-            {slice.items.map((app) => {
-              const tenant = app.tenant;
-              const name = tenant?.full_name ?? `Applicant #${app.id}`;
-              const listing = app.listing;
-              const unit = listing?.unit;
-              const property = unit?.property;
-              const decidable = isDecidable(app.status);
-              const isBusy = decidingId === app.id;
-
-              const menuItems = decidable
-                ? [
-                    {
-                      label: 'Approve',
-                      icon: <IconCheck size={14} />,
-                      onClick: () => openReview(app, 'approve'),
-                    },
-                    {
-                      label: 'Decline',
-                      icon: <IconX size={14} />,
-                      danger: true,
-                      onClick: () => openReview(app, 'reject'),
-                    },
-                  ]
-                : [];
-
-              return (
-                <RecordCard
-                  key={app.id}
-                  onClick={() => openReview(app)}
-                  leading={<AvatarCircle name={name} src={app.tenant?.avatar_url} />}
-                  title={name}
-                  titleMeta={
-                    tenant?.identity_verified ? (
-                      <IconShield
-                        size={13}
-                        className="text-success-500"
-                        title="Identity verified"
-                      />
-                    ) : undefined
-                  }
-                  subtitle={
-                    <>
-                      {tenant?.email && (
-                        <span className="flex items-center gap-1 text-ink-500">
-                          <IconMail size={11} className="shrink-0" />
-                          {tenant.email}
-                        </span>
-                      )}
-                      {tenant?.phone && (
-                        <span className="flex items-center gap-1 text-ink-400">
-                          <IconPhone size={11} className="shrink-0" />
-                          {tenant.phone}
-                        </span>
-                      )}
-                    </>
-                  }
-                  related={
-                    <RecordRelated
-                      thumbnail={
-                        <Thumbnail
-                          src={storageUrl(listing?.primary_photo?.path)}
-                          alt={listing?.title ?? 'Listing'}
-                          seed={listing?.title ?? ''}
-                          size={44}
-                        />
-                      }
-                      title={listing?.title ?? `Listing #${app.listing_id}`}
-                      lines={[
-                        [unit ? `Unit ${unit.unit_number}` : null, property?.name]
-                          .filter(Boolean)
-                          .join(' · ') || '—',
-                      ]}
-                    />
-                  }
-                  indicator={<ReadinessCell readiness={app.readiness} />}
-                  status={
-                    <SemanticBadge role={getApplicationVariant(app.status)}>
-                      {applicationStatusLabel[app.status]}
-                    </SemanticBadge>
-                  }
-                  timestamp={
-                    <>
-                      {formatDate(app.submitted_at ?? app.created_at)} ·{' '}
-                      {timeAgo(app.submitted_at ?? app.created_at)}
-                    </>
-                  }
-                  primaryAction={
-                    decidable ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        loading={isBusy}
-                        disabled={decidingId !== null}
-                        onClick={() => openReview(app)}
-                      >
-                        Review
-                      </Button>
-                    ) : undefined
-                  }
-                  menu={menuItems.length > 0 ? <ActionMenu items={menuItems} /> : undefined}
-                />
-              );
-            })}
-          </RecordList>
-
-          {/* Pagination — sits below the cards, never inside a table shell. */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-ink-500">{rangeLabel(slice, 'applicant')}</p>
-            <Pagination slice={slice} onPage={setPage} />
+      <section className="glass">
+        <div className="toolbar">
+          <div className="tabs">
+            {APPLICANT_TABS.map((t) => (
+              <button key={t.key} className={`tab ${tab === t.key ? 'on' : ''}`} onClick={() => setTab(t.key)}>
+                {t.label} <span className="cnt">{counts[t.key] ?? 0}</span>
+              </button>
+            ))}
           </div>
+          <div className="filt">
+            <div className="search">
+              <IconSearch />
+              <input aria-label="Search applicants" placeholder="Search applicants, listings, or employers…" value={q} onChange={(e) => setQ(e.target.value)} />
+            </div>
+            <select className="sel" value={listingFilter} onChange={(e) => setListingFilter(e.target.value)}>
+              <option value="all">All listings</option>
+              {listingOptions.map(([id, title]) => (
+                <option key={id} value={id}>{title}</option>
+              ))}
+            </select>
+            <select className="sel" value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
+              {SORTS.map((s) => (
+                <option key={s.key} value={s.key}>Sort: {s.label}</option>
+              ))}
+            </select>
+            <button className={`btn btn-sm ${group ? 'btn-dark' : ''}`} onClick={() => setGroup((g) => !g)}>
+              {group ? 'Grouped' : 'Group by listing'}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {rows.length === 0 ? (
+        <section className="glass">
+          <div className="empty">
+            <div className="ic"><IconPerson /></div>
+            <span className="et">{list.length === 0 ? 'No applicants yet' : 'No applications here'}</span>
+            <p>
+              {list.length === 0
+                ? "When tenants apply to your active listings, they'll appear here for review."
+                : 'No applications match this view. Try adjusting the search term or filter.'}
+            </p>
+          </div>
+        </section>
+      ) : group ? (
+        <GroupedList rows={rows} onOpen={openApplicant} onToggleShortlist={toggleShortlist} shortlistingId={shortlistingId} />
+      ) : (
+        <div className="alist">
+          {rows.map((app) => (
+            <ApplicantCard key={app.id} app={app} onOpen={openApplicant} onToggleShortlist={toggleShortlist} shortlisting={shortlistingId === app.id} />
+          ))}
         </div>
       )}
 
-      {/* Review / decision drawer */}
-      <DetailDrawer
-        open={reviewTarget !== null}
-        onClose={closeReview}
-        eyebrow="APPLICATION"
-        title={
-          reviewTarget
-            ? `Review application: ${reviewTarget.tenant?.full_name ?? `Applicant #${reviewTarget.id}`}`
-            : 'Review application'
-        }
-        description={
-          reviewTarget
-            ? `Application for ${reviewTarget.listing?.title ?? `Listing #${reviewTarget.listing_id}`}`
-            : undefined
-        }
-        footer={
-          reviewTarget && isDecidable(reviewTarget.status) ? (
-            <>
-              <Button variant="secondary" onClick={closeReview} disabled={decidingId !== null}>
-                Cancel
-              </Button>
-              <div className="flex gap-2">
-                {modalDecision !== 'reject' && (
-                  <Button
-                    leftIcon={<IconCheck size={14} />}
-                    onClick={handleModalApprove}
-                    loading={decidingId === reviewTarget?.id}
-                    disabled={decidingId !== null}
-                    className="bg-success-600 text-white hover:bg-success-500"
-                  >
-                    Approve
-                  </Button>
-                )}
-                {modalDecision !== 'approve' && (
-                  <Button
-                    variant="danger"
-                    leftIcon={<IconX size={14} />}
-                    onClick={handleModalReject}
-                    loading={decidingId === reviewTarget?.id}
-                    disabled={decidingId !== null}
-                  >
-                    {modalDecision === 'reject' ? 'Confirm rejection' : 'Decline'}
-                  </Button>
-                )}
-              </div>
-            </>
-          ) : (
-            <Button variant="secondary" onClick={closeReview}>
-              Close
-            </Button>
-          )
-        }
+      <Modal
+        open={fairOpen}
+        onClose={() => setFairOpen(false)}
+        title="Fair housing guidance"
+        footer={<button className="btn btn-dark" onClick={() => setFairOpen(false)}>Got it</button>}
       >
-        {reviewTarget && (
-          <div className="space-y-4">
-            {/* Tenant summary */}
-            <div className="rounded-xl bg-ink-50 p-4 text-sm space-y-1">
-              <p className="font-medium text-ink-900">{reviewTarget.tenant?.full_name ?? '—'}</p>
-              {reviewTarget.tenant?.email && (
-                <p className="flex items-center gap-1.5 text-ink-600">
-                  <IconMail size={13} /> {reviewTarget.tenant.email}
-                </p>
-              )}
-              {reviewTarget.tenant?.phone && (
-                <p className="flex items-center gap-1.5 text-ink-600">
-                  <IconPhone size={13} /> {reviewTarget.tenant.phone}
-                </p>
-              )}
-              {reviewTarget.tenant?.identity_verified && (
-                <p className="flex items-center gap-1.5 text-success-600 text-xs">
-                  <IconShield size={12} /> Identity verified
-                </p>
-              )}
-            </div>
+        <p style={{ fontSize: '0.86rem', color: 'var(--wla-ink-2)', lineHeight: 1.6 }}>
+          Wyncrest is committed to fair, consistent leasing. When reviewing applicants:
+          <br />
+          <br />
+          <b>Do</b> consider affordability, verified identity, rental history, references, and completeness.
+          <br />
+          <br />
+          <b>Do not</b> consider race, ethnicity, religion, gender, sexual orientation, disability, nationality, or family
+          status.
+          <br />
+          <br />
+          Apply the same criteria to every applicant for a unit. Wyncrest records decisions and reasons so your process stays
+          consistent and defensible.
+        </p>
+      </Modal>
+    </div>
+  );
+}
 
-            {/* Readiness in drawer */}
-            {reviewTarget.readiness && (
-              <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-500">
-                  Profile readiness
-                </p>
-                <ReadinessCell readiness={reviewTarget.readiness} />
-              </div>
-            )}
+/**
+ * Spread onto a clickable card <div> so keyboard users can reach and activate
+ * it: button semantics, Tab focus, Enter/Space fire the action. The keydown
+ * only reacts on the card itself so nested buttons keep their own behaviour.
+ */
+function pressable(action: () => void) {
+  return {
+    role: 'button' as const,
+    tabIndex: 0,
+    onClick: action,
+    onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.target !== e.currentTarget) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        action();
+      }
+    },
+  };
+}
 
-            {/* Cover note */}
-            {reviewTarget.cover_note && (
-              <div>
-                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-500">
-                  Cover note
-                </p>
-                <p className="text-sm text-ink-700 whitespace-pre-line">{reviewTarget.cover_note}</p>
-              </div>
-            )}
+function ApplicantCard({
+  app,
+  onOpen,
+  onToggleShortlist,
+  shortlisting,
+}: {
+  app: Application;
+  onOpen: (app: Application, action?: 'approve' | 'reject') => void;
+  onToggleShortlist: (app: Application, e?: React.MouseEvent) => void;
+  shortlisting: boolean;
+}) {
+  const name = app.tenant?.full_name ?? `Applicant #${app.id}`;
+  const listing = app.listing;
+  const unit = listing?.unit;
+  const property = unit?.property;
+  const afford = affordability(app);
+  const income = app.form_data?.employment?.income;
+  const completeness = completenessPercent(app);
+  const verified = isFullyVerified(app);
 
-            {/* Rejection reason input — shown when declining */}
-            {isDecidable(reviewTarget.status) && modalDecision !== 'approve' && (
-              <Field
-                label="Reason for declining (optional)"
-                hint="Shared with the applicant. Leave blank to decline without a note."
-                error={rejectError}
-              >
-                {(id, invalid) => (
-                  <Textarea
-                    id={id}
-                    invalid={invalid}
-                    rows={3}
-                    placeholder="e.g. The unit has been let to another applicant."
-                    value={rejectReason}
-                    onChange={(e) => {
-                      setRejectReason(e.target.value);
-                      if (rejectError) setRejectError('');
-                    }}
-                  />
-                )}
-              </Field>
+  return (
+    <div className="acard glass" style={{ ['--edge' as string]: EDGE[app.status] ?? 'var(--wla-gborder)' }} {...pressable(() => onOpen(app))}>
+      <div className="ac-top">
+        <div className="avatar">{initials(name)}</div>
+        <div className="ac-id">
+          <div className="ac-name">
+            {name}
+            {verified ? (
+              <span className="vbadge ok"><IconCheck /> Verified</span>
+            ) : (
+              <span className="vbadge part">Partly verified</span>
             )}
           </div>
+          <div className="ac-for">
+            Applied for {property?.name ?? listing?.title} {unit ? `· Unit ${unit.unit_number}` : ''} ·{' '}
+            {unit?.rent_amount ? `${formatCedisDecimal(unit.rent_amount)}/mo` : '—'}
+          </div>
+        </div>
+        <span className={`statuspill ${app.status}`}><span className="sd" />{STATUS_LABEL[app.status]}</span>
+      </div>
+
+      <div className="signals">
+        <div className="sig"><div className="n">{income ? formatCedisDecimal(income) : '—'}</div><div className="l">Monthly income</div></div>
+        <div className="sig">
+          <div className="n">{afford ? <span className={`afford ${afford.level}`}>{afford.ratio}× · {AFFORD_LABEL[afford.level]}</span> : '—'}</div>
+          <div className="l">Affordability</div>
+        </div>
+        <div className="sig"><div className="n">{completeness}%</div><div className="l">Completeness</div></div>
+        <div className="sig"><div className="n">{householdSummary(app)}</div><div className="l">Household</div></div>
+      </div>
+
+      <div className="ac-foot">
+        <span className="sub">Submitted {formatDate(app.submitted_at ?? app.created_at)} · #{app.id}</span>
+        {isDecidable(app.status) && (
+          <button className="btn btn-sm btn-petrol" onClick={(e) => { e.stopPropagation(); onOpen(app); }}>Review</button>
         )}
-      </DetailDrawer>
+        {canShortlist(app.status) && (
+          <button
+            className={`iconbtn ${app.is_shortlisted ? 'on' : ''}`}
+            title="Shortlist"
+            disabled={shortlisting}
+            onClick={(e) => onToggleShortlist(app, e)}
+          >
+            <IconStar />
+          </button>
+        )}
+        <button className="iconbtn" title="Message" onClick={(e) => { e.stopPropagation(); onOpen(app); }}>
+          <IconMessage />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Local checkmark for the verified badge (avoids importing the shared icon kit). */
+function IconCheck(p: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={p.className}>
+      <path d="M20 6L9 17l-5-5" />
+    </svg>
+  );
+}
+
+function GroupedList({
+  rows,
+  onOpen,
+  onToggleShortlist,
+  shortlistingId,
+}: {
+  rows: Application[];
+  onOpen: (app: Application, action?: 'approve' | 'reject') => void;
+  onToggleShortlist: (app: Application, e?: React.MouseEvent) => void;
+  shortlistingId: number | null;
+}) {
+  const groups: { key: string; label: string; items: Application[] }[] = [];
+  const index = new Map<string, number>();
+  for (const app of rows) {
+    const key = String(app.listing_id);
+    if (!index.has(key)) {
+      index.set(key, groups.length);
+      const unit = app.listing?.unit;
+      const label = [app.listing?.unit?.property?.name ?? app.listing?.title, unit ? `Unit ${unit.unit_number}` : null].filter(Boolean).join(' · ');
+      groups.push({ key, label, items: [] });
+    }
+    groups[index.get(key)!].items.push(app);
+  }
+
+  return (
+    <div className="alist">
+      {groups.map((g) => (
+        <div key={g.key}>
+          <div className="grouphead">
+            {g.label} <span className="gc">{g.items.length}</span>
+          </div>
+          <div className="alist">
+            {g.items.map((app) => (
+              <ApplicantCard key={app.id} app={app} onOpen={onOpen} onToggleShortlist={onToggleShortlist} shortlisting={shortlistingId === app.id} />
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

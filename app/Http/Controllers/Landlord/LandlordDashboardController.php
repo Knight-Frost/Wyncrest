@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Landlord;
 
+use App\Enums\ApplicationStatus;
 use App\Enums\ContractStatus;
 use App\Enums\LedgerStatus;
-use App\Enums\LedgerType;
 use App\Enums\ListingStatus;
 use App\Enums\MaintenanceStatus;
 use App\Enums\UnitAvailabilityStatus;
@@ -16,6 +16,7 @@ use App\Models\Listing;
 use App\Models\MaintenanceRequest;
 use App\Models\Property;
 use App\Models\Unit;
+use App\Services\Ledger\LedgerComputationEngine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -31,7 +32,7 @@ class LandlordDashboardController extends Controller
     /**
      * Get the landlord dashboard summary.
      */
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, LedgerComputationEngine $engine): JsonResponse
     {
         $landlordId = $request->user()->id;
 
@@ -75,25 +76,20 @@ class LandlordDashboardController extends Controller
             ->where('status', MaintenanceStatus::IN_PROGRESS)
             ->count();
 
-        // ── Ledger ────────────────────────────────────────────────────────────
-        $outstandingCents = (int) LedgerEntry::byLandlord($landlordId)
-            ->whereIn('status', [LedgerStatus::PENDING->value, LedgerStatus::OVERDUE->value])
-            ->sum('amount_cents');
+        // ── Ledger ────────────────────────────────────────────────────────
+        // Delegated to LedgerComputationEngine — the same engine that powers
+        // the landlord ledger page and admin dashboard, so this figure can
+        // never disagree with what the ledger itself shows.
+        $outstandingCents = $engine->computeOutstanding(['landlord_id' => $landlordId]);
+        $overdueCents = $engine->computeOverdue(['landlord_id' => $landlordId]);
 
-        $overdueCents = (int) LedgerEntry::byLandlord($landlordId)
-            ->where('status', LedgerStatus::OVERDUE)
-            ->sum('amount_cents');
-
-        // why: ledger entries are immutable and carry no paid_at timestamp, so
-        // "collected this month" is measured against due_date — the obligation's
-        // period — for RENT entries now marked paid within the current calendar
-        // month. Scoped to RENT obligations (not negative PAYMENT receipts) so the
-        // figure is the positive rent collected.
-        $collectedThisMonthCents = (int) LedgerEntry::byLandlord($landlordId)
-            ->where('type', LedgerType::RENT->value)
-            ->where('status', LedgerStatus::PAID)
-            ->whereBetween('due_date', [now()->startOfMonth(), now()->endOfMonth()])
-            ->sum('amount_cents');
+        // "Collected" = actual money received (sum of PAYMENT entries),
+        // scoped to payments recorded within the current calendar month.
+        $collectedThisMonthCents = $engine->computeCollected([
+            'landlord_id' => $landlordId,
+            'date_from' => now()->startOfMonth(),
+            'date_to' => now()->endOfMonth(),
+        ]);
 
         $nextDueDate = LedgerEntry::byLandlord($landlordId)
             ->where('status', LedgerStatus::PENDING)
@@ -117,11 +113,11 @@ class LandlordDashboardController extends Controller
 
             $rentTrend[] = [
                 'month' => $monthStart->format('M'),
-                'collected_cents' => (int) LedgerEntry::byLandlord($landlordId)
-                    ->where('type', LedgerType::RENT->value)
-                    ->where('status', LedgerStatus::PAID)
-                    ->whereBetween('due_date', $window)
-                    ->sum('amount_cents'),
+                'collected_cents' => $engine->computeCollected([
+                    'landlord_id' => $landlordId,
+                    'date_from' => $monthStart,
+                    'date_to' => $monthEnd,
+                ]),
                 'outstanding_cents' => (int) LedgerEntry::byLandlord($landlordId)
                     ->whereIn('status', [LedgerStatus::PENDING->value, LedgerStatus::OVERDUE->value])
                     ->whereBetween('due_date', $window)
@@ -130,7 +126,10 @@ class LandlordDashboardController extends Controller
         }
 
         // ── Recent activity ───────────────────────────────────────────────────
+        // A tenant's unsubmitted DRAFT (form_data included) is still private
+        // to them — it must never surface in the landlord's activity feed.
         $recentApplications = Application::where('landlord_id', $landlordId)
+            ->where('status', '!=', ApplicationStatus::DRAFT)
             ->orderByDesc('created_at')
             ->limit(5)
             ->get()

@@ -1,501 +1,350 @@
-import { useState, useMemo } from 'react';
+/**
+ * ApplicationsPage — the tenant's rental-application command centre.
+ *
+ * Rebuilt from the wyncrest-applications mockup, wired to 100% real data:
+ *   GET /tenant/applications  → list (status, listing, counts, latest event)
+ * Every card links to the real detail workspace; drafts open the guided form.
+ * No fabricated fields, no dead buttons.
+ */
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useApi } from '@/hooks/useApi';
 import { tenantApi } from '@/lib/endpoints';
-import { formatDate, formatCedisDecimal } from '@/lib/format';
-import { useToast } from '@/components/ui/toast';
+import { formatDate, formatCedisDecimal, formatDateTime } from '@/lib/format';
+import { LoadingState, ErrorState, ForbiddenState } from '@/components/ui/states';
 import {
-  LoadingState,
-  ErrorState,
-  ForbiddenState,
-  EmptyState,
-} from '@/components/ui/states';
-import {
-  StatusCard,
-  SemanticBadge,
-  DashboardSection,
-  DataCardGrid,
-  NexusCard,
-  getApplicationVariant,
-} from '@/components/cards';
-import {
-  IconFileText,
-  IconCheckCircle,
-  IconClock,
-  IconXCircle,
-  IconSearch,
-  IconMapPin,
-  IconBed,
-  IconBath,
-  IconCheck,
-  IconChevronRight,
+  IconAlertTriangle,
   IconArrowRight,
-  IconUsers,
-  IconActivity,
+  IconCheck,
+  IconClock,
+  IconCircleCheck,
 } from '@/components/ui/icons';
 import type { Application, ApplicationStatus } from '@/lib/types';
+import {
+  STATUS_LABEL,
+  STATUS_ROLE,
+  isPastStatus,
+  homeTitle,
+  unitLabel,
+  homeAddress,
+  rentAmount,
+  progressText,
+  progressPercent,
+} from './applicationHelpers';
 import './applications.css';
 
-/* ---- Status helpers ------------------------------------------------------- */
+/* ── Status pill ─────────────────────────────────────────────────────────── */
 
-const IN_PROGRESS_STATUSES: ApplicationStatus[] = [
-  'submitted',
-  'in_review',
-  'landlord_review',
-];
-
-const ACTIVE_STATUSES: ApplicationStatus[] = [
-  'submitted',
-  'in_review',
-  'landlord_review',
-];
-
-function isActive(status: ApplicationStatus): boolean {
-  return (ACTIVE_STATUSES as string[]).includes(status);
-}
-
-/* ---- Stepper stages ------------------------------------------------------- */
-
-const STAGES = ['Submitted', 'In review', 'Landlord', 'Decision'];
-
-type StepStatus = {
-  step: number;
-  accent: 'brand' | 'success' | 'danger' | 'ink';
-};
-
-function getStepStatus(status: ApplicationStatus): StepStatus {
-  switch (status) {
-    case 'submitted':       return { step: 0, accent: 'brand' };
-    case 'in_review':       return { step: 1, accent: 'brand' };
-    case 'landlord_review': return { step: 2, accent: 'brand' };
-    case 'approved':        return { step: 3, accent: 'success' };
-    case 'rejected':        return { step: 3, accent: 'danger' };
-    default:                return { step: 0, accent: 'ink' };
-  }
-}
-
-/* ── Stepper ──────────────────────────────────────────────────────────────── */
-
-function Stepper({ step, accent }: { step: number; accent: StepStatus['accent'] }) {
-  const accentVar =
-    accent === 'success' ? 'var(--color-success-600)'
-    : accent === 'danger'  ? 'var(--color-danger-600)'
-    : accent === 'ink'     ? 'var(--color-ink-400)'
-    :                        'var(--color-brand-600)';
-
+function StatusPill({ status }: { status: ApplicationStatus }) {
   return (
-    <div className="ap2-steps" aria-label="Application progress">
-      {STAGES.map((s, i) => {
-        const done    = i < step;
-        const current = i === step;
-        return (
-          <div
-            key={s}
-            className={`ap2-step${done ? ' done' : ''}${current ? ' current' : ''}`}
-            style={{ '--ap2-accent': accentVar } as React.CSSProperties}
-            aria-current={current ? 'step' : undefined}
-          >
-            <span className="ap2-step-node" aria-hidden="true">
-              {done ? (
-                <IconCheck size={13} strokeWidth={2.5} />
-              ) : current ? (
-                <span className="ap2-step-dot" />
-              ) : null}
-            </span>
-            <span className="ap2-step-label">{s}</span>
-          </div>
-        );
-      })}
-    </div>
+    <span className={`wapp-pill ${STATUS_ROLE[status]}`}>
+      <span className="sd" />
+      {STATUS_LABEL[status]}
+    </span>
   );
 }
 
-/* ── Application card ────────────────────────────────────────────────────── */
+/* ── Tabs ────────────────────────────────────────────────────────────────── */
 
-function ApplicationCard({
-  app,
-  onWithdraw,
-  withdrawingId,
-}: {
-  app: Application;
-  onWithdraw: (id: number) => void;
-  withdrawingId: number | null;
-}) {
-  const navigate  = useNavigate();
-  const role      = getApplicationVariant(app.status);
-  const { step, accent } = getStepStatus(app.status);
-
-  const listing  = app.listing;
-  const unit     = listing?.unit;
-  const property = unit?.property;
-
-  const title      = listing?.title ?? `Application #${app.id}`;
-  const city       = property?.city ?? null;
-  const bedrooms   = unit?.bedrooms ?? null;
-  const bathrooms  = unit?.bathrooms ?? null;
-  const rentAmount = unit?.rent_amount ?? null;
-
-  const canWithdraw  = isActive(app.status);
-  const isWithdrawing = withdrawingId === app.id;
-
-  return (
-    <article className="ap2-card">
-      {/* ── Property info ── */}
-      <div className="ap2-card-info">
-        <h3 className="ap2-card-name">{title}</h3>
-        {city && (
-          <p className="ap2-card-location">
-            <IconMapPin size={13} aria-hidden="true" />
-            {city}
-          </p>
-        )}
-        <div className="ap2-card-specs">
-          {bedrooms !== null && (
-            <span className="ap2-card-spec">
-              <IconBed size={14} aria-hidden="true" />
-              {bedrooms} bd
-            </span>
-          )}
-          {bathrooms !== null && (
-            <span className="ap2-card-spec">
-              <IconBath size={14} aria-hidden="true" />
-              {bathrooms} ba
-            </span>
-          )}
-          {rentAmount && (
-            <span className="ap2-card-spec ap2-card-money">
-              {formatCedisDecimal(rentAmount)}/mo
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* ── Status column ── */}
-      <div className="ap2-card-status">
-        <SemanticBadge role={role} status={app.status} size="sm" />
-        <div className="ap2-meta">
-          <span className="ap2-meta-lab">Applied</span>
-          <span className="ap2-meta-val">
-            {formatDate(app.submitted_at ?? app.created_at)}
-          </span>
-        </div>
-        {(app.reviewed_at ?? app.decided_at) && (
-          <div className="ap2-meta">
-            <span className="ap2-meta-lab">Last updated</span>
-            <span className="ap2-meta-val">
-              {formatDate(app.decided_at ?? app.reviewed_at)}
-            </span>
-          </div>
-        )}
-        {app.decision_reason &&
-          (app.status === 'approved' || app.status === 'rejected') && (
-            <div className="ap2-meta">
-              <span className="ap2-meta-lab">Decision note</span>
-              <span className="ap2-meta-reason">{app.decision_reason}</span>
-            </div>
-          )}
-      </div>
-
-      {/* ── Progress track ── */}
-      <div className="ap2-card-track">
-        <Stepper step={step} accent={accent} />
-        <div className="ap2-actions">
-          <button
-            className="ap2-btn-ghost"
-            onClick={() => navigate('/app/contracts')}
-            type="button"
-          >
-            <IconActivity size={14} aria-hidden="true" />
-            Timeline
-          </button>
-          <button
-            className="ap2-btn-ghost"
-            onClick={() => navigate('/app/messages')}
-            type="button"
-          >
-            <IconUsers size={14} aria-hidden="true" />
-            Message
-          </button>
-          {canWithdraw && (
-            <button
-              className="ap2-btn-ghost ap2-btn-withdraw"
-              onClick={() => onWithdraw(app.id)}
-              disabled={isWithdrawing}
-              type="button"
-            >
-              {isWithdrawing ? 'Withdrawing…' : 'Withdraw'}
-            </button>
-          )}
-        </div>
-      </div>
-    </article>
-  );
-}
-
-/* ── Filter tabs ─────────────────────────────────────────────────────────── */
-
-const TABS = [
-  { v: 'all',       l: 'All' },
-  { v: 'in_review', l: 'In review' },
-  { v: 'approved',  l: 'Approved' },
+const TABS: { v: string; l: string }[] = [
+  { v: 'all', l: 'All' },
+  { v: 'drafts', l: 'Drafts' },
   { v: 'submitted', l: 'Submitted' },
-  { v: 'rejected',  l: 'Rejected' },
+  { v: 'needs', l: 'Needs action' },
+  { v: 'approved', l: 'Approved' },
+  { v: 'past', l: 'Not selected' },
 ];
 
-function matchesTab(a: Application, tab: string): boolean {
+const SUBMITTED_SET: ApplicationStatus[] = ['submitted', 'in_review', 'landlord_review'];
+
+function inTab(app: Application, tab: string): boolean {
   switch (tab) {
-    case 'in_review': return (IN_PROGRESS_STATUSES as string[]).includes(a.status);
-    case 'approved':  return a.status === 'approved';
-    case 'submitted': return a.status === 'submitted';
-    case 'rejected':  return a.status === 'rejected';
+    case 'drafts':    return app.status === 'draft';
+    case 'submitted': return SUBMITTED_SET.includes(app.status);
+    case 'needs':     return app.status === 'needs_action';
+    case 'approved':  return app.status === 'approved';
+    case 'past':      return isPastStatus(app.status);
     default:          return true;
   }
 }
 
-/* ============================================================================
-   ApplicationsPage
-   ============================================================================ */
+/* ── Application card ─────────────────────────────────────────────────────── */
 
-export function ApplicationsPage() {
-  const [tab, setTab]         = useState('all');
-  const [query, setQuery]     = useState('');
-  const [withdrawingId, setWithdrawingId] = useState<number | null>(null);
+function ApplicationCard({ app }: { app: Application }) {
+  const navigate = useNavigate();
+  const isDraft = app.status === 'draft';
+  const unit = unitLabel(app);
+  const rent = rentAmount(app);
+  const pct = progressPercent(app);
 
-  const appsQ   = useApi(() => tenantApi.applications(), []);
-  const { toast } = useToast();
+  const primaryLabel =
+    app.status === 'draft' ? 'Continue application'
+    : app.status === 'needs_action' ? 'Fix application'
+    : app.status === 'approved' ? 'View approval'
+    : isPastStatus(app.status) ? 'View decision'
+    : 'View details';
 
-  const apps = useMemo(() => appsQ.data ?? [], [appsQ.data]);
+  const primaryClass =
+    app.status === 'needs_action' ? 'wapp-btn-warning'
+    : app.status === 'approved' ? 'wapp-btn-success'
+    : app.status === 'draft' ? 'wapp-btn-primary'
+    : 'wapp-btn-glass';
 
-  /* Derived counts — all from real data */
-  const { total, approved, inProgress, rejected, activeCount } = useMemo(() => {
-    const total      = apps.length;
-    const approved   = apps.filter((a) => a.status === 'approved').length;
-    const inProgress = apps.filter((a) =>
-      (IN_PROGRESS_STATUSES as string[]).includes(a.status),
-    ).length;
-    const rejected   = apps.filter((a) => a.status === 'rejected').length;
-    const activeCount = apps.filter((a) => isActive(a.status)).length;
-    return { total, approved, inProgress, rejected, activeCount };
+  const go = () => navigate(isDraft ? `/app/applications/${app.id}/apply` : `/app/applications/${app.id}`);
+
+  const edgeVar =
+    STATUS_ROLE[app.status] === 'warning' ? 'var(--color-warning-500)'
+    : STATUS_ROLE[app.status] === 'success' ? 'var(--color-success-600)'
+    : STATUS_ROLE[app.status] === 'danger' ? 'var(--color-danger-500)'
+    : STATUS_ROLE[app.status] === 'info' ? 'var(--color-info-500)'
+    : 'var(--color-ink-300)';
+
+  return (
+    <button
+      type="button"
+      className="wapp-acard"
+      style={{ ['--wapp-edge' as string]: edgeVar }}
+      onClick={() => navigate(`/app/applications/${app.id}`)}
+    >
+      <div className="wapp-ac-top">
+        <div className="wapp-ac-home">
+          <div className="h">{homeTitle(app)}{unit ? `, ${unit}` : ''}</div>
+          <div className="a">{homeAddress(app) || '—'}</div>
+        </div>
+        <StatusPill status={app.status} />
+      </div>
+
+      <div className="wapp-ac-grid">
+        <div className="wapp-ac-cell">
+          <div className="l">Rent</div>
+          <div className="v money">{rent ? `${formatCedisDecimal(rent)}/mo` : '—'}</div>
+        </div>
+        <div className="wapp-ac-cell">
+          <div className="l">Progress</div>
+          <div className="v" style={{ fontSize: '0.82rem' }}>{progressText(app)}</div>
+          <div className="wapp-progbar"><i style={{ width: `${pct}%` }} /></div>
+        </div>
+        <div className="wapp-ac-cell">
+          <div className="l">{isDraft ? 'Started' : 'Submitted'}</div>
+          <div className="v">{formatDate(app.submitted_at ?? app.created_at)}</div>
+        </div>
+        <div className="wapp-ac-cell">
+          <div className="l">Last update</div>
+          <div className="v">{formatDate(app.latest_event?.created_at ?? app.created_at)}</div>
+        </div>
+      </div>
+
+      <div className="wapp-ac-foot">
+        {(app.status === 'needs_action' || app.status === 'draft') && (
+          <span className="wapp-ac-next">
+            <IconAlertTriangle size={13} aria-hidden="true" />
+            {app.status === 'needs_action' ? 'Action needed' : 'Continue where you left off'}
+          </span>
+        )}
+        <span className="spacer" />
+        <span
+          className={`wapp-btn wapp-btn-sm ${primaryClass}`}
+          onClick={(e) => { e.stopPropagation(); go(); }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); go(); } }}
+        >
+          {primaryLabel}
+        </span>
+      </div>
+    </button>
+  );
+}
+
+/* ── Recent updates ──────────────────────────────────────────────────────── */
+
+function RecentUpdates({ apps }: { apps: Application[] }) {
+  const updates = useMemo(() => {
+    return apps
+      .filter((a) => a.latest_event)
+      .map((a) => ({ app: a, ev: a.latest_event! }))
+      .sort((x, y) => (y.ev.created_at ?? '').localeCompare(x.ev.created_at ?? ''))
+      .slice(0, 5);
   }, [apps]);
 
-  const q    = query.trim().toLowerCase();
-  const list = useMemo(
-    () =>
-      apps.filter((a) => {
-        if (!matchesTab(a, tab)) return false;
-        if (!q) return true;
-        const listing = a.listing;
-        const title   = listing?.title ?? '';
-        const city    = listing?.unit?.property?.city ?? '';
-        return `${title} ${city}`.toLowerCase().includes(q);
-      }),
-    [apps, tab, q],
+  if (updates.length === 0) return null;
+
+  return (
+    <section className="wapp-glass wapp-updates">
+      <h2>Recent updates</h2>
+      {updates.map(({ app, ev }) => {
+        const cls = ev.event === 'info_requested' ? 'warn'
+          : ev.event === 'approved' || ev.event === 'request_resolved' ? 'ok'
+          : ev.event === 'rejected' || ev.event === 'withdrawn' ? 'warn'
+          : 'info';
+        const Icon = cls === 'warn' ? IconAlertTriangle : cls === 'ok' ? IconCheck : IconClock;
+        return (
+          <Link key={ev.id} to={`/app/applications/${app.id}`} className={`wapp-upd ${cls}`} style={{ textDecoration: 'none' }}>
+            <span className="ud"><Icon size={15} aria-hidden="true" /></span>
+            <span className="um">
+              <span>{ev.description} · <b>{homeTitle(app)}</b></span>
+              <span className="ut" style={{ display: 'block' }}>{formatDateTime(ev.created_at)}</span>
+            </span>
+          </Link>
+        );
+      })}
+    </section>
   );
+}
 
-  async function handleWithdraw(id: number) {
-    if (withdrawingId !== null) return;
-    setWithdrawingId(id);
-    try {
-      await tenantApi.withdrawApplication(id);
-      toast('Application withdrawn.', 'success');
-      appsQ.reload();
-    } catch {
-      toast('Failed to withdraw the application. Please try again.', 'error');
-    } finally {
-      setWithdrawingId(null);
-    }
-  }
+/* ── Page ────────────────────────────────────────────────────────────────── */
 
-  /* ── Loading ─────────────────────────────────────────────────────────── */
+export function ApplicationsPage() {
+  const [tab, setTab] = useState('all');
+  const appsQ = useApi(() => tenantApi.applications(), []);
+  const apps = useMemo(() => appsQ.data ?? [], [appsQ.data]);
+
+  const counts = useMemo(() => ({
+    drafts: apps.filter((a) => a.status === 'draft').length,
+    submitted: apps.filter((a) => SUBMITTED_SET.includes(a.status)).length,
+    needs: apps.filter((a) => a.status === 'needs_action').length,
+    approved: apps.filter((a) => a.status === 'approved').length,
+  }), [apps]);
+
+  const needs = useMemo(() => apps.filter((a) => a.status === 'needs_action'), [apps]);
+  const rows = useMemo(() => apps.filter((a) => inTab(a, tab)), [apps, tab]);
+
   if (appsQ.loading) {
     return (
-      <div className="ap2-page">
-        <PageHeader query={query} onQueryChange={setQuery} />
+      <div className="wapp">
+        <Intro />
         <LoadingState label="Loading applications…" />
       </div>
     );
   }
 
-  /* ── Error ───────────────────────────────────────────────────────────── */
   if (appsQ.error) {
     if (appsQ.error.status === 403) {
       return (
-        <div className="ap2-page">
-          <PageHeader query={query} onQueryChange={setQuery} />
-          <ForbiddenState
-            title="Applications unavailable"
-            message="Your account doesn't have access to applications."
-          />
+        <div className="wapp">
+          <Intro />
+          <ForbiddenState title="Applications unavailable" message="Your account doesn't have access to applications." />
         </div>
       );
     }
     return (
-      <div className="ap2-page">
-        <PageHeader query={query} onQueryChange={setQuery} />
-        <ErrorState
-          title="Couldn't load applications"
-          message={appsQ.error.message}
-          onRetry={appsQ.reload}
-        />
+      <div className="wapp">
+        <Intro />
+        <ErrorState title="Couldn't load applications" message={appsQ.error.message} onRetry={appsQ.reload} />
       </div>
     );
   }
 
-  /* ── Zero applications ───────────────────────────────────────────────── */
-  if (apps.length === 0) {
-    return (
-      <div className="ap2-page">
-        <PageHeader query={query} onQueryChange={setQuery} />
-        <EmptyState
-          icon={<IconFileText size={26} />}
-          title="No applications yet"
-          description="When you apply for a home, your progress will appear here."
-          action={
-            <Link to="/app/browse" className="ap2-browse-link">
-              Browse homes <IconArrowRight size={15} aria-hidden="true" />
-            </Link>
-          }
-        />
-      </div>
-    );
-  }
-
-  /* ── Main render ─────────────────────────────────────────────────────── */
   return (
-    <div className="ap2-page">
-      <PageHeader query={query} onQueryChange={setQuery} />
+    <div className="wapp">
+      <Intro />
 
-      {/* ── Filter tabs ── */}
-      <nav className="ap2-tabs" aria-label="Filter applications">
-        {TABS.map((t) => (
-          <button
-            key={t.v}
-            className={`ap2-tab${tab === t.v ? ' on' : ''}`}
-            onClick={() => setTab(t.v)}
-            type="button"
-            aria-pressed={tab === t.v}
-          >
-            {t.l}
-          </button>
-        ))}
-      </nav>
+      {/* Stat cards */}
+      <section className="wapp-cards">
+        <StatCard label="Drafts" value={counts.drafts} color="var(--color-ink-400)" onClick={() => setTab('drafts')} />
+        <StatCard label="Submitted" value={counts.submitted} color="var(--color-info-500)" onClick={() => setTab('submitted')} />
+        <StatCard label="Needs action" value={counts.needs} color="var(--color-warning-500)" tone="warn" onClick={() => setTab('needs')} />
+        <StatCard label="Approved" value={counts.approved} color="var(--color-success-600)" tone="ok" onClick={() => setTab('approved')} />
+      </section>
 
-      {/* ── Summary stat cards ── */}
-      <DashboardSection eyebrow="Overview" title="Your Applications">
-        <DataCardGrid cols={4}>
-          <StatusCard
-            label="Total applications"
-            value={total}
-            sub="All time"
-            icon={<IconFileText size={18} />}
-            role="neutral"
-            onClick={() => setTab('all')}
-          />
-          <StatusCard
-            label="Approved"
-            value={approved}
-            sub={total > 0 ? `${Math.round((approved / total) * 100)}% of total` : 'None yet'}
-            icon={<IconCheckCircle size={18} />}
-            role={approved > 0 ? 'success' : 'neutral'}
-            onClick={() => setTab('approved')}
-          />
-          <StatusCard
-            label="In progress"
-            value={inProgress}
-            sub={total > 0 ? `${Math.round((inProgress / total) * 100)}% of total` : 'None yet'}
-            icon={<IconClock size={18} />}
-            role={inProgress > 0 ? 'warning' : 'neutral'}
-            onClick={() => setTab('in_review')}
-          />
-          <StatusCard
-            label="Rejected"
-            value={rejected}
-            sub={total > 0 ? `${Math.round((rejected / total) * 100)}% of total` : 'None yet'}
-            icon={<IconXCircle size={18} />}
-            role={rejected > 0 ? 'danger' : 'neutral'}
-            onClick={() => setTab('rejected')}
-          />
-        </DataCardGrid>
-      </DashboardSection>
-
-      {/* ── Active-applications notice ── */}
-      {activeCount > 0 && (
-        <NexusCard role="info" className="ap2-active-notice">
-          <div className="ap2-active-notice-body">
-            <p className="ap2-active-count">
-              {activeCount} active application{activeCount === 1 ? '' : 's'}
-            </p>
-            <p className="ap2-active-sub">
-              Track each stage below. You'll be notified when your status changes.
-            </p>
+      {/* Needs-action banner */}
+      {needs.length > 0 && (
+        <section className="wapp-glass wapp-alert">
+          <div className="wapp-alert-h">
+            <IconAlertTriangle size={18} aria-hidden="true" />
+            Needs action
           </div>
-          <div className="ap2-stages-legend" aria-hidden="true">
-            {['Submitted', 'In review', 'Landlord', 'Decision'].map((s, i) => (
-              <div key={s} className="ap2-legend-item">
-                <span className="ap2-legend-node">{i + 1}</span>
-                <span className="ap2-legend-label">{s}</span>
+          {needs.map((a) => (
+            <div key={a.id} className="wapp-alert-row">
+              <div className="wapp-alert-m">
+                <div className="wapp-alert-mt">{homeTitle(a)}{unitLabel(a) ? `, ${unitLabel(a)}` : ''}</div>
+                <div className="wapp-alert-ms">
+                  {a.open_requests_count && a.open_requests_count > 0
+                    ? `${a.open_requests_count} open request${a.open_requests_count === 1 ? '' : 's'} from the landlord.`
+                    : 'The landlord needs something from you.'}
+                </div>
               </div>
+              <Link to={`/app/applications/${a.id}`} className="wapp-btn wapp-btn-warning wapp-btn-sm">
+                Open application
+              </Link>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* List panel */}
+      <section className="wapp-glass">
+        <div className="wapp-panel-head">
+          <h2>Your applications</h2>
+          <div className="wapp-tabs">
+            {TABS.map((t) => (
+              <button
+                key={t.v}
+                type="button"
+                className={`wapp-tab${tab === t.v ? ' on' : ''}`}
+                onClick={() => setTab(t.v)}
+                aria-pressed={tab === t.v}
+              >
+                {t.l}
+              </button>
             ))}
           </div>
-        </NexusCard>
-      )}
-
-      {/* ── Application list / filtered-empty ── */}
-      {list.length === 0 ? (
-        <EmptyState
-          icon={<IconFileText size={26} />}
-          title="No applications here"
-          description="Nothing matches this filter. Try a different tab or clear your search."
-          action={
-            <Link to="/app/browse" className="ap2-browse-link">
-              Browse homes <IconChevronRight size={15} aria-hidden="true" />
-            </Link>
-          }
-        />
-      ) : (
-        <div className="ap2-list">
-          {list.map((a) => (
-            <ApplicationCard
-              key={a.id}
-              app={a}
-              onWithdraw={handleWithdraw}
-              withdrawingId={withdrawingId}
-            />
-          ))}
         </div>
-      )}
+
+        <div className="wapp-list">
+          {rows.length > 0 ? (
+            rows.map((a) => <ApplicationCard key={a.id} app={a} />)
+          ) : (
+            <div className="wapp-empty">
+              <div className="ic"><IconCircleCheck size={26} aria-hidden="true" /></div>
+              <span className="t">No applications here</span>
+              <p>
+                {apps.length === 0
+                  ? 'When you apply for a rental, your progress, documents, and landlord updates will appear here.'
+                  : 'Nothing matches this filter. Try a different tab.'}
+              </p>
+              <Link to="/app/browse" className="wapp-btn wapp-btn-primary">
+                Browse listings <IconArrowRight size={15} aria-hidden="true" />
+              </Link>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <RecentUpdates apps={apps} />
     </div>
   );
 }
 
-/* ── Page header ─────────────────────────────────────────────────────────── */
+/* ── Small pieces ────────────────────────────────────────────────────────── */
 
-function PageHeader({
-  query,
-  onQueryChange,
+function Intro() {
+  return (
+    <section className="wapp-glass wapp-intro">
+      <span className="wapp-eyebrow">Applications</span>
+      <h1>Rental <b>applications.</b></h1>
+      <p>Apply for homes, upload the documents each home needs, and track landlord review — all in one place.</p>
+    </section>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  color,
+  tone,
+  onClick,
 }: {
-  query: string;
-  onQueryChange: (v: string) => void;
+  label: string;
+  value: number;
+  color: string;
+  tone?: 'warn' | 'ok';
+  onClick: () => void;
 }) {
   return (
-    <div className="ap2-header">
-      <div>
-        <span className="eyebrow">My Rental</span>
-        <h1 className="ap2-title">Applications</h1>
-        <p className="ap2-sub">
-          Track your rental applications, next steps, and decision status in one
-          place.
-        </p>
-      </div>
-      <label className="ap2-search" aria-label="Search applications">
-        <IconSearch size={17} aria-hidden="true" />
-        <input
-          type="search"
-          placeholder="Search by property or city…"
-          value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
-        />
-      </label>
-    </div>
+    <button type="button" className={`wapp-glass wapp-card${tone ? ` ${tone}` : ''}`} onClick={onClick}>
+      <div className="wapp-card-l"><i style={{ background: color }} />{label}</div>
+      <div className="wapp-card-v">{value}</div>
+    </button>
   );
 }
