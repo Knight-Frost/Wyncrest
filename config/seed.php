@@ -7,10 +7,10 @@
 |
 | Controls the two seeding modes:
 |
-|   - development : a SMALL, controlled, fully-truthful demo world (1 admin,
-|                   5 landlords, 5 tenants — 4 in good standing + 1 owing one
-|                   month — with real properties, listings, leases and an
-|                   immutable, derivable ledger). Predictable local-only creds.
+|   - development : a SMALL, controlled, fully-truthful demo world (4 admins,
+|                   7 landlords, 9 tenants — see Database\Seeders\Dev\SeedCatalog
+|                   for the exact roster — with real properties, listings, leases
+|                   and an immutable, derivable ledger). Predictable local-only creds.
 |
 |   - production  : safe baseline only — reference/system data (feature
 |                   definitions) and an OPTIONAL bootstrap admin from env vars.
@@ -41,13 +41,6 @@ return [
         // All demo emails use a reserved, non-routable test domain so they can
         // never collide with or email a real person.
         'email_domain' => env('WYNCREST_DEMO_DOMAIN', env('NEXUS_DEMO_DOMAIN', 'wyncrest.test')),
-
-        // Expected CATALOG account counts for the controlled development world
-        // (SeedCatalog::LANDLORDS / ::TENANTS). The VerificationSeeder adds a few
-        // standalone accounts on top to keep the admin review queue non-empty; the
-        // verify command accounts for those separately.
-        'tenants' => (int) env('WYNCREST_DEMO_TENANTS', env('NEXUS_DEMO_TENANTS', 9)),
-        'landlords' => (int) env('WYNCREST_DEMO_LANDLORDS', env('NEXUS_DEMO_LANDLORDS', 7)),
     ],
 
     // -------------------------------------------------------------------------
@@ -66,9 +59,9 @@ return [
     // Safety latch: refuse to run the development seeder while APP_ENV is
     // production unless this is explicitly flipped on. Prevents an accidental
     // `WYNCREST_SEED_MODE=development` from poisoning a production database.
-    'allow_dev_seed_in_production' => (bool) env(
-        'WYNCREST_ALLOW_DEV_SEED_IN_PROD',
-        env('NEXUS_ALLOW_DEV_SEED_IN_PROD', false),
+    'allow_dev_seed_in_production' => filter_var(
+        env('WYNCREST_ALLOW_DEV_SEED_IN_PROD', env('NEXUS_ALLOW_DEV_SEED_IN_PROD', false)),
+        FILTER_VALIDATE_BOOLEAN,
     ),
 
     // Currency used for demo money (the platform presents GH₵).

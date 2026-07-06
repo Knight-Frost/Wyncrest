@@ -183,7 +183,7 @@ Route (middleware: auth:sanctum + role guard + rate limit)
 | `app/Console/Commands` | Scheduled jobs (rent generation, overdue marking, digests) |
 | `app/Support/Cache` | Analytics cache keys, metadata, selective invalidation |
 | `database/{migrations,factories,seeders}` | Schema, test factories, demo seeder |
-| `routes/api.php` `api_contracts.php` `api_ledger.php` | API route definitions |
+| `routes/api.php` | API route definitions (all endpoints, incl. contracts/ledger sub-domains) |
 | `tests/{Feature,Unit,Load}` | PHPUnit feature/unit tests + k6 load scripts |
 | `frontend/` | React/TS SPA (the real user-facing app) |
 | `docs/` | Architecture, API examples, deployment notes |
@@ -193,7 +193,7 @@ Route (middleware: auth:sanctum + role guard + rate limit)
 `User` (tenant/landlord) · `Admin` (separate table) · `Property` → `Unit` →
 `Listing` (→ `ListingPhoto`) · `Contract` · `LedgerEntry` · `Notification` /
 `NotificationPreference` · `Feature` / `LandlordFeature` · `AuditLog` ·
-`EmailLog` · `Conversation` / `Message` (schema only, no UI yet).
+`EmailLog` · `Conversation` / `Message` (fully built: endpoints + MessagesPage).
 
 **Core workflow:** Landlord creates Property → Unit → Listing (DRAFT) → submits →
 Admin approves (ACTIVE/published). Landlord drafts a Contract for a tenant →
@@ -262,9 +262,8 @@ super-admins in the current phase).
 ## 13. API Structure
 
 - Base path: `/api/*` (JSON only). Health check at `/up`.
-- Route files: `routes/api.php` (auth, public, tenant, landlord, admin,
-  notifications, analytics, metrics, webhooks), plus `api_contracts.php` and
-  `api_ledger.php` for contract/ledger sub-domains.
+- Route file: `routes/api.php` (auth, public, tenant, landlord, admin,
+  notifications, analytics, metrics, webhooks, contracts, ledger — all in one file).
 - Guards: `auth:sanctum` + a role middleware + `rate.limit.role`.
 - Webhook: `POST /webhooks/stripe`: **no auth**, verified by Stripe signature.
 - **Response convention:** JSON. (Completion work standardizes the envelope,
@@ -335,10 +334,11 @@ composer install
 cp .env.example .env
 php artisan key:generate
 touch database/database.sqlite          # sqlite default
-php artisan migrate:fresh --seed         # mode-aware seed (controlled dev world: 1 admin/5 LL/5 T)
+php artisan migrate:fresh --seed         # mode-aware seed (scenario world: 4 admins/7 LL/9 T + queue accts)
 # production-safe baseline only: WYNCREST_SEED_MODE=production php artisan db:seed
 # verify the dev world + ledger: php artisan wyncrest:seed:verify
-# Seeding architecture + demo accounts: docs/SEEDING.md  (env: WYNCREST_*, legacy NEXUS_* still works)
+# Seeding architecture + demo accounts: docs/SEEDING.md; full scenario matrix: docs/SEEDED_SCENARIOS.md
+#   (covers verification/account/financial/contract/messaging states; env: WYNCREST_*, legacy NEXUS_* works)
 
 # Frontend
 cd frontend && npm install && npm run dev   # Vite dev server on :5173
@@ -463,13 +463,71 @@ Remaining / future work:
 - [x] ~~Application lifecycle notifications~~ **DONE (Phase 7):** submit→landlord, decide→tenant.
 - Fixed a **pre-existing flaky suite** (Carbon::setTestNow leak from LedgerAutomationTest) via a
   global `tearDown` reset in `tests/TestCase.php`: suite is now deterministic (596 green, 6/6 runs).
-- [ ] Granular admin RBAC (all admins are super-admins today).
-- [ ] `Conversation`/`Message` messaging feature (schema only).
+- [x] ~~Applications were list-only (submit/withdraw/decide).~~ **DONE (July 2026, full mockup parity):**
+  rebuilt the tenant Applications experience from `wyncrest-applications.html` end-to-end. Backend: `DRAFT`
+  + `NEEDS_ACTION` statuses, `applications.form_data` (json), `application_requests` (landlord/admin
+  request-more-info → needs_action → tenant resolves), append-only `application_events` timeline,
+  `ApplicationService` centralising every transition (event+audit+notify), per-application documents
+  (polymorphic), draft/save/submit/delete + landlord `request-info` endpoints. Frontend: routed list +
+  `/app/applications/:id` detail workspace + `/app/applications/:id/apply` 7-step guided form (autosave),
+  White-Liquid-Glass `.wapp` styling. 13 new tests; suite **859 green**. *Both follow-ups CLOSED
+  (July 5 2026 readiness pass):* the listing-detail "Apply" CTA now calls `startApplicationDraft` and
+  opens the guided form, and the landlord "request more info" button was already wired (ApplicantDetail).
+- [x] ~~Granular admin RBAC (all admins are super-admins today).~~ **DONE (July 1 2026 access-control
+  pass):** super vs scoped admins, `AdminCapability` + `admin.can` middleware, ManageAccessPage.
+- [x] ~~`Conversation`/`Message` messaging feature (schema only).~~ **DONE:** fully built
+  (endpoints + `MessagesPage.tsx`); messages now notify recipients (`message_received`, July 5 2026).
+- [x] **Production-readiness audit pass (July 5 2026):** 7-dimension full-codebase audit + repair.
+  Headline fixes: Stripe payments now settle their obligation (was CRITICAL — double-charge possible),
+  race-proof ledger transitions + payment-intent unique index, analytics cross-landlord IDOR + cache
+  leak closed, landlord dashboard draft-application privacy leak fixed, dev-seed-in-prod latch parses
+  booleans strictly, dead route files deleted, contract expiry automation (`contracts:mark-expired`),
+  contract-sent/first-rent/message notifications wired, misattributed duplicate audit rows + fabricated
+  EmailLog rows removed, Apply CTA wired to the guided form, dark-mode/a11y fixes across 4 portals.
+  Suite **1037 green**. Full detail: `WYNCREST_PRODUCTION_READINESS_REPORT.md` (§16 = remaining risks).
 - [x] ~~Feature UIs for media/verification/reviews~~ **DONE (Wyncrest rebuild):** tenant
   verification center + reviews + avatar; landlord photo galleries (GalleryManager) + verification
   + review responses; admin verification & review moderation + audited doc download; **accent-color
   picker** (16 curated, localStorage, brand/action ramps only); **audit-log investigation redesign**
   (filters + detail drawer with real before/after, never fabricated). All wired to real endpoints.
+- [x] ~~Admin Listing Review is too thin (summary card + approve/reject only).~~ **DONE (July 2026):**
+  rebuilt into a full moderation command centre. Routed pages (no modals): `/app/listing-review` queue,
+  `/app/listing-review/:listingId` detail, `.../preview` (Tenant Preview). New `ListingReviewService`
+  computes truthful per-status counts, a 10-item compliance checklist, warnings, completeness % and an
+  audit-log-backed timeline; real internal admin notes (`listing_notes` table). Endpoints under
+  `admin.can:moderate_listings`: `GET/POST /admin/listings/review*`. 22 new tests; suite 715 green.
+- [x] ~~Landlord Listings page was thin (list + quick-view drawer only, no lifecycle
+  self-service).~~ **DONE (July 2026):** rebuilt from `wyncrest-listings-landlord.html` reusing the
+  existing `.wprop` White-Liquid-Glass system (`properties.css`, ported 1:1 from `wyncrest-properties.html`)
+  instead of inventing a new look. List page keeps the same design language as Properties; new full-page
+  `/app/listings/:id` detail replaces the quick-view drawer, with 7 tabs (Overview, Applications, Review &
+  Approval, Public Preview, Media, Pricing, Activity) — Media reuses `GalleryManager`, Review/Activity are
+  sourced from the real audit-log trail (new `GET /landlord/listings/{id}/history`, backed by
+  `AuditLogResource`), never fabricated. New backend: landlord self-service lifecycle — `withdraw`
+  (pending_review→draft), `deactivate`/`reactivate` (active⇄inactive), `archive`/`restore`
+  (draft|rejected|inactive⇄archived) — none of these transitions existed before (`INACTIVE`/`ARCHIVED`
+  were dead enum values with no code path). Fixed a real gap: rejected listings could never be resubmitted
+  (`ListingPolicy::submit()` only allowed `DRAFT`) — now `REJECTED` can resubmit too, clearing
+  `rejection_reason`. `index()`/`show()` now return real `applications_count`/`new_applications_count`
+  (`withCount`, dropping the old client-side double-fetch-and-join) and a truthful `missing_requirements`
+  array (mirrors `SubmitListingRequest`'s own gate, not invented). Applications endpoint gained an optional
+  `?listing_id=` filter. 20 new tests; suite 912 green. *Deliberately kept unchanged:* the existing
+  `/app/listings/create` multi-step wizard — already real, tested, and backend-wired; rebuilding it to
+  match the mockup's differently-grouped steps was out of scope for this pass.
+- [x] ~~Landlord Applicants page was a single list + drawer (no form_data/documents/messaging
+  visible, no shortlist/compare).~~ **DONE (July 2026):** rebuilt from `wyncrest-applications-landlord.html`
+  into a command centre: routed queue (`/app/applicants`) + full-page detail (`/app/applicants/:id`,
+  8 tabs: overview/employment/rental/household/documents/verification/messages/timeline) + compare
+  (`/app/applicants/compare`), no modals/drawer. New backend: `shortlisted_at` on `applications`
+  (independent of lifecycle status, `ApplicationPolicy::shortlist`) + toggle endpoint; landlord
+  messaging scoped to an application (`GET/POST /landlord/applications/{id}/messages`, reuses the
+  existing tenant `Conversation`/`Message` models — no separate landlord inbox); `DocumentPolicy::view()`
+  extended so a landlord can open a document attached to *their own* applicant's application (was
+  hard-blocked before). Fixed a real gap: `index()` never excluded `DRAFT`, so a tenant's still-private
+  draft could leak into the landlord's list. Affordability/completeness are computed from real
+  `form_data`/documents (reuses the tenant guided-form's own `sectionsComplete`/`sectionDone`, never a
+  second definition of "complete"). 10 new tests; suite 912 green. Verified live (shortlist, compare,
+  messaging round-trip, approve/decline modals, deep-linked quick actions).
 - [ ] Per-page glass polish: a few existing pages still need cosmetic white-glass refinement
   (Listing detail, Browse, some landlord sub-pages); they already render real data on tokens.
 - [ ] Frontend automated tests (Vitest/RTL): currently validated via tsc + lint

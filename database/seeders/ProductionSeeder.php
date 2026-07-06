@@ -42,8 +42,9 @@ class ProductionSeeder extends Seeder
         $password = config('seed.bootstrap_admin.password');
 
         if (! $email || ! $name || ! $password) {
-            $message = 'Skipping super-admin bootstrap: set NEXUS_BOOTSTRAP_ADMIN_EMAIL, '
-                .'NEXUS_BOOTSTRAP_ADMIN_NAME and NEXUS_BOOTSTRAP_ADMIN_PASSWORD to create one.';
+            $message = 'Skipping super-admin bootstrap: set WYNCREST_BOOTSTRAP_ADMIN_EMAIL, '
+                .'WYNCREST_BOOTSTRAP_ADMIN_NAME and WYNCREST_BOOTSTRAP_ADMIN_PASSWORD to create one '
+                .'(legacy NEXUS_BOOTSTRAP_ADMIN_* still works as a fallback).';
             $this->command?->warn('  ⚠ '.$message);
             \Illuminate\Support\Facades\Log::warning('[ProductionSeeder] '.$message);
 

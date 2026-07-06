@@ -218,7 +218,7 @@ print_summary() {
     printf '   %s(Brand-new product — empty states are expected and intentional.)%s\n' "$c_dim" "$c_reset"
   else
     printf '   %sAccounts%s (password: %s)\n' "$c_yellow" "$c_reset" "$DEMO_PASSWORD"
-    printf '     %sAdmins%s (3 records: 2 active logins, 1 pending invite)\n' "$c_green" "$c_reset"
+    printf '     %sAdmins%s (4 records: 3 active logins, 1 pending invite)\n' "$c_green" "$c_reset"
     printf '       admin@wyncrest.test          super admin, full access\n'
     printf '       reviewer@wyncrest.test       scoped admin (verifications, listings, reviews, audit log)\n'
     printf '       pending.admin@wyncrest.test  pending invite, not an active login\n'

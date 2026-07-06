@@ -44,7 +44,15 @@ class DatabaseSeeder extends Seeder
         $configured = config('seed.mode');
 
         if (is_string($configured) && $configured !== '') {
-            return strtolower($configured) === 'production' ? 'production' : 'development';
+            $normalized = strtolower($configured);
+
+            if (! in_array($normalized, ['development', 'production'], true)) {
+                throw new \RuntimeException(
+                    "Invalid seed mode \"{$configured}\": expected \"development\" or \"production\"."
+                );
+            }
+
+            return $normalized;
         }
 
         return app()->environment('production') ? 'production' : 'development';

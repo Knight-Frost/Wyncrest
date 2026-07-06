@@ -89,6 +89,34 @@ class SeedingTest extends TestCase
         $this->assertSame('development', DatabaseSeeder::resolveMode());
     }
 
+    public function test_mode_resolution_throws_on_unknown_explicit_mode(): void
+    {
+        config(['seed.mode' => 'prodction']);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('prodction');
+
+        DatabaseSeeder::resolveMode();
+    }
+
+    public function test_allow_dev_seed_in_production_env_parsing_rejects_truthy_looking_strings(): void
+    {
+        // why: env() only returns a real PHP bool for the literal strings
+        // "true"/"false" (case-insensitive) — anything else (e.g. "no") comes
+        // back as the raw string, which a naive (bool) cast always turns into
+        // TRUE. filter_var(..., FILTER_VALIDATE_BOOLEAN) is the fix under test.
+        $this->assertFalse(filter_var('no', FILTER_VALIDATE_BOOLEAN));
+        $this->assertFalse(filter_var('off', FILTER_VALIDATE_BOOLEAN));
+        $this->assertFalse(filter_var('0', FILTER_VALIDATE_BOOLEAN));
+        $this->assertTrue(filter_var('true', FILTER_VALIDATE_BOOLEAN));
+        $this->assertTrue(filter_var('1', FILTER_VALIDATE_BOOLEAN));
+
+        // And confirm the config value itself is a real bool once loaded,
+        // regardless of how the underlying env var was spelled.
+        config(['seed.allow_dev_seed_in_production' => filter_var('no', FILTER_VALIDATE_BOOLEAN)]);
+        $this->assertFalse(config('seed.allow_dev_seed_in_production'));
+    }
+
     public function test_development_seeder_refuses_to_run_in_production(): void
     {
         $this->app['env'] = 'production';
