@@ -6,6 +6,7 @@ use App\Models\Admin;
 use App\Models\AuditLog;
 use App\Models\User;
 use App\Support\Audit\AuditClassifier;
+use App\Support\Csv\CsvWriter;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -422,7 +423,7 @@ class AuditLogService
                     $actorEmail = $actor ? $actor->email : null;
                     $status = AuditClassifier::status($log->severity);
 
-                    fputcsv($handle, [
+                    fputcsv($handle, CsvWriter::sanitizeRow([
                         $log->created_at?->toIso8601String(),
                         AuditClassifier::area($log->action),
                         $actorName,
@@ -432,7 +433,7 @@ class AuditLogService
                         $log->severity,
                         $status['label'],
                         $log->ip_address,
-                    ]);
+                    ]));
                 }
             });
 

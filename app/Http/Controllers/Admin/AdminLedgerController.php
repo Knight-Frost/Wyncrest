@@ -14,6 +14,7 @@ use App\Services\Ledger\LedgerComputationEngine;
 use App\Services\Ledger\LedgerReconciliationService;
 use App\Services\LedgerService;
 use App\Services\NotificationService;
+use App\Support\Csv\CsvWriter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -239,9 +240,9 @@ class AdminLedgerController extends Controller
 
         return response()->streamDownload(function () use ($header, $rows) {
             $out = fopen('php://output', 'w');
-            fputcsv($out, $header);
+            fputcsv($out, CsvWriter::sanitizeRow($header));
             foreach ($rows as $row) {
-                fputcsv($out, $row);
+                fputcsv($out, CsvWriter::sanitizeRow($row));
             }
             fclose($out);
         }, 'wyncrest-ledger.csv', ['Content-Type' => 'text/csv']);

@@ -725,6 +725,28 @@ class MaintenanceWorkflowTest extends TestCase
         $this->assertSame('1', $response->headers->get('X-Export-Row-Count'));
     }
 
+    /** @test */
+    public function test_export_sanitizes_a_title_that_looks_like_a_csv_formula(): void
+    {
+        $graph = $this->buildActiveGraph();
+        MaintenanceRequest::factory()->create([
+            'tenant_id' => $graph['tenant']->id, 'contract_id' => $graph['contract']->id,
+            'property_id' => $graph['property']->id, 'unit_id' => $graph['unit']->id,
+            'landlord_id' => $graph['landlord']->id,
+            'title' => '=cmd|/c calc!A1',
+        ]);
+
+        Sanctum::actingAs($graph['landlord'], ['*']);
+
+        $response = $this->get('/api/landlord/maintenance/export?scope=full');
+
+        $response->assertStatus(200);
+        $csv = $response->getContent();
+
+        $this->assertStringNotContainsString(',=cmd|', $csv);
+        $this->assertStringContainsString("'=cmd|", $csv);
+    }
+
     // ─── Notifications ────────────────────────────────────────────────────────
 
     /** @test */

@@ -261,6 +261,29 @@ class AdminLedgerCaseFileTest extends TestCase
         ]);
     }
 
+    public function test_export_sanitizes_a_tenant_name_that_looks_like_a_csv_formula(): void
+    {
+        $contract = Contract::factory()->active()->create();
+        $contract->tenant()->update(['first_name' => '=cmd', 'last_name' => 'Attacker']);
+        LedgerEntry::factory()->paid()->create([
+            'contract_id' => $contract->id,
+            'tenant_id' => $contract->tenant_id,
+            'landlord_id' => $contract->landlord_id,
+            'type' => LedgerType::RENT,
+            'amount_cents' => 70_000,
+        ]);
+
+        $this->actingAs($this->admin, 'admin');
+
+        $response = $this->get('/api/admin/ledger/export');
+
+        $response->assertStatus(200);
+        $csv = $response->streamedContent();
+
+        $this->assertStringNotContainsString(',=cmd Attacker,', $csv);
+        $this->assertStringContainsString("'=cmd Attacker", $csv);
+    }
+
     public function test_search_filters_the_list_and_summary_consistently(): void
     {
         $contractA = Contract::factory()->active()->create();

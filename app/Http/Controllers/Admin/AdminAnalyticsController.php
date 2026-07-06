@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Admin;
 use App\Services\Admin\AdminAnalyticsService;
 use App\Services\AuditService;
+use App\Support\Csv\CsvWriter;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -85,7 +86,7 @@ class AdminAnalyticsController extends Controller
         return response()->streamDownload(function () use ($rows) {
             $out = fopen('php://output', 'w');
             foreach ($rows as $row) {
-                fputcsv($out, $row);
+                fputcsv($out, CsvWriter::sanitizeRow($row));
             }
             fclose($out);
         }, 'wyncrest-admin-analytics.csv', ['Content-Type' => 'text/csv']);

@@ -10,6 +10,7 @@ use App\Services\AuditService;
 use App\Services\LandlordAnalyticsService;
 use App\Services\Ledger\LedgerComputationEngine;
 use App\Services\TenantReadinessService;
+use App\Support\Csv\CsvWriter;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -231,7 +232,7 @@ class LandlordExportController extends Controller
     private function buildAnalyticsCsv(array $payload, string $propertyName): string
     {
         $handle = fopen('php://temp', 'r+');
-        $write = fn (array $row = []) => fputcsv($handle, $row);
+        $write = fn (array $row = []) => fputcsv($handle, CsvWriter::sanitizeRow($row));
         $cedis = fn (int $cents) => number_format($cents / 100, 2, '.', '');
 
         $write(['Wyncrest Portfolio Analytics Report']);
@@ -335,9 +336,9 @@ class LandlordExportController extends Controller
     {
         return response()->streamDownload(function () use ($header, $rows) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, $header);
+            fputcsv($handle, CsvWriter::sanitizeRow($header));
             foreach ($rows as $row) {
-                fputcsv($handle, $row);
+                fputcsv($handle, CsvWriter::sanitizeRow($row));
             }
             fclose($handle);
         }, $filename, [

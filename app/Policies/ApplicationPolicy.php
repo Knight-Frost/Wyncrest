@@ -26,13 +26,19 @@ class ApplicationPolicy
 
     /**
      * Determine whether the user can view a specific application.
-     * Only the applying tenant or the target landlord may view it.
+     * Only the applying tenant or the target landlord may view it — except a
+     * DRAFT application, which is still private to the tenant and is not yet
+     * visible to the landlord (it hasn't been submitted).
      */
     public function view(User $user, Application $application): bool
     {
         $userId = (int) $user->id;
         $tenantId = (int) $application->tenant_id;
         $landlordId = (int) $application->landlord_id;
+
+        if ($application->status->isDraft()) {
+            return $userId === $tenantId;
+        }
 
         return $userId === $tenantId || $userId === $landlordId;
     }

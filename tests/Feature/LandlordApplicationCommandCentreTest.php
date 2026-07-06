@@ -274,4 +274,57 @@ class LandlordApplicationCommandCentreTest extends TestCase
         $this->getJson("/api/landlord/documents/{$document->id}/download")
             ->assertStatus(403);
     }
+
+    // =========================================================================
+    // A tenant's DRAFT application is private — the landlord cannot view it
+    // =========================================================================
+
+    public function test_landlord_cannot_view_a_tenants_draft_application(): void
+    {
+        $draft = Application::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'listing_id' => $this->listing->id,
+            'landlord_id' => $this->landlord->id,
+            'status' => ApplicationStatus::DRAFT,
+        ]);
+
+        Sanctum::actingAs($this->landlord, [], 'sanctum');
+
+        $this->getJson("/api/landlord/applications/{$draft->id}")
+            ->assertStatus(403);
+    }
+
+    public function test_landlord_cannot_view_messages_on_a_tenants_draft_application(): void
+    {
+        $draft = Application::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'listing_id' => $this->listing->id,
+            'landlord_id' => $this->landlord->id,
+            'status' => ApplicationStatus::DRAFT,
+        ]);
+
+        Sanctum::actingAs($this->landlord, [], 'sanctum');
+
+        $this->getJson("/api/landlord/applications/{$draft->id}/messages")
+            ->assertStatus(403);
+
+        $this->postJson("/api/landlord/applications/{$draft->id}/messages", [
+            'body' => 'Hello',
+        ])->assertStatus(403);
+    }
+
+    public function test_tenant_can_still_view_their_own_draft_application(): void
+    {
+        $draft = Application::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'listing_id' => $this->listing->id,
+            'landlord_id' => $this->landlord->id,
+            'status' => ApplicationStatus::DRAFT,
+        ]);
+
+        Sanctum::actingAs($this->tenant, [], 'sanctum');
+
+        $this->getJson("/api/tenant/applications/{$draft->id}")
+            ->assertStatus(200);
+    }
 }

@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Services\AuditService;
 use App\Services\MaintenanceService;
 use App\Services\NotificationService;
+use App\Support\Csv\CsvWriter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -305,9 +306,9 @@ class LandlordMaintenanceController extends Controller
         ])->all();
 
         $handle = fopen('php://temp', 'r+');
-        fputcsv($handle, $header);
+        fputcsv($handle, CsvWriter::sanitizeRow($header));
         foreach ($rows as $row) {
-            fputcsv($handle, $row);
+            fputcsv($handle, CsvWriter::sanitizeRow($row));
         }
         rewind($handle);
         $csv = stream_get_contents($handle);
