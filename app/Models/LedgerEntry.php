@@ -54,6 +54,8 @@ class LedgerEntry extends Model
         'status',
         'related_rent_entry_id',
         'stripe_payment_intent_id',
+        'payment_method',
+        'payment_reference',
     ];
 
     protected $casts = [
@@ -220,7 +222,13 @@ class LedgerEntry extends Model
             $updateData['stripe_payment_intent_id'] = $paymentIntentId;
         }
 
-        $updated = static::where('id', $this->id)->update($updateData);
+        // Compare-and-swap on the current status: if a concurrent request
+        // already transitioned this entry, the update matches 0 rows and we
+        // report failure instead of silently double-applying (e.g. two
+        // simultaneous payments both flipping PENDING -> PAID).
+        $updated = static::where('id', $this->id)
+            ->where('status', $currentStatus)
+            ->update($updateData);
 
         if ($updated) {
             $this->status = $newStatus;

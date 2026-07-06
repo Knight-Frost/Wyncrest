@@ -8,6 +8,8 @@ use App\Events\PaymentFailed;
 use App\Events\PaymentSucceeded;
 use App\Models\LedgerEntry;
 use App\Models\User;
+use App\Services\Ledger\LedgerComputationEngine;
+use Illuminate\Support\Facades\DB;
 use Stripe\Exception\ApiErrorException;
 use Stripe\StripeClient;
 
@@ -24,7 +26,8 @@ class PaymentService
     protected ?StripeClient $stripe = null;
 
     public function __construct(
-        protected AuditService $auditService
+        protected AuditService $auditService,
+        protected LedgerComputationEngine $engine
     ) {
         // Only initialize Stripe client if API key is configured
         // This allows the service to be instantiated in tests without real keys
@@ -36,8 +39,13 @@ class PaymentService
 
     /**
      * Check if Stripe is configured and available.
+     *
+     * Public so controllers can advertise online-payment availability to the
+     * SPA truthfully (e.g. the tenant Payments page hides the card checkout
+     * when no gateway is wired) instead of letting the tenant discover it via
+     * a failed charge.
      */
-    protected function isStripeConfigured(): bool
+    public function isStripeConfigured(): bool
     {
         return $this->stripe !== null;
     }
@@ -176,28 +184,80 @@ class PaymentService
             throw new \Exception("Original ledger entry not found: {$ledgerEntryId}");
         }
 
-        // Create PAYMENT ledger entry (negative amount = money received)
-        $paymentEntry = LedgerEntry::create([
-            'contract_id' => $originalEntry->contract_id,
-            'tenant_id' => $originalEntry->tenant_id,
-            'landlord_id' => $originalEntry->landlord_id,
-            'type' => LedgerType::PAYMENT,
-            'amount_cents' => -$originalEntry->amount_cents, // Negative = reduces balance
-            'currency' => $originalEntry->currency,
-            'billing_period_start' => $originalEntry->billing_period_start,
-            'billing_period_end' => $originalEntry->billing_period_end,
-            'due_date' => now(),
-            'status' => LedgerStatus::PAID,
-            'related_rent_entry_id' => $originalEntry->id,
-            'stripe_payment_intent_id' => $paymentIntentId,
-        ]);
+        // The ledger records what actually moved: refuse to book a credit
+        // unless Stripe confirms the charge succeeded for the exact amount
+        // and currency of the obligation.
+        if ($intent->status !== 'succeeded') {
+            throw new \Exception("Payment intent {$paymentIntentId} is not succeeded (status: {$intent->status})");
+        }
+
+        $received = $intent->amount_received ?? $intent->amount;
+        if ((int) $received !== (int) $originalEntry->amount_cents
+            || strtolower((string) $intent->currency) !== strtolower((string) $originalEntry->currency)) {
+            $this->auditService->log(
+                actor: null,
+                action: 'payment_amount_mismatch',
+                subject: $originalEntry,
+                description: "Refused to record payment {$paymentIntentId}: Stripe reports {$received} {$intent->currency}, obligation is {$originalEntry->amount_cents} {$originalEntry->currency}",
+                metadata: ['stripe_payment_intent_id' => $paymentIntentId],
+                severity: 'critical'
+            );
+            throw new \Exception("Payment intent {$paymentIntentId} amount/currency does not match the obligation");
+        }
+
+        $paymentEntry = DB::transaction(function () use ($originalEntry, $paymentIntentId) {
+            // Re-read under lock so a concurrent webhook/manual payment
+            // cannot settle the same obligation twice.
+            $lockedEntry = LedgerEntry::whereKey($originalEntry->id)->lockForUpdate()->first();
+
+            $duplicate = LedgerEntry::where('stripe_payment_intent_id', $paymentIntentId)
+                ->where('type', LedgerType::PAYMENT)
+                ->lockForUpdate()
+                ->first();
+            if ($duplicate) {
+                return $duplicate;
+            }
+
+            if (! $lockedEntry->canBePaid()) {
+                throw new \Exception("Ledger entry {$lockedEntry->id} is not payable (status: {$lockedEntry->status->value})");
+            }
+
+            // Create PAYMENT ledger entry (negative amount = money received)
+            $paymentEntry = LedgerEntry::create([
+                'contract_id' => $lockedEntry->contract_id,
+                'tenant_id' => $lockedEntry->tenant_id,
+                'landlord_id' => $lockedEntry->landlord_id,
+                'type' => LedgerType::PAYMENT,
+                'amount_cents' => -$lockedEntry->amount_cents, // Negative = reduces balance
+                'currency' => $lockedEntry->currency,
+                'billing_period_start' => $lockedEntry->billing_period_start,
+                'billing_period_end' => $lockedEntry->billing_period_end,
+                'due_date' => now(),
+                'status' => LedgerStatus::PAID,
+                'related_rent_entry_id' => $lockedEntry->id,
+                'stripe_payment_intent_id' => $paymentIntentId,
+            ]);
+
+            // Settle the obligation itself so it stops being due (and can no
+            // longer be marked overdue, fined, or paid a second time).
+            if (! $lockedEntry->transitionStatus(LedgerStatus::PAID, $paymentIntentId)) {
+                throw new \Exception("Ledger entry {$lockedEntry->id} changed state while recording payment");
+            }
+
+            return $paymentEntry;
+        });
+
+        // Redelivered/concurrent webhook resolved to the existing entry.
+        if (! $paymentEntry->wasRecentlyCreated) {
+            return $paymentEntry;
+        }
 
         // Audit log (info severity - successful transaction)
         $this->auditService->log(
             actor: null, // System action from webhook
             action: 'payment_recorded',
             subject: $paymentEntry,
-            description: "Payment recorded for ledger entry {$originalEntry->id}: \${$originalEntry->amount_in_dollars}",
+            description: "Payment recorded for ledger entry {$originalEntry->id}: GH₵".number_format($originalEntry->amount_cents / 100, 2),
             metadata: [
                 'stripe_payment_intent_id' => $paymentIntentId,
                 'original_entry_id' => $originalEntry->id,
@@ -267,16 +327,6 @@ class PaymentService
      */
     public function getTenantBalance(User $tenant): int
     {
-        // Sum all obligations (rent, late fees) - positive
-        $obligations = LedgerEntry::byTenant($tenant->id)
-            ->whereIn('type', [LedgerType::RENT->value, LedgerType::LATE_FEE->value])
-            ->sum('amount_cents');
-
-        // Sum all payments - negative
-        $payments = LedgerEntry::byTenant($tenant->id)
-            ->where('type', LedgerType::PAYMENT->value)
-            ->sum('amount_cents');
-
-        return $obligations + $payments; // Payments are negative, so this adds correctly
+        return $this->engine->computeTenantBalance((int) $tenant->id);
     }
 }

@@ -25,7 +25,11 @@ return new class extends Migration
 
             // Entry details - includes payment type for recording payments
             $table->enum('type', ['rent', 'late_fee', 'payment', 'refund']);
-            $table->bigInteger('amount_cents'); // Always positive, stored in cents
+            // Signed accounting value, in cents: rent/late_fee/refund are positive
+            // (increase balance), payment is negative (reduces balance). See
+            // App\Services\Ledger\LedgerComputationEngine for the canonical
+            // sign convention and all derived display/balance math.
+            $table->bigInteger('amount_cents');
             $table->char('currency', 3)->default('USD');
 
             // Billing period (for rent entries)

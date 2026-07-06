@@ -88,6 +88,31 @@ class PaymentWorkflowTest extends TestCase
             ]);
     }
 
+    public function test_balance_advertises_gateway_availability()
+    {
+        // No STRIPE_SECRET_KEY is set in the test environment, so the API must
+        // tell the SPA that online card payments are unavailable rather than
+        // letting it render a checkout that can only fail.
+        config(['services.stripe.secret' => null]);
+
+        $response = $this->actingAs($this->tenant, 'sanctum')
+            ->getJson('/api/tenant/payments/balance');
+
+        $response->assertStatus(200)
+            ->assertJson(['online_payments_enabled' => false]);
+    }
+
+    public function test_initiate_fails_honestly_when_gateway_unconfigured()
+    {
+        config(['services.stripe.secret' => null]);
+
+        $response = $this->actingAs($this->tenant, 'sanctum')
+            ->postJson("/api/tenant/payments/initiate/{$this->rentEntry->id}");
+
+        $response->assertStatus(503)
+            ->assertJson(['code' => 'gateway_unavailable']);
+    }
+
     public function test_tenant_balance_after_payment()
     {
         // Create payment entry

@@ -116,6 +116,39 @@ class LedgerWorkflowTest extends TestCase
             ]);
     }
 
+    public function test_tenant_can_filter_ledger_entries_by_contract()
+    {
+        $entry = LedgerEntry::factory()->create([
+            'contract_id' => $this->contract->id,
+            'tenant_id' => $this->tenant->id,
+            'landlord_id' => $this->landlord->id,
+        ]);
+
+        // A second contract/entry for the same tenant that must NOT appear
+        // once the response is scoped to $this->contract.
+        $otherListing = Listing::factory()->active()->create([
+            'unit_id' => Unit::factory()->create(['property_id' => $this->contract->listing->unit->property_id])->id,
+            'landlord_id' => $this->landlord->id,
+        ]);
+        $otherContract = Contract::factory()->create([
+            'listing_id' => $otherListing->id,
+            'landlord_id' => $this->landlord->id,
+            'tenant_id' => $this->tenant->id,
+        ]);
+        $otherEntry = LedgerEntry::factory()->create([
+            'contract_id' => $otherContract->id,
+            'tenant_id' => $this->tenant->id,
+            'landlord_id' => $this->landlord->id,
+        ]);
+
+        $response = $this->actingAs($this->tenant, 'sanctum')
+            ->getJson("/api/tenant/ledger?contract_id={$this->contract->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonFragment(['id' => $entry->id])
+            ->assertJsonMissing(['id' => $otherEntry->id]);
+    }
+
     public function test_landlord_can_view_their_ledger_entries()
     {
         // Create ledger entry
@@ -205,6 +238,27 @@ class LedgerWorkflowTest extends TestCase
             ->assertJson([
                 'message' => 'Late fees can only be applied to overdue entries',
             ]);
+    }
+
+    public function test_scoped_admin_without_manage_ledger_can_view_but_not_generate_late_fee()
+    {
+        $rentEntry = LedgerEntry::factory()->overdue()->create([
+            'contract_id' => $this->contract->id,
+            'tenant_id' => $this->tenant->id,
+            'landlord_id' => $this->landlord->id,
+            'type' => LedgerType::RENT,
+        ]);
+        $scoped = Admin::factory()->create(['is_super_admin' => false, 'capabilities' => []]);
+
+        // Viewing the ledger needs no capability.
+        $this->actingAs($scoped, 'admin')->getJson('/api/admin/ledger')->assertOk();
+
+        // Generating a late fee still requires manage_ledger.
+        $this->actingAs($scoped, 'admin')
+            ->postJson("/api/admin/ledger/{$rentEntry->id}/late-fee", ['amount_cents' => 10000])
+            ->assertStatus(403)->assertJsonPath('required_capability', 'manage_ledger');
+
+        $this->assertDatabaseMissing('ledger_entries', ['type' => LedgerType::LATE_FEE->value]);
     }
 
     public function test_duplicate_late_fee_cannot_be_created()

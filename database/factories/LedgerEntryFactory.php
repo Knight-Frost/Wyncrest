@@ -57,6 +57,13 @@ class LedgerEntryFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'status' => LedgerStatus::PENDING,
+            // why: definition()'s due_date is random and can land in the
+            // past, which silently makes a "pending" entry read as overdue
+            // too (PENDING + due_date < today) and flakes any assertion
+            // that expects pending/overdue to be disjoint. Pin a safe
+            // future date here; callers needing a specific date still
+            // override it via create([...]).
+            'due_date' => Carbon::now()->addDays(15),
         ]);
     }
 

@@ -29,6 +29,16 @@ class TenantPaymentController extends Controller
      */
     public function initiate(InitiatePaymentRequest $request, LedgerEntry $ledgerEntry): JsonResponse
     {
+        // Fail honestly (and early) when no payment gateway is wired, so the
+        // SPA can show a truthful "online payments unavailable" state rather
+        // than a generic 500 that reads like a bug.
+        if (! $this->paymentService->isStripeConfigured()) {
+            return response()->json([
+                'message' => 'Online card payments are not enabled on this environment yet. Please arrange payment with your landlord.',
+                'code' => 'gateway_unavailable',
+            ], 503);
+        }
+
         try {
             $result = $this->paymentService->createPaymentIntent(
                 $ledgerEntry,
@@ -84,6 +94,10 @@ class TenantPaymentController extends Controller
                 'balance_cents' => $balance,
                 'balance_dollars' => $balance / 100,
                 'owes_money' => $balance > 0,
+                // Lets the Payments page render the real card checkout only when
+                // a gateway is actually configured; otherwise it shows an honest
+                // "coming soon" note instead of a button that can only fail.
+                'online_payments_enabled' => $this->paymentService->isStripeConfigured(),
             ]);
         } catch (\Exception $e) {
             Log::error('Error retrieving tenant balance', [

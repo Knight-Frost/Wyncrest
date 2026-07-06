@@ -104,9 +104,10 @@ class StripeWebhookController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            // Return 200 to prevent Stripe from retrying (we logged the error)
-            // Stripe will keep retrying 5xx errors
-            return response()->json(['status' => 'logged_error'], 200);
+            // Return 5xx so Stripe retries: recordSuccessfulPayment() is
+            // idempotent per intent id, and answering 200 on a transient
+            // failure would lose a real captured charge forever.
+            return response()->json(['status' => 'processing_error'], 500);
         }
     }
 

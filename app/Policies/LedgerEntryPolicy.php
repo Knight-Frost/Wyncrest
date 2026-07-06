@@ -2,6 +2,8 @@
 
 namespace App\Policies;
 
+use App\Enums\LedgerStatus;
+use App\Enums\LedgerType;
 use App\Enums\UserType;
 use App\Models\LedgerEntry;
 use App\Models\User;
@@ -85,5 +87,25 @@ class LedgerEntryPolicy
 
         // Entry must be in a payable state
         return $entry->canBePaid();
+    }
+
+    /**
+     * Determine if the landlord can record a manual/offline payment against
+     * this ledger entry (their own contract's open rent/late-fee entry).
+     */
+    public function recordPayment(User $user, LedgerEntry $entry): bool
+    {
+        $userId = (int) $user->id;
+        $landlordId = (int) $entry->landlord_id;
+
+        if ($userId !== $landlordId) {
+            return false;
+        }
+
+        if (! in_array($entry->type, [LedgerType::RENT, LedgerType::LATE_FEE], true)) {
+            return false;
+        }
+
+        return in_array($entry->status, [LedgerStatus::PENDING, LedgerStatus::OVERDUE], true);
     }
 }
