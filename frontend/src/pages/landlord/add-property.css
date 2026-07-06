@@ -1,0 +1,131 @@
+/* ==========================================================================
+   ADD PROPERTY — dedicated full page (/app/properties/new), replacing the old
+   two-step side drawer. White Liquid Glass; token-driven; prefix `.wap-`.
+   ========================================================================== */
+
+.wap-page { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+
+.wap-breadcrumb { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--color-ink-400); }
+.wap-breadcrumb a { color: var(--color-ink-400); transition: color .15s; }
+.wap-breadcrumb a:hover { color: var(--color-ink-700); }
+
+.wap-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-ink-200);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-sm);
+  padding: 28px;
+}
+
+.wap-steps { max-width: 620px; margin: 0 auto 28px; }
+
+.wap-step-head { margin-bottom: 20px; }
+.wap-step-title { font-family: var(--font-display); font-size: 20px; font-weight: 600; color: var(--color-ink-950); }
+.wap-step-sub { margin-top: 4px; font-size: 13.5px; color: var(--color-ink-500); }
+
+.wap-form { display: flex; flex-direction: column; gap: 20px; }
+.wap-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.wap-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+
+.wap-hint { font-size: 12px; color: var(--color-ink-400); }
+
+/* ── ownership/management type radio cards (local guidance only) ─────────── */
+.wap-radio-group { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.wap-radio-card {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px; border: 1.5px solid var(--color-ink-200); border-radius: var(--radius-xl);
+  cursor: pointer; transition: border-color .15s, background .15s;
+}
+.wap-radio-card:hover { border-color: var(--color-brand-400); }
+.wap-radio-card.on { border-color: var(--color-brand-600); background: var(--color-brand-50); }
+.wap-radio-card input { margin-top: 3px; accent-color: var(--color-brand-600); }
+.wap-radio-label { font-size: 13.5px; font-weight: 600; color: var(--color-ink-800); }
+
+/* ── amenity chips (mirrors the listing wizard's chip pattern) ───────────── */
+.wap-amenity-group { display: flex; flex-direction: column; gap: 8px; }
+.wap-amenity-group-label { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--color-ink-500); }
+.wap-chips { display: flex; flex-wrap: wrap; gap: 10px; }
+.wap-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 14px; border-radius: 999px; border: 1.5px solid var(--color-ink-300);
+  background: var(--color-surface); color: var(--color-ink-700);
+  font-size: 13px; font-weight: 500; cursor: pointer; user-select: none;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.wap-chip:hover { border-color: var(--color-brand-400); }
+.wap-chip.on { border-color: var(--color-brand-600); background: var(--color-brand-50); color: var(--color-brand-700); font-weight: 600; }
+.wap-chip:focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+.wap-chip-check { width: 16px; height: 16px; display: grid; place-items: center; border-radius: 5px; border: 1.5px solid var(--color-ink-300); flex-shrink: 0; }
+.wap-chip.on .wap-chip-check { background: var(--color-brand-600); border-color: var(--color-brand-600); color: var(--color-on-brand); }
+
+/* ── boolean rule toggle row ──────────────────────────────────────────────── */
+.wap-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border: 1.5px solid var(--color-ink-200); border-radius: 12px; }
+.wap-toggle { position: relative; width: 44px; height: 26px; border-radius: 999px; border: none; background: var(--color-ink-300); cursor: pointer; transition: background .15s; flex-shrink: 0; }
+.wap-toggle.on { background: var(--color-brand-600); }
+.wap-toggle::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.wap-toggle.on::after { transform: translateX(18px); }
+.wap-toggle:focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+
+/* ── units list ───────────────────────────────────────────────────────────── */
+.wap-unit-card {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 16px; border: 1px solid var(--color-ink-200); border-radius: var(--radius-xl);
+  background: var(--color-canvas);
+}
+.wap-unit-name { font-size: 14px; font-weight: 600; color: var(--color-ink-900); }
+.wap-unit-meta { font-size: 12.5px; color: var(--color-ink-500); margin-top: 2px; }
+.wap-unit-list { display: flex; flex-direction: column; gap: 10px; }
+.wap-add-unit-form {
+  border: 1.5px dashed var(--color-ink-300); border-radius: var(--radius-xl);
+  padding: 20px; background: var(--color-canvas);
+}
+
+/* ── banners ──────────────────────────────────────────────────────────────── */
+.wap-banner {
+  font-size: 13px; border-radius: var(--radius-xl); padding: 12px 16px;
+  display: flex; align-items: flex-start; gap: 10px;
+}
+.wap-banner-info { color: var(--color-brand-700); background: var(--color-brand-50); border: 1px solid color-mix(in srgb, var(--color-brand-600) 20%, transparent); }
+.wap-banner-warning { color: var(--color-warning-700, var(--color-warning-600)); background: var(--color-warning-50); border: 1px solid color-mix(in srgb, var(--color-warning-600) 25%, transparent); }
+.wap-banner-danger { color: var(--color-danger-600); background: var(--color-danger-50); border: 1px solid color-mix(in srgb, var(--color-danger-600) 20%, transparent); }
+.wap-banner ul { margin: 4px 0 0; padding-left: 18px; }
+
+/* ── review summary ───────────────────────────────────────────────────────── */
+.wap-review { display: flex; flex-direction: column; gap: 20px; }
+.wap-summary-section { border: 1px solid var(--color-ink-200); border-radius: var(--radius-xl); overflow: hidden; }
+.wap-summary-section-title {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--color-ink-500); padding: 12px 18px; background: var(--color-canvas);
+  border-bottom: 1px solid var(--color-ink-200);
+}
+.wap-summary-row { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 12px 18px; border-top: 1px solid var(--color-ink-200); }
+.wap-summary-row:first-of-type { border-top: none; }
+.wap-summary-label { font-size: 13px; color: var(--color-ink-500); flex: 0 0 auto; }
+.wap-summary-value { font-size: 14px; font-weight: 600; color: var(--color-ink-900); text-align: right; min-width: 0; word-break: break-word; }
+
+.wap-next-steps { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* ── footer ───────────────────────────────────────────────────────────────── */
+.wap-footer { border-top: 1px solid var(--color-ink-200); margin-top: 24px; padding-top: 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.wap-footer-actions { display: flex; align-items: center; gap: 10px; }
+.wap-status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-ink-500); }
+.wap-status.saving { color: var(--color-brand-600); }
+
+/* ── success ──────────────────────────────────────────────────────────────── */
+.wap-success { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 56px 24px; }
+.wap-success-ico { width: 68px; height: 68px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: var(--color-success-50); color: var(--color-success-600); margin-bottom: 4px; }
+.wap-success-title { font-family: var(--font-display); font-weight: 600; font-size: 24px; color: var(--color-ink-950); }
+.wap-success-text { font-size: 14px; color: var(--color-ink-500); max-width: 44ch; }
+
+/* ── responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .wap-card { padding: 20px; }
+  .wap-grid, .wap-grid-3, .wap-radio-group { grid-template-columns: 1fr; }
+  .wap-footer { flex-direction: column-reverse; align-items: stretch; }
+  .wap-footer-actions { flex-direction: column-reverse; }
+  .wap-footer-actions > * { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wap-toggle::after, .wap-chip, .wap-radio-card { transition: none; }
+}

@@ -2,16 +2,19 @@
 
 namespace App\Http\Controllers\Landlord;
 
-use App\Enums\LedgerStatus;
-use App\Enums\LedgerType;
+use App\Enums\ListingStatus;
+use App\Enums\MediaCollection;
 use App\Enums\UnitAvailabilityStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StorePropertyRequest;
 use App\Http\Requests\UpdatePropertyRequest;
-use App\Models\LedgerEntry;
+use App\Models\Listing;
+use App\Models\MediaAsset;
 use App\Models\Property;
 use App\Models\Unit;
 use App\Services\AuditService;
+use App\Services\Ledger\LedgerComputationEngine;
+use App\Services\PropertyDetailService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -30,7 +33,7 @@ class PropertyController extends Controller
     /**
      * Display a listing of the landlord's properties.
      */
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, LedgerComputationEngine $engine): JsonResponse
     {
         $this->authorize('viewAny', Property::class);
 
@@ -51,24 +54,41 @@ class PropertyController extends Controller
             ->get()
             ->groupBy('property_id');
 
-        // Per-property rent collected this calendar month. Matches the dashboard
-        // definition exactly: RENT-type entries marked PAID with due_date in the
-        // current month, scoped to this landlord, joined out to the owning
-        // property via contract → listing → unit. One grouped query.
-        $collectedByProperty = LedgerEntry::query()
-            ->where('ledger_entries.landlord_id', $landlordId)
-            ->where('ledger_entries.type', LedgerType::RENT->value)
-            ->where('ledger_entries.status', LedgerStatus::PAID->value)
-            ->whereBetween('ledger_entries.due_date', [now()->startOfMonth(), now()->endOfMonth()])
-            ->join('contracts', 'contracts.id', '=', 'ledger_entries.contract_id')
-            ->join('listings', 'listings.id', '=', 'contracts.listing_id')
-            ->join('units', 'units.id', '=', 'listings.unit_id')
-            ->whereIn('units.property_id', $propertyIds)
-            ->selectRaw('units.property_id as property_id, SUM(ledger_entries.amount_cents) as collected')
-            ->groupBy('units.property_id')
-            ->pluck('collected', 'property_id');
+        // Listings for these properties, joined via their units. Used to derive
+        // listed/pending counts and the "needs attention" warnings the cards show.
+        $listings = Listing::whereHas('unit', fn ($q) => $q->whereIn('property_id', $propertyIds))
+            ->with('unit:id,property_id')
+            ->get(['id', 'unit_id', 'status', 'changes_requested_reason'])
+            ->groupBy(fn (Listing $l) => $l->unit->property_id);
 
-        $payload = $properties->map(function (Property $property) use ($unitCounts, $collectedByProperty) {
+        // Vacant unit ids per property (to spot vacant units with no listing).
+        $vacantUnits = Unit::whereIn('property_id', $propertyIds)
+            ->where('availability_status', UnitAvailabilityStatus::AVAILABLE)
+            ->get(['id', 'property_id'])
+            ->groupBy('property_id');
+
+        // First gallery photo per property → the card cover (and a truthful
+        // "no cover photo" signal when absent).
+        $coverByProperty = MediaAsset::where('collection', MediaCollection::PropertyGallery->value)
+            ->where('status', 'active')
+            ->where('attachable_type', Property::class)
+            ->whereIn('attachable_id', $propertyIds)
+            ->ordered()
+            ->get()
+            ->groupBy('attachable_id')
+            ->map(fn ($group) => $group->first());
+
+        $activeInFlight = [ListingStatus::ACTIVE, ListingStatus::PENDING_REVIEW, ListingStatus::DRAFT];
+
+        $payload = $properties->map(function (Property $property) use (
+            $unitCounts,
+            $listings,
+            $vacantUnits,
+            $coverByProperty,
+            $activeInFlight,
+            $landlordId,
+            $engine
+        ) {
             // availability_status is enum-cast on the model, so key by its scalar value.
             $counts = ($unitCounts[$property->id] ?? collect())
                 ->mapWithKeys(fn ($row) => [$row->availability_status->value => (int) $row->aggregate]);
@@ -77,11 +97,56 @@ class PropertyController extends Controller
             $occupied = (int) ($counts[UnitAvailabilityStatus::OCCUPIED->value] ?? 0);
             $vacant = (int) ($counts[UnitAvailabilityStatus::AVAILABLE->value] ?? 0);
 
+            $propertyListings = $listings->get($property->id, collect());
+            $listed = $propertyListings->where('status', ListingStatus::ACTIVE)->count();
+            $pending = $propertyListings->where('status', ListingStatus::PENDING_REVIEW)->count();
+            $rejected = $propertyListings->where('status', ListingStatus::REJECTED)->count();
+            $changesRequested = $propertyListings->filter(
+                fn (Listing $l) => $l->status === ListingStatus::DRAFT && $l->changes_requested_reason
+            )->count();
+
+            // Vacant units that carry no active/in-flight listing can't be applied for.
+            $listedUnitIds = $propertyListings
+                ->whereIn('status', $activeInFlight)
+                ->pluck('unit_id')
+                ->unique();
+            $vacantUnlisted = ($vacantUnits->get($property->id, collect()))
+                ->reject(fn (Unit $u) => $listedUnitIds->contains($u->id))
+                ->count();
+
+            $cover = $coverByProperty->get($property->id);
+
+            $attention = PropertyDetailService::attentionSummary(
+                isActive: $property->is_active,
+                unitsTotal: $total,
+                vacantUnlisted: $vacantUnlisted,
+                rejected: $rejected,
+                changesRequested: $changesRequested,
+                hasCover: $cover !== null,
+            );
+
+            // Per-property rent collected this calendar month, via the same
+            // computation engine that powers the dashboard and ledger page
+            // (a landlord's property list is small, so a per-property call
+            // trades a little query volume for one authoritative definition
+            // of "collected" instead of a third bespoke SQL aggregate).
+            $collectedThisMonthCents = $engine->computeCollected([
+                'landlord_id' => $landlordId,
+                'property_id' => $property->id,
+                'date_from' => now()->startOfMonth(),
+                'date_to' => now()->endOfMonth(),
+            ]);
+
             return array_merge($property->toArray(), [
                 'occupied_units' => $occupied,
                 'vacant_units' => $vacant,
+                'listed_units' => $listed,
+                'pending_units' => $pending,
+                'rejected_units' => $rejected,
                 'occupancy_rate' => (int) round($occupied / max($total, 1) * 100),
-                'collected_this_month_cents' => (int) ($collectedByProperty[$property->id] ?? 0),
+                'collected_this_month_cents' => $collectedThisMonthCents,
+                'cover_url' => $cover?->url,
+                'attention' => $attention,
             ]);
         });
 
@@ -121,6 +186,19 @@ class PropertyController extends Controller
         $this->authorize('view', $property);
 
         return response()->json($property->load(['units', 'activeUnits', 'mediaAssets']));
+    }
+
+    /**
+     * Rich detail payload for the landlord Property page — property info,
+     * summary counts, attention warnings, units, listings, contracts/tenants,
+     * a property-scoped ledger, maintenance, documents, photos, and activity.
+     * All aggregation and money computation happens server-side.
+     */
+    public function detail(Property $property, PropertyDetailService $detailService): JsonResponse
+    {
+        $this->authorize('view', $property);
+
+        return response()->json($detailService->build($property));
     }
 
     /**

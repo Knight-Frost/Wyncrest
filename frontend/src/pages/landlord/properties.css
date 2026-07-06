@@ -1,0 +1,392 @@
+/* ============================================================================
+   Landlord Properties — White Liquid Glass, faithfully ported from
+   wyncrest-properties.html. Everything is scoped under `.wprop` so these
+   petrol/oxblood glass tokens never leak into the rest of the app.
+   ========================================================================== */
+
+.wprop {
+  --wp-white: var(--color-surface);
+  --wp-ink: var(--color-ink-900);
+  --wp-ink-2: var(--color-ink-700);
+  --wp-ink-3: var(--color-ink-500);
+  /* Fixed "always dark" solid fill for the .btn-dark CTA and the active .chip.on
+     state — these are a deliberate near-black pill (distinct from the petrol
+     brand button), not body text, so they must NOT invert to near-white in dark
+     mode the way --wp-ink (now theme-reactive) does. */
+  --wp-ink-solid: light-dark(#13161b, #2a3138);
+  --wp-line: var(--color-ink-200);
+  --wp-petrol: var(--color-action-600);
+  --wp-petrol-2: var(--color-action-500);
+  --wp-oxblood: var(--color-danger-600);
+  /* --wp-wine / --wp-indigo are unused decorative one-offs (no matching
+     semantic token); keep them theme-aware via light-dark() instead of a bare
+     literal so they don't wash out if ever used in dark mode. */
+  --wp-wine: light-dark(#a93346, #e3a3ae);
+  --wp-green: var(--color-success-600);
+  /* --color-success-600 is tuned for readable TEXT on a surface (it goes light
+     in dark mode), so it's unsafe as a solid fill under white/on-action text
+     (.btn-green, the "Cover" photo tag). Give solid fills their own fixed-ish
+     green that stays dark enough for white text in both themes. */
+  --wp-green-solid: light-dark(#2c7a57, #1f6b48);
+  --wp-amber: var(--color-warning-600);
+  --wp-slate: var(--color-ink-500);
+  --wp-indigo: light-dark(#4b3e86, #b9ade3);
+  --wp-blue: var(--color-info-600);
+  --wp-glass: linear-gradient(150deg, var(--glass-bg-strong), var(--glass-bg));
+  --wp-gborder: var(--glass-border);
+  --wp-gshadow: var(--glass-highlight), var(--glass-shadow);
+  --wp-disp: 'Big Shoulders Display', Impact, sans-serif;
+  --wp-serif: 'Fraunces', Georgia, serif;
+  --wp-sans: 'Hanken Grotesque', system-ui, sans-serif;
+  --wp-mono: 'Space Grotesk', monospace;
+
+  font-family: var(--wp-sans);
+  color: var(--wp-ink);
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wprop *,
+.wprop *::before,
+.wprop *::after {
+  box-sizing: border-box;
+}
+.wprop button { font-family: inherit; cursor: pointer; }
+.wprop input, .wprop select, .wprop textarea { font-family: inherit; }
+.wprop .mono { font-family: var(--wp-mono); }
+.wprop .num { font-family: var(--wp-mono); font-variant-numeric: tabular-nums; }
+.wprop .dl {
+  font-family: var(--wp-mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--wp-ink-3);
+}
+
+.wprop .glass {
+  background: var(--wp-glass);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  backdrop-filter: blur(22px) saturate(150%);
+  border: 1px solid var(--wp-gborder);
+  border-radius: 18px;
+  box-shadow: var(--wp-gshadow);
+  position: relative;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .wprop .glass { background: var(--color-surface); }
+}
+
+/* buttons */
+.wprop .btn {
+  font-weight: 500;
+  font-size: 0.85rem;
+  border: none;
+  padding: 0.62em 1.05em;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  transition: 0.18s;
+  white-space: nowrap;
+  background: var(--glass-bg-strong);
+  color: var(--wp-ink);
+  box-shadow: inset 0 0 0 1px var(--wp-gborder);
+}
+.wprop .btn:hover { background: var(--color-surface); transform: translateY(-1px); }
+.wprop .btn svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.9; }
+.wprop .btn-dark { background: var(--wp-ink-solid); color: var(--color-on-action); box-shadow: none; }
+.wprop .btn-dark:hover { background: color-mix(in srgb, var(--wp-ink-solid) 85%, black); }
+.wprop .btn-petrol { background: linear-gradient(145deg, var(--wp-petrol-2), var(--wp-petrol)); color: var(--color-on-action); box-shadow: none; }
+.wprop .btn-petrol:hover { filter: brightness(1.08); }
+.wprop .btn-green { background: linear-gradient(145deg, color-mix(in srgb, var(--wp-green-solid) 85%, white), var(--wp-green-solid)); color: var(--color-on-action); box-shadow: none; }
+.wprop .btn-green:hover { filter: brightness(1.06); }
+.wprop .btn-blood { color: var(--wp-oxblood); background: color-mix(in srgb, currentColor 8%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 30%, transparent); }
+.wprop .btn-blood:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
+.wprop .btn-sm { padding: 0.44em 0.75em; font-size: 0.79rem; border-radius: 9px; }
+.wprop .btn[disabled] { opacity: 0.45; cursor: not-allowed; transform: none !important; }
+
+/* page head */
+.wprop .pagehead {
+  padding: clamp(1.4rem, 3vw, 2.1rem);
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.wprop .ph-eyebrow {
+  font-family: var(--wp-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--wp-petrol);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+}
+.wprop .ph-eyebrow::before { content: ''; width: 24px; height: 1px; background: var(--wp-petrol); }
+.wprop .ph-title {
+  font-family: var(--wp-serif);
+  font-weight: 400;
+  font-size: clamp(2.1rem, 4.4vw, 3rem);
+  line-height: 1.02;
+  margin: 0.6rem 0 0.4rem;
+}
+.wprop .ph-title b { font-style: italic; color: var(--wp-petrol); font-weight: 400; }
+.wprop .ph-sub { color: var(--wp-ink-2); font-size: 0.94rem; max-width: 52ch; font-weight: 300; }
+
+/* summary cards */
+.wprop .sumcards { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+@media (max-width: 1000px) { .wprop .sumcards { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 560px) { .wprop .sumcards { grid-template-columns: repeat(2, 1fr); } }
+.wprop .scard { padding: 1rem 1.1rem; cursor: default; position: relative; transition: 0.18s; }
+.wprop .scard .sl {
+  font-family: var(--wp-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--wp-ink-3);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.wprop .scard .sl i { width: 7px; height: 7px; border-radius: 50%; }
+.wprop .scard .sv { font-family: var(--wp-disp); font-weight: 800; font-size: 1.75rem; line-height: 1; margin-top: 0.5rem; }
+.wprop .scard .ss { font-size: 0.74rem; color: var(--wp-ink-3); margin-top: 0.25rem; }
+.wprop .scard.att .sv { color: var(--wp-amber); }
+.wprop .scard.occ .sv { color: var(--wp-green); }
+
+/* toolbar */
+.wprop .toolbar { padding: 0.9rem 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.wprop .search {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--wp-gborder);
+  border-radius: 10px;
+  padding: 0.55rem 0.8rem;
+  background: var(--color-surface);
+}
+.wprop .search svg { width: 15px; height: 15px; stroke: var(--wp-ink-3); fill: none; stroke-width: 2; flex: none; }
+.wprop .search input { border: none; outline: none; flex: 1; font-size: 0.86rem; background: none; }
+.wprop .sel {
+  font-size: 0.8rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--wp-gborder);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--wp-ink-2);
+}
+
+/* property cards */
+.wprop .pgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+@media (max-width: 760px) { .wprop .pgrid { grid-template-columns: 1fr; } }
+.wprop .pcard { overflow: hidden; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; }
+.wprop .pcard:hover { transform: translateY(-3px); box-shadow: var(--wp-gshadow), var(--shadow-lg); }
+.wprop .cover { height: 150px; position: relative; display: flex; align-items: flex-end; padding: 0.8rem; overflow: hidden; }
+.wprop .cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.wprop .cover .cvicon { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0.5; }
+.wprop .cover .cvicon svg { width: 56px; height: 56px; stroke: rgba(255, 255, 255, 0.85); fill: none; stroke-width: 1.2; }
+.wprop .cover.missing {
+  background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--wp-ink) 3%, transparent), color-mix(in srgb, var(--wp-ink) 3%, transparent) 12px, color-mix(in srgb, var(--wp-ink) 5%, transparent) 12px, color-mix(in srgb, var(--wp-ink) 5%, transparent) 24px);
+  border-bottom: 1px dashed var(--wp-gborder);
+}
+.wprop .cover.missing .cvicon svg { stroke: var(--wp-ink-3); opacity: 0.6; }
+.wprop .cover.missing .cvtext { position: absolute; bottom: 0.7rem; left: 0; right: 0; text-align: center; font-size: 0.78rem; color: var(--wp-ink-3); }
+.wprop .cover .ptype {
+  /* Label chip drawn on top of the cover photo itself — a fixed dark scrim +
+     white text is correct regardless of theme (acceptable literal survivor). */
+  position: relative;
+  z-index: 1;
+  font-family: var(--wp-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.28);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  padding: 0.3em 0.6em;
+  border-radius: 100px;
+}
+.wprop .statuspill {
+  font-size: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.3em 0.7em;
+  border-radius: 100px;
+  font-weight: 500;
+  white-space: nowrap;
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
+  z-index: 1;
+  background: var(--glass-bg-strong);
+}
+.wprop .statuspill .sd { width: 6px; height: 6px; border-radius: 50%; }
+.wprop .statuspill.active { color: var(--wp-green); }
+.wprop .statuspill.active .sd { background: var(--wp-green); }
+.wprop .statuspill.draft { color: var(--wp-slate); }
+.wprop .statuspill.draft .sd { background: var(--wp-slate); }
+.wprop .statuspill.archived { color: var(--wp-ink-3); }
+.wprop .statuspill.archived .sd { background: var(--wp-ink-3); }
+.wprop .pbody { padding: 1.1rem 1.2rem; flex: 1; display: flex; flex-direction: column; }
+.wprop .pname { font-family: var(--wp-serif); font-size: 1.4rem; line-height: 1.1; }
+.wprop .paddr { font-size: 0.83rem; color: var(--wp-ink-3); margin-top: 0.2rem; }
+.wprop .pstats {
+  display: flex;
+  gap: 1.1rem;
+  flex-wrap: wrap;
+  margin: 0.9rem 0;
+  padding: 0.8rem 0;
+  border-top: 1px solid var(--wp-line);
+  border-bottom: 1px solid var(--wp-line);
+}
+.wprop .pstat .n { font-family: var(--wp-disp); font-weight: 800; font-size: 1.15rem; }
+.wprop .pstat .l { font-family: var(--wp-mono); font-size: 0.5rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--wp-ink-3); margin-top: 0.1rem; }
+.wprop .pstat .n.occ { color: var(--wp-green); }
+.wprop .pstat .n.pend { color: var(--wp-amber); }
+.wprop .att-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--wp-amber);
+  background: color-mix(in srgb, currentColor 9%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  padding: 0.4rem 0.7rem;
+  border-radius: 9px;
+  margin-bottom: 0.7rem;
+}
+.wprop .att-badge svg { width: 14px; height: 14px; stroke: var(--wp-amber); fill: none; stroke-width: 2; flex: none; }
+.wprop .att-badge.red { color: var(--wp-oxblood); background: color-mix(in srgb, currentColor 7%, transparent); border-color: color-mix(in srgb, currentColor 25%, transparent); }
+.wprop .att-badge.red svg { stroke: var(--wp-oxblood); }
+.wprop .pfoot { display: flex; gap: 0.45rem; flex-wrap: wrap; margin-top: auto; align-items: center; }
+.wprop .pfoot .upd { font-family: var(--wp-mono); font-size: 0.62rem; color: var(--wp-ink-3); margin-right: auto; }
+
+/* empty states */
+.wprop .empty { padding: 3.5rem 1.5rem; text-align: center; color: var(--wp-ink-3); }
+.wprop .empty .ic { width: 64px; height: 64px; border-radius: 17px; background: color-mix(in srgb, var(--wp-petrol) 8%, transparent); display: grid; place-items: center; margin: 0 auto 1.2rem; }
+.wprop .empty .ic svg { width: 30px; height: 30px; stroke: var(--wp-petrol); fill: none; stroke-width: 1.5; }
+.wprop .empty .et { display: block; font-size: 1.6rem; color: var(--wp-ink); margin-bottom: 0.4rem; font-family: var(--wp-serif); }
+.wprop .empty p { max-width: 46ch; margin: 0 auto 1.3rem; }
+.wprop .empty .helper { font-size: 0.8rem; margin-top: 0.9rem; }
+
+/* ---- DETAIL ------------------------------------------------------------- */
+.wprop .crumb { display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: var(--wp-ink-3); padding: 0.2rem 0; flex-wrap: wrap; }
+.wprop .crumb .sep { opacity: 0.5; }
+.wprop .back { display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 500; color: var(--wp-ink); font-size: 0.85rem; background: none; border: none; }
+.wprop .back svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+.wprop .dhead { overflow: hidden; }
+.wprop .dcover { height: 180px; position: relative; display: flex; align-items: flex-end; padding: 1.2rem; }
+.wprop .dcover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.wprop .dcover .cvicon { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0.45; }
+.wprop .dcover .cvicon svg { width: 66px; height: 66px; stroke: rgba(255, 255, 255, 0.85); fill: none; stroke-width: 1.1; }
+.wprop .dcover.missing { background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--wp-ink) 3%, transparent), color-mix(in srgb, var(--wp-ink) 3%, transparent) 12px, color-mix(in srgb, var(--wp-ink) 5%, transparent) 12px, color-mix(in srgb, var(--wp-ink) 5%, transparent) 24px); }
+.wprop .dcover.missing .cvicon svg { stroke: var(--wp-ink-3); }
+.wprop .dhead-body { padding: 1.3rem 1.5rem; }
+.wprop .dh-type { font-family: var(--wp-mono); font-size: 0.6rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--wp-petrol-2); }
+.wprop .dh-name { font-family: var(--wp-serif); font-size: clamp(1.8rem, 3.4vw, 2.5rem); line-height: 1.05; margin: 0.3rem 0; }
+.wprop .dh-addr { color: var(--wp-ink-2); font-size: 0.94rem; }
+.wprop .dh-meta { display: flex; gap: 0.6rem 1rem; flex-wrap: wrap; margin-top: 0.7rem; align-items: center; font-size: 0.85rem; color: var(--wp-ink-3); }
+.wprop .dh-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; margin-top: 1.2rem; }
+.wprop .dsum { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+@media (max-width: 900px) { .wprop .dsum { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 520px) { .wprop .dsum { grid-template-columns: repeat(2, 1fr); } }
+
+/* tabs */
+.wprop .dtabs { display: flex; gap: 0.2rem; overflow-x: auto; scrollbar-width: none; padding: 0.3rem; background: color-mix(in srgb, var(--wp-ink) 3%, transparent); border-radius: 12px; }
+.wprop .dtabs::-webkit-scrollbar { display: none; }
+.wprop .dtab { font-size: 0.83rem; padding: 0.5rem 0.85rem; border: none; background: none; color: var(--wp-ink-2); white-space: nowrap; border-radius: 9px; display: flex; align-items: center; gap: 0.4rem; }
+.wprop .dtab:hover { background: var(--glass-bg); }
+.wprop .dtab.on { background: var(--color-surface); color: var(--wp-ink); font-weight: 600; box-shadow: var(--shadow-md); }
+.wprop .dtab .cnt { font-family: var(--wp-mono); font-size: 0.62rem; background: color-mix(in srgb, var(--wp-ink) 8%, transparent); padding: 0.1em 0.4em; border-radius: 100px; }
+.wprop .dtab.on .cnt { background: var(--wp-petrol); color: var(--color-on-action); }
+
+.wprop .sec { padding: 1.4rem clamp(1.2rem, 2.5vw, 1.6rem); }
+.wprop .sec-h { font-family: var(--wp-disp); font-weight: 700; text-transform: uppercase; font-size: 1.15rem; margin-bottom: 1.1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.wprop .sec-h .hint { font-size: 0.76rem; color: var(--wp-ink-3); font-family: var(--wp-sans); font-weight: 400; text-transform: none; display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+.wprop .two { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+@media (max-width: 700px) { .wprop .two { grid-template-columns: 1fr; } }
+.wprop .kv { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.87rem; padding: 0.4rem 0; border-top: 1px solid var(--wp-line); }
+.wprop .kv:first-of-type { border-top: none; }
+.wprop .kv .kk { color: var(--wp-ink-3); }
+.wprop .kv .vv { font-weight: 500; text-align: right; }
+.wprop .chips { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.wprop .chip { font-size: 0.78rem; padding: 0.35em 0.7em; border-radius: 100px; background: color-mix(in srgb, var(--wp-ink) 5%, transparent); color: var(--wp-ink-2); }
+
+.wprop .warnrow { display: flex; gap: 0.8rem; align-items: flex-start; padding: 0.8rem; border-radius: 11px; margin-bottom: 0.6rem; }
+.wprop .warnrow.warn { background: color-mix(in srgb, var(--wp-amber) 7%, transparent); border: 1px solid color-mix(in srgb, var(--wp-amber) 22%, transparent); }
+.wprop .warnrow.red { background: color-mix(in srgb, var(--wp-oxblood) 6%, transparent); border: 1px solid color-mix(in srgb, var(--wp-oxblood) 20%, transparent); }
+.wprop .warnrow.good { background: color-mix(in srgb, var(--wp-green) 6%, transparent); border: 1px solid color-mix(in srgb, var(--wp-green) 20%, transparent); }
+.wprop .warnrow .wi { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; flex: none; }
+.wprop .warnrow.warn .wi { background: color-mix(in srgb, var(--wp-amber) 14%, transparent); }
+.wprop .warnrow.warn .wi svg { stroke: var(--wp-amber); }
+.wprop .warnrow.red .wi { background: color-mix(in srgb, var(--wp-oxblood) 13%, transparent); }
+.wprop .warnrow.red .wi svg { stroke: var(--wp-oxblood); }
+.wprop .warnrow.good .wi { background: color-mix(in srgb, var(--wp-green) 14%, transparent); }
+.wprop .warnrow.good .wi svg { stroke: var(--wp-green); }
+.wprop .warnrow .wi svg { width: 16px; height: 16px; fill: none; stroke-width: 2; }
+.wprop .warnrow .wt { font-weight: 600; font-size: 0.88rem; }
+.wprop .warnrow .ws { font-size: 0.82rem; color: var(--wp-ink-2); margin-top: 0.15rem; }
+
+.wprop .tablewrap { overflow-x: auto; }
+.wprop table.tbl { width: 100%; border-collapse: collapse; font-size: 0.84rem; min-width: 640px; }
+.wprop table.tbl th { font-family: var(--wp-mono); font-size: 0.52rem; letter-spacing: 0.09em; text-transform: uppercase; color: var(--wp-ink-3); text-align: left; padding: 0.6rem 0.7rem; border-bottom: 1px solid var(--wp-gborder); white-space: nowrap; }
+.wprop table.tbl th.r, .wprop table.tbl td.r { text-align: right; }
+.wprop table.tbl td { padding: 0.65rem 0.7rem; border-bottom: 1px solid var(--wp-line); vertical-align: middle; }
+.wprop table.tbl tbody tr:last-child td { border-bottom: none; }
+
+.wprop .badge { font-family: var(--wp-mono); font-size: 0.53rem; letter-spacing: 0.06em; text-transform: uppercase; padding: 0.28em 0.6em; border-radius: 100px; white-space: nowrap; display: inline-block; }
+.wprop .badge.green { color: var(--wp-green); background: color-mix(in srgb, currentColor 12%, transparent); }
+.wprop .badge.amber { color: var(--wp-amber); background: color-mix(in srgb, currentColor 13%, transparent); }
+.wprop .badge.red { color: var(--wp-oxblood); background: color-mix(in srgb, currentColor 12%, transparent); }
+.wprop .badge.gray { color: var(--wp-slate); background: color-mix(in srgb, currentColor 13%, transparent); }
+.wprop .badge.blue { color: var(--wp-blue); background: color-mix(in srgb, currentColor 12%, transparent); }
+.wprop .mono-sm { font-family: var(--wp-mono); font-size: 0.78rem; }
+
+.wprop .listcard { border: 1px solid var(--wp-gborder); border-radius: 14px; padding: 1.1rem 1.2rem; margin-bottom: 0.9rem; }
+.wprop .listcard .lh { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: flex-start; }
+.wprop .listcard .lt { font-weight: 600; font-size: 1rem; }
+.wprop .listcard .lsub { font-size: 0.8rem; color: var(--wp-ink-3); margin-top: 0.15rem; }
+.wprop .listcard .lstats { display: flex; gap: 1.3rem; margin: 0.8rem 0; flex-wrap: wrap; }
+.wprop .listcard .lstat .n { font-family: var(--wp-disp); font-weight: 700; font-size: 1rem; }
+.wprop .listcard .lstat .l { font-family: var(--wp-mono); font-size: 0.5rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--wp-ink-3); }
+.wprop .feedback { background: color-mix(in srgb, var(--wp-oxblood) 5%, transparent); border: 1px solid color-mix(in srgb, var(--wp-oxblood) 20%, transparent); border-radius: 10px; padding: 0.7rem 0.9rem; font-size: 0.83rem; color: var(--wp-ink-2); margin: 0.6rem 0; }
+.wprop .feedback b { color: var(--wp-oxblood); }
+.wprop .listcard .lf { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+.wprop .emptytab { padding: 2.6rem 1.2rem; text-align: center; color: var(--wp-ink-3); }
+.wprop .emptytab .ei { width: 52px; height: 52px; border-radius: 14px; background: color-mix(in srgb, var(--wp-petrol) 7%, transparent); display: grid; place-items: center; margin: 0 auto 1rem; }
+.wprop .emptytab .ei svg { width: 26px; height: 26px; stroke: var(--wp-petrol); fill: none; stroke-width: 1.5; }
+.wprop .emptytab .et2 { font-family: var(--wp-serif); font-size: 1.3rem; color: var(--wp-ink); margin-bottom: 0.3rem; }
+.wprop .emptytab p { max-width: 40ch; margin: 0 auto 1rem; }
+
+.wprop .photogrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; }
+@media (max-width: 600px) { .wprop .photogrid { grid-template-columns: repeat(2, 1fr); } }
+.wprop .phototile { border-radius: 12px; height: 120px; position: relative; overflow: hidden; display: flex; align-items: flex-end; padding: 0.6rem; }
+.wprop .phototile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* .pl2 label and .cvicon watermark are drawn on top of the actual gallery
+   photo tile, so the fixed dark scrim + white text/stroke is an acceptable
+   literal survivor (matches the .cover .ptype photo-overlay pattern above). */
+.wprop .phototile .pl2 { font-family: var(--wp-mono); font-size: 0.56rem; letter-spacing: 0.06em; text-transform: uppercase; color: #fff; background: rgba(0, 0, 0, 0.3); padding: 0.25em 0.5em; border-radius: 6px; position: relative; z-index: 1; }
+.wprop .phototile .cvicon { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0.4; }
+.wprop .phototile .cvicon svg { width: 30px; height: 30px; stroke: #fff; fill: none; stroke-width: 1.3; }
+.wprop .phototile.cover-tag::after { content: 'Cover'; position: absolute; top: 0.5rem; right: 0.5rem; font-family: var(--wp-mono); font-size: 0.5rem; letter-spacing: 0.06em; text-transform: uppercase; background: var(--wp-green-solid); color: var(--color-on-action); padding: 0.2em 0.5em; border-radius: 5px; z-index: 1; }
+
+.wprop .tl { position: relative; padding-left: 1.5rem; }
+.wprop .tl::before { content: ''; position: absolute; left: 5px; top: 6px; bottom: 6px; width: 2px; background: var(--wp-gborder); }
+.wprop .tl-item { position: relative; padding: 0.4rem 0 0.9rem; }
+.wprop .tl-item::before { content: ''; position: absolute; left: -1.5rem; top: 0.5rem; width: 11px; height: 11px; border-radius: 50%; background: var(--color-surface); box-shadow: 0 0 0 2px var(--wp-petrol); }
+.wprop .tl-item .te { font-weight: 500; font-size: 0.88rem; }
+.wprop .tl-item .tm { font-family: var(--wp-mono); font-size: 0.6rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--wp-ink-3); margin-top: 0.2rem; }
+.wprop .tl-item .actor { font-family: var(--wp-mono); font-size: 0.54rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.15em 0.45em; border-radius: 5px; background: color-mix(in srgb, var(--wp-ink) 6%, transparent); color: var(--wp-ink-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  .wprop * { transition: none !important; }
+}

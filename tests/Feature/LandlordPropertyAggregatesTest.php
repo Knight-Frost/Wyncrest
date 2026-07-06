@@ -61,7 +61,7 @@ class LandlordPropertyAggregatesTest extends TestCase
             'landlord_id' => $this->landlord->id,
             'listing_id' => $listing->id,
         ]);
-        LedgerEntry::factory()->create([
+        $paidRent = LedgerEntry::factory()->create([
             'contract_id' => $contract->id,
             'landlord_id' => $this->landlord->id,
             'tenant_id' => $contract->tenant_id,
@@ -69,6 +69,19 @@ class LandlordPropertyAggregatesTest extends TestCase
             'status' => LedgerStatus::PAID,
             'amount_cents' => 120000,
             'due_date' => now()->startOfMonth()->addDays(2),
+        ]);
+        // Collected is cash-basis (sum of PAYMENT entries via
+        // LedgerComputationEngine), so the matching payment receipt is what
+        // actually drives collected_this_month_cents.
+        LedgerEntry::factory()->create([
+            'contract_id' => $contract->id,
+            'landlord_id' => $this->landlord->id,
+            'tenant_id' => $contract->tenant_id,
+            'type' => LedgerType::PAYMENT,
+            'status' => LedgerStatus::PAID,
+            'amount_cents' => -120000,
+            'related_rent_entry_id' => $paidRent->id,
+            'created_at' => now()->startOfMonth()->addDays(2),
         ]);
         // A pending entry this month must NOT count toward collected.
         LedgerEntry::factory()->create([

@@ -30,6 +30,12 @@ class Property extends Model
         'year_built',
         'lot_size',
         'description',
+        'parking',
+        'pet_policy',
+        'smoking_policy',
+        'amenities',
+        'rules',
+        'address_visibility',
         'is_active',
     ];
 
@@ -37,6 +43,8 @@ class Property extends Model
         'property_type' => PropertyType::class,
         'year_built' => 'integer',
         'lot_size' => 'decimal:2',
+        'amenities' => 'array',
+        'rules' => 'array',
         'is_active' => 'boolean',
     ];
 
@@ -52,6 +60,41 @@ class Property extends Model
         ];
 
         return implode(', ', array_filter($parts));
+    }
+
+    /**
+     * Address fields safe to expose to tenants/public viewers, honoring
+     * address_visibility. The street address is only ever exposed when the
+     * landlord has explicitly opted into 'public'; otherwise viewers only
+     * learn the general area. There is no application/contract-aware "after
+     * approval" check yet, so 'full_after_approval' behaves like 'area_only'
+     * on today's fully-anonymous public listing endpoints.
+     *
+     * @return array{city:string,state:string,area:string,street_address:?string,street_address_2:?string,full_address:?string}
+     */
+    public function publicAddress(): array
+    {
+        $area = trim("{$this->city}, {$this->state}", ', ');
+
+        if ($this->address_visibility === 'public') {
+            return [
+                'city' => $this->city,
+                'state' => $this->state,
+                'area' => $area,
+                'street_address' => $this->street_address,
+                'street_address_2' => $this->street_address_2,
+                'full_address' => $this->full_address,
+            ];
+        }
+
+        return [
+            'city' => $this->city,
+            'state' => $this->state,
+            'area' => $area,
+            'street_address' => null,
+            'street_address_2' => null,
+            'full_address' => null,
+        ];
     }
 
     /**

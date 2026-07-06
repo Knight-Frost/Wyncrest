@@ -15,6 +15,10 @@ enum PropertyType: string
     case CONDO = 'condo';
     case TOWNHOUSE = 'townhouse';
     case COMMERCIAL = 'commercial';
+    case DUPLEX = 'duplex';
+    case STUDIO_BLOCK = 'studio_block';
+    case COMPOUND_HOUSE = 'compound_house';
+    case MIXED_USE = 'mixed_use';
     case OTHER = 'other';
 
     /**
@@ -29,6 +33,10 @@ enum PropertyType: string
             self::CONDO => 'Condo',
             self::TOWNHOUSE => 'Townhouse',
             self::COMMERCIAL => 'Commercial',
+            self::DUPLEX => 'Duplex',
+            self::STUDIO_BLOCK => 'Studio Block',
+            self::COMPOUND_HOUSE => 'Compound House',
+            self::MIXED_USE => 'Mixed-Use',
             self::OTHER => 'Other',
         };
     }

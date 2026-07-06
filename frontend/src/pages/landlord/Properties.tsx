@@ -2,510 +2,333 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApi } from '@/hooks/useApi';
 import { landlordApi } from '@/lib/endpoints';
-import type { ApiError, Listing, Property, PropertyType } from '@/lib/types';
-import { formatCents, formatDateTime, humanize, storageUrl } from '@/lib/format';
-import { paginate, pluralize, rangeLabel } from '@/lib/paginate';
-import { PageHeader } from '@/components/layout/PageHeader';
-import { Button } from '@/components/ui/Button';
-import { RecordList, RecordCard } from '@/components/ui/RecordCard';
-import { DestructiveConfirmDialog } from '@/components/ui/DestructiveConfirmDialog';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
-import { PropertyFormDrawer } from './PropertyFormDrawer';
+import type { Property, PropertyType } from '@/lib/types';
+import { humanize } from '@/lib/format';
+import { ErrorState, LoadingState } from '@/components/ui/states';
 import { PROPERTY_TYPES } from './property-constants';
-import {
-  CommandBar,
-  SearchInput,
-  SortSelect,
-  Pagination,
-  ActionMenu,
-  Thumbnail,
-  type SelectOption,
-} from '@/components/landlord/primitives';
-import {
-  IconBuilding,
-  IconHome,
-  IconPlus,
-  IconEye,
-  IconEdit,
-  IconTrash,
-  IconUsers,
-} from '@/components/ui/icons';
-import { useToast } from '@/components/ui/toast';
-import {
-  StatusCard,
-  SemanticBadge,
-  DashboardSection,
-  DataCardGrid,
-  getOccupancyVariant,
-} from '@/components/cards';
+import { IconBuilding, IconPlus, IconSearch, IconWarn, CoverGlyph } from './properties-ui';
+import { gradientFor, propertyStatus } from './properties-helpers';
+import './properties.css';
 
 /* ──────────────────────────────────────────────────────────────────────────
-   CONSTANTS & HELPERS
+   FILTERS
 ────────────────────────────────────────────────────────────────────────── */
 
-const PER_PAGE = 8;
+type StatusFilter = '' | 'active' | 'inactive';
+type ListingFilter = '' | 'active' | 'pending' | 'rejected' | 'none';
+type OccupancyFilter = '' | 'occupied' | 'vacant' | 'partial';
+type TypeFilter = '' | PropertyType;
+type SortKey = 'recent' | 'alpha' | 'units' | 'occupancy' | 'attention';
 
-type OccupancyFilter = 'all' | 'has_vacancy' | 'fully_occupied';
-type SortKey = 'newest' | 'name_asc' | 'most_units' | 'highest_occupancy';
-type TypeFilter = 'all' | PropertyType;
-
-const SORT_OPTIONS: SelectOption<SortKey>[] = [
-  { value: 'newest', label: 'Newest' },
-  { value: 'name_asc', label: 'Name A to Z' },
-  { value: 'most_units', label: 'Most units' },
-  { value: 'highest_occupancy', label: 'Highest occupancy' },
-];
-
-const TYPE_OPTIONS: SelectOption<TypeFilter>[] = [
-  { value: 'all', label: 'All types' },
-  ...PROPERTY_TYPES.map((t) => ({ value: t as TypeFilter, label: humanize(t) })),
-];
-
-const OCCUPANCY_OPTIONS: SelectOption<OccupancyFilter>[] = [
-  { value: 'all', label: 'All occupancy' },
-  { value: 'has_vacancy', label: 'Has vacancy' },
-  { value: 'fully_occupied', label: 'Fully occupied' },
-];
-
-/** Relative-ish time, falls back to absolute datetime. */
-function whenLabel(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  const diff = Date.now() - d.getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 7) return `${days}d ago`;
-  return formatDateTime(iso);
+interface Controls {
+  q: string;
+  status: StatusFilter;
+  listing: ListingFilter;
+  occupancy: OccupancyFilter;
+  type: TypeFilter;
+  sort: SortKey;
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
-   PHOTO MAP — property_id → first listing image URL
-────────────────────────────────────────────────────────────────────────── */
+const DEFAULT_CONTROLS: Controls = {
+  q: '',
+  status: '',
+  listing: '',
+  occupancy: '',
+  type: '',
+  sort: 'recent',
+};
 
-function buildPhotoMap(listings: Listing[]): Map<number, string> {
-  const map = new Map<number, string>();
-  for (const l of listings) {
-    if (!l.primary_photo?.path) continue;
-    const propId = l.unit?.property_id;
-    if (propId === undefined || map.has(propId)) continue;
-    const url = storageUrl(l.primary_photo.path);
-    if (url) map.set(propId, url);
-  }
-  return map;
-}
+/* Small helpers over the aggregate fields the index returns. */
+const total = (p: Property) => p.units_count ?? 0;
+const occ = (p: Property) => p.occupied_units ?? 0;
+const listed = (p: Property) => p.listed_units ?? 0;
+const pending = (p: Property) => p.pending_units ?? 0;
+const rejected = (p: Property) => p.rejected_units ?? 0;
+const attentionCount = (p: Property) => p.attention?.length ?? 0;
 
 /* ──────────────────────────────────────────────────────────────────────────
-   MAIN COMPONENT
+   COMPONENT
 ────────────────────────────────────────────────────────────────────────── */
 
 export function Properties() {
   const navigate = useNavigate();
-  const { toast } = useToast();
-
-  /* ── Data fetching ── */
   const { data, loading, error, reload } = useApi(() => landlordApi.properties(), []);
-  const listingsApi = useApi(() => landlordApi.listings(), []);
+  const [c, setC] = useState<Controls>(DEFAULT_CONTROLS);
 
-  /* ── Create / edit drawer state ── */
-  const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<Property | null>(null);
-
-  const [toDelete, setToDelete] = useState<Property | null>(null);
-  const [deleting, setDeleting] = useState(false);
-
-  /* ── Controls state ── */
-  const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
-  const [occupancyFilter, setOccupancyFilter] = useState<OccupancyFilter>('all');
-  const [sort, setSort] = useState<SortKey>('newest');
-  const [page, setPage] = useState(1);
-
-  /* ── Derived data ── */
   const properties = useMemo(() => data ?? [], [data]);
 
-  const photoMap = useMemo(
-    () => buildPhotoMap(listingsApi.data ?? []),
-    [listingsApi.data],
-  );
-
-  /* ── KPI aggregates from real per-property data ── */
-  const kpi = useMemo(() => {
-    let totalUnits = 0;
-    let occupiedUnits = 0;
-    let vacantUnits = 0;
-    for (const p of properties) {
-      totalUnits += p.units_count ?? 0;
-      occupiedUnits += p.occupied_units ?? 0;
-      vacantUnits += p.vacant_units ?? 0;
-    }
-    const occupancyRate = totalUnits > 0 ? Math.round((occupiedUnits / totalUnits) * 100) : 0;
-    return { totalUnits, occupiedUnits, vacantUnits, occupancyRate };
+  /* Portfolio totals across all properties. */
+  const totals = useMemo(() => {
+    return properties.reduce(
+      (acc, p) => {
+        acc.props += 1;
+        acc.units += total(p);
+        acc.listed += listed(p);
+        acc.occ += occ(p);
+        acc.pending += pending(p);
+        if (attentionCount(p) > 0) acc.att += 1;
+        return acc;
+      },
+      { props: 0, units: 0, listed: 0, occ: 0, pending: 0, att: 0 },
+    );
   }, [properties]);
 
-  /* ── Filtered + sorted list ── */
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+  /* Filter + sort. */
+  const rows = useMemo(() => {
+    const q = c.q.trim().toLowerCase();
 
     let result = properties.filter((p) => {
       if (q) {
-        const hay = [p.name, p.city, p.state, p.street_address].join(' ').toLowerCase();
+        const hay = [p.name, p.street_address, p.city, p.state, humanize(p.property_type)]
+          .join(' ')
+          .toLowerCase();
         if (!hay.includes(q)) return false;
       }
-      if (typeFilter !== 'all' && p.property_type !== typeFilter) return false;
-      if (occupancyFilter === 'has_vacancy') {
-        const vacant = p.vacant_units ?? 0;
-        if (vacant === 0) return false;
+      if (c.status === 'active' && !p.is_active) return false;
+      if (c.status === 'inactive' && p.is_active) return false;
+      if (c.type && p.property_type !== c.type) return false;
+
+      if (c.occupancy) {
+        const o = occ(p);
+        const t = total(p);
+        if (c.occupancy === 'occupied' && !(t > 0 && o === t)) return false;
+        if (c.occupancy === 'vacant' && o !== 0) return false;
+        if (c.occupancy === 'partial' && !(o > 0 && o < t)) return false;
       }
-      if (occupancyFilter === 'fully_occupied') {
-        const totalU = p.units_count ?? 0;
-        const occupiedU = p.occupied_units ?? 0;
-        if (totalU === 0 || occupiedU < totalU) return false;
+
+      if (c.listing) {
+        if (c.listing === 'active' && listed(p) === 0) return false;
+        if (c.listing === 'pending' && pending(p) === 0) return false;
+        if (c.listing === 'rejected' && rejected(p) === 0) return false;
+        if (c.listing === 'none' && listed(p) + pending(p) > 0) return false;
       }
       return true;
     });
 
     result = [...result].sort((a, b) => {
-      switch (sort) {
-        case 'name_asc':
+      switch (c.sort) {
+        case 'alpha':
           return a.name.localeCompare(b.name);
-        case 'most_units':
-          return (b.units_count ?? 0) - (a.units_count ?? 0);
-        case 'highest_occupancy':
+        case 'units':
+          return total(b) - total(a);
+        case 'occupancy':
           return (b.occupancy_rate ?? 0) - (a.occupancy_rate ?? 0);
-        case 'newest':
+        case 'attention':
+          return attentionCount(b) - attentionCount(a);
+        case 'recent':
         default:
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       }
     });
 
     return result;
-  }, [properties, search, typeFilter, occupancyFilter, sort]);
+  }, [properties, c]);
 
-  const slice = paginate(filtered, page, PER_PAGE);
+  const set = <K extends keyof Controls>(key: K, value: Controls[K]) =>
+    setC((prev) => ({ ...prev, [key]: value }));
 
-  function resetPage() {
-    setPage(1);
+  if (loading) {
+    return (
+      <div className="wprop">
+        <LoadingState label="Loading properties…" />
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="wprop">
+        <ErrorState message={error.message} onRetry={reload} />
+      </div>
+    );
   }
 
-  /* ──────────────────────────────────────────────────────────────────────────
-     HANDLERS (preserved exactly)
-  ────────────────────────────────────────────────────────────────────────── */
-
-  function openCreate() {
-    setEditing(null);
-    setFormOpen(true);
-  }
-
-  function openEdit(p: Property) {
-    setEditing(p);
-    setFormOpen(true);
-  }
-
-  async function handleDelete() {
-    if (!toDelete) return;
-    setDeleting(true);
-    try {
-      await landlordApi.deleteProperty(toDelete.id);
-      toast('Property deleted', 'success');
-      setToDelete(null);
-      reload();
-    } catch (err) {
-      toast((err as ApiError).message, 'error');
-    } finally {
-      setDeleting(false);
-    }
-  }
-
-  const hasAny = properties.length > 0;
-
-  /* ──────────────────────────────────────────────────────────────────────────
-     RENDER
-  ────────────────────────────────────────────────────────────────────────── */
+  const noneAtAll = properties.length === 0;
 
   return (
-    <div className="animate-rise space-y-10">
-      {/* Page header */}
-      <PageHeader
-        eyebrow="Portfolio"
-        title="Properties"
-        description="Manage the buildings and homes in your rental portfolio."
-        action={
-          <Button leftIcon={<IconPlus size={16} />} onClick={openCreate}>
-            Add property
-          </Button>
-        }
-      />
+    <div className="wprop animate-rise">
+      {/* Page head */}
+      <section className="glass pagehead">
+        <div>
+          <span className="ph-eyebrow">Portfolio</span>
+          <h1 className="ph-title">
+            Your <b>properties.</b>
+          </h1>
+          <p className="ph-sub">
+            Manage the buildings, homes, and units in your rental portfolio, and publish them as
+            listings for tenants.
+          </p>
+        </div>
+        <button className="btn btn-dark" onClick={() => navigate('/app/properties/new')}>
+          <IconPlus /> Add property
+        </button>
+      </section>
 
-      {/* KPI row — always shown (loading-aware) */}
-      <DashboardSection eyebrow="PORTFOLIO SUMMARY">
-        <DataCardGrid cols={4}>
-          <StatusCard
-            label="Total properties"
-            value={properties.length}
-            sub="Across your portfolio"
-            icon={<IconBuilding size={18} />}
-            role="neutral"
-            loading={loading}
-          />
-          <StatusCard
-            label="Total units"
-            value={kpi.totalUnits}
-            sub={pluralize(kpi.totalUnits, 'unit')}
-            icon={<IconHome size={18} />}
-            role="neutral"
-            loading={loading}
-          />
-          <StatusCard
-            label="Occupied units"
-            value={kpi.occupiedUnits}
-            sub="Currently tenanted"
-            role="success"
-            icon={<IconUsers size={18} />}
-            loading={loading}
-          />
-          <StatusCard
-            label="Vacant units"
-            value={kpi.vacantUnits}
-            sub={kpi.totalUnits > 0 ? `${kpi.occupancyRate}% occupancy rate` : 'No units yet'}
-            role={getOccupancyVariant(kpi.occupancyRate)}
-            icon={<IconHome size={18} />}
-            loading={loading}
-          />
-        </DataCardGrid>
-      </DashboardSection>
+      {/* Summary cards */}
+      <div className="sumcards">
+        <SummaryCard label="Total properties" dot="var(--wp-petrol-2)" value={totals.props} sub={`${totals.units} total units`} />
+        <SummaryCard label="Total units" dot="var(--wp-slate)" value={totals.units} sub="across portfolio" />
+        <SummaryCard label="Listed units" dot="var(--wp-green)" value={totals.listed} sub="available to tenants" />
+        <SummaryCard label="Occupied" dot="var(--wp-green)" value={totals.occ} sub="active contracts" cls="occ" />
+        <SummaryCard label="Pending review" dot="var(--wp-amber)" value={totals.pending} sub="awaiting admin" />
+        <SummaryCard label="Needs attention" dot="var(--wp-amber)" value={totals.att} sub="properties to review" cls="att" />
+      </div>
 
-      {/* Main content */}
-      {loading ? (
-        <LoadingState label="Loading properties…" />
-      ) : error ? (
-        <ErrorState message={error.message} onRetry={reload} />
-      ) : !hasAny ? (
-        <EmptyState
-          icon={<IconBuilding />}
-          title="No properties yet"
-          description="Add your first property to start managing units, listings, tenants, rent, and maintenance."
-          action={
-            <Button leftIcon={<IconPlus size={16} />} onClick={openCreate}>
-              Add property
-            </Button>
-          }
-        />
-      ) : (
-        <DashboardSection eyebrow="YOUR PROPERTIES">
-          {/* Command bar */}
-          <CommandBar>
-            <SearchInput
-              value={search}
-              onChange={(v) => { setSearch(v); resetPage(); }}
-              placeholder="Search by name, city, or address…"
-              label="Search properties"
-            />
-            <SortSelect
-              value={typeFilter}
-              onChange={(v) => { setTypeFilter(v); resetPage(); }}
-              options={TYPE_OPTIONS}
-              label="Filter by type"
-              prefix=""
-            />
-            <SortSelect
-              value={occupancyFilter}
-              onChange={(v) => { setOccupancyFilter(v); resetPage(); }}
-              options={OCCUPANCY_OPTIONS}
-              label="Filter by occupancy"
-              prefix=""
-            />
-            <SortSelect
-              value={sort}
-              onChange={(v) => { setSort(v); resetPage(); }}
-              options={SORT_OPTIONS}
-              label="Sort"
-              prefix="Sort: "
-            />
-          </CommandBar>
-
-          {/* No-match state */}
-          {slice.total === 0 ? (
-            <EmptyState
-              icon={<IconBuilding />}
-              title="No properties match"
-              description="Try a different search term or adjust the filters."
-            />
-          ) : (
-            <div className="space-y-5">
-              {/* Record list — one standalone card per property. No table shell,
-                  no horizontal scroll: identity + units summary + occupancy +
-                  collected + status + actions all stay visible (stacking on
-                  mobile, inline columns on desktop). */}
-              <RecordList>
-                {slice.items.map((p) => {
-                  const photoUrl = photoMap.get(p.id);
-                  const totalU = p.units_count ?? 0;
-                  const occupiedU = p.occupied_units ?? 0;
-                  const vacantU = p.vacant_units ?? 0;
-                  const occRate = p.occupancy_rate ?? 0;
-                  const collectedCents = p.collected_this_month_cents ?? 0;
-                  const occRole = getOccupancyVariant(occRate);
-                  const detailHref = `/app/properties/${p.id}`;
-
-                  const occText =
-                    occRole === 'success'
-                      ? 'text-success-600'
-                      : occRole === 'warning'
-                      ? 'text-warning-600'
-                      : 'text-danger-600';
-                  const occBar =
-                    occRole === 'success'
-                      ? 'bg-success-500'
-                      : occRole === 'warning'
-                      ? 'bg-warning-500'
-                      : 'bg-danger-500';
-
-                  const menuItems = [
-                    {
-                      label: 'Manage units',
-                      icon: <IconUsers size={15} />,
-                      onClick: () => navigate(detailHref),
-                    },
-                    {
-                      label: 'Edit property',
-                      icon: <IconEdit size={15} />,
-                      onClick: () => openEdit(p),
-                    },
-                    {
-                      label: 'Delete',
-                      icon: <IconTrash size={15} />,
-                      danger: true,
-                      onClick: () => setToDelete(p),
-                    },
-                  ];
-
-                  return (
-                    <RecordCard
-                      key={p.id}
-                      onClick={() => navigate(detailHref)}
-                      leading={
-                        <Thumbnail src={photoUrl} alt={p.name} seed={p.name} size={64} />
-                      }
-                      title={p.name}
-                      titleMeta={
-                        <span className="flex flex-wrap items-center gap-1.5">
-                          <SemanticBadge role="neutral" status={p.property_type}>
-                            {humanize(p.property_type)}
-                          </SemanticBadge>
-                          {!p.is_active && (
-                            <SemanticBadge role="neutral">Inactive</SemanticBadge>
-                          )}
-                        </span>
-                      }
-                      subtitle={
-                        <span className="text-ink-500">
-                          {p.city}, {p.state}
-                        </span>
-                      }
-                      related={
-                        <div>
-                          <p className="font-display text-base font-semibold tabular-nums text-ink-900">
-                            {totalU} {totalU === 1 ? 'unit' : 'units'}
-                          </p>
-                          <p className="mt-0.5 text-xs text-ink-500">
-                            <span className="font-medium text-success-600">
-                              {occupiedU} occupied
-                            </span>
-                            {' · '}
-                            <span className="font-medium text-warning-600">
-                              {vacantU} vacant
-                            </span>
-                          </p>
-                        </div>
-                      }
-                      indicator={
-                        <div className="space-y-2">
-                          <div>
-                            <div className="flex items-baseline justify-between gap-2">
-                              <span className="text-[11px] text-ink-400">Occupancy</span>
-                              <span
-                                className={`font-display text-sm font-semibold tabular-nums ${occText}`}
-                              >
-                                {occRate}%
-                              </span>
-                            </div>
-                            {totalU > 0 && (
-                              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-ink-100">
-                                <div
-                                  className={`h-full rounded-full ${occBar}`}
-                                  style={{ width: `${occRate}%` }}
-                                />
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex items-baseline justify-between gap-2">
-                            <span className="text-[11px] text-ink-400">Collected</span>
-                            <span
-                              className="font-display text-sm font-semibold"
-                              style={{ color: 'var(--color-money)' }}
-                            >
-                              {collectedCents > 0 ? formatCents(collectedCents) : '—'}
-                            </span>
-                          </div>
-                        </div>
-                      }
-                      status={
-                        <SemanticBadge role={occRole}>
-                          {totalU > 0 ? `${occRate}% occupied` : 'No units'}
-                        </SemanticBadge>
-                      }
-                      timestamp={<>Updated {whenLabel(p.updated_at)}</>}
-                      primaryAction={
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          leftIcon={<IconEye size={14} />}
-                          onClick={() => navigate(detailHref)}
-                        >
-                          View details
-                        </Button>
-                      }
-                      menu={<ActionMenu items={menuItems} />}
-                    />
-                  );
-                })}
-              </RecordList>
-
-              {/* Footer: range label + pagination — below the cards. */}
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs text-ink-500">
-                  {rangeLabel(slice, 'property', 'properties')}
-                </p>
-                <Pagination slice={slice} onPage={setPage} />
-              </div>
+      {/* Toolbar */}
+      {!noneAtAll && (
+        <section className="glass">
+          <div className="toolbar">
+            <div className="search">
+              <IconSearch />
+              <input
+                placeholder="Search properties, units, or addresses…"
+                value={c.q}
+                onChange={(e) => set('q', e.target.value)}
+                aria-label="Search properties"
+              />
             </div>
-          )}
-        </DashboardSection>
+            <FilterSelect value={c.status} onChange={(v) => set('status', v as StatusFilter)} label="Property status"
+              opts={[['', 'All statuses'], ['active', 'Active'], ['inactive', 'Inactive']]} />
+            <FilterSelect value={c.listing} onChange={(v) => set('listing', v as ListingFilter)} label="Listing"
+              opts={[['', 'Any listing'], ['active', 'Active'], ['pending', 'Pending review'], ['rejected', 'Rejected'], ['none', 'Not listed']]} />
+            <FilterSelect value={c.occupancy} onChange={(v) => set('occupancy', v as OccupancyFilter)} label="Occupancy"
+              opts={[['', 'Any occupancy'], ['occupied', 'Fully occupied'], ['vacant', 'Vacant'], ['partial', 'Partially occupied']]} />
+            <FilterSelect value={c.type} onChange={(v) => set('type', v as TypeFilter)} label="Type"
+              opts={[['', 'All types'], ...PROPERTY_TYPES.map((t) => [t, humanize(t)] as [string, string])]} />
+            <FilterSelect value={c.sort} onChange={(v) => set('sort', v as SortKey)} label="Sort"
+              opts={[['recent', 'Recently added'], ['alpha', 'Alphabetical'], ['units', 'Most units'], ['occupancy', 'Highest occupancy'], ['attention', 'Needs attention first']]} />
+          </div>
+        </section>
       )}
 
-      {/* ── Add / Edit drawer — right-side multi-step creation panel ────────── */}
-      <PropertyFormDrawer
-        open={formOpen}
-        editing={editing}
-        onClose={() => setFormOpen(false)}
-        onSaved={reload}
-      />
-
-      {/* ── Delete confirmation ───────────────────────────────────────────── */}
-      <DestructiveConfirmDialog
-        open={toDelete !== null}
-        onClose={() => setToDelete(null)}
-        onConfirm={handleDelete}
-        title="Delete property"
-        description={toDelete ? `Delete "${toDelete.name}"? This cannot be undone.` : undefined}
-        confirmLabel="Delete"
-        loading={deleting}
-      />
+      {/* Grid / empty states */}
+      {noneAtAll ? (
+        <section className="glass">
+          <div className="empty">
+            <div className="ic"><IconBuilding /></div>
+            <span className="et">No properties yet</span>
+            <p>
+              Add your first property to start building your rental portfolio. You can add photos,
+              create units, publish listings, and manage tenants all from one place.
+            </p>
+            <button className="btn btn-dark" onClick={() => navigate('/app/properties/new')}>
+              <IconPlus /> Add your first property
+            </button>
+            <div className="helper">
+              A property can be a house, apartment building, duplex, or any rental space you own.
+            </div>
+          </div>
+        </section>
+      ) : rows.length === 0 ? (
+        <section className="glass">
+          <div className="empty">
+            <div className="ic"><IconSearch /></div>
+            <span className="et">No matches</span>
+            <p>No properties match your search or filters. Try clearing them.</p>
+            <button className="btn" onClick={() => setC(DEFAULT_CONTROLS)}>Clear filters</button>
+          </div>
+        </section>
+      ) : (
+        <div className="pgrid">
+          {rows.map((p) => (
+            <PropertyCard key={p.id} p={p} onOpen={() => navigate(`/app/properties/${p.id}`)} />
+          ))}
+        </div>
+      )}
     </div>
   );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   SUBCOMPONENTS
+────────────────────────────────────────────────────────────────────────── */
+
+function SummaryCard({ label, dot, value, sub, cls }: { label: string; dot: string; value: number; sub: string; cls?: string }) {
+  return (
+    <div className={`scard glass ${cls ?? ''}`}>
+      <div className="sl"><i style={{ background: dot }} />{label}</div>
+      <div className="sv">{value}</div>
+      <div className="ss">{sub}</div>
+    </div>
+  );
+}
+
+function FilterSelect({ value, onChange, label, opts }: {
+  value: string;
+  onChange: (v: string) => void;
+  label: string;
+  opts: [string, string][];
+}) {
+  return (
+    <select className="sel" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
+      {opts.map(([v, l]) => (
+        <option key={v} value={v}>{l}</option>
+      ))}
+    </select>
+  );
+}
+
+function PropertyCard({ p, onOpen }: { p: Property; onOpen: () => void }) {
+  const status = propertyStatus(p.is_active);
+  const att = p.attention?.[0];
+  const cover = p.cover_url ?? null;
+
+  return (
+    <div className="pcard glass" onClick={onOpen} role="button" tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter') onOpen(); }}>
+      {cover ? (
+        <div className="cover" style={{ background: gradientFor(p.id) }}>
+          <img src={cover} alt={p.name} />
+          <span className="ptype">{humanize(p.property_type)}</span>
+          <span className={`statuspill ${status.cls}`}><span className="sd" />{status.label}</span>
+        </div>
+      ) : (
+        <div className="cover missing">
+          <CoverGlyph />
+          <div className="cvtext">No cover photo</div>
+          <span className="ptype">{humanize(p.property_type)}</span>
+          <span className={`statuspill ${status.cls}`}><span className="sd" />{status.label}</span>
+        </div>
+      )}
+
+      <div className="pbody">
+        <div className="pname">{p.name}</div>
+        <div className="paddr">{p.city}{p.state ? `, ${p.state}` : ''}</div>
+
+        <div className="pstats">
+          <div className="pstat"><div className="n">{total(p)}</div><div className="l">Units</div></div>
+          <div className="pstat"><div className="n occ">{occ(p)}</div><div className="l">Occupied</div></div>
+          <div className="pstat"><div className="n">{listed(p)}</div><div className="l">Listed</div></div>
+          <div className="pstat"><div className="n pend">{pending(p)}</div><div className="l">Pending</div></div>
+        </div>
+
+        {att && (
+          <div className={`att-badge ${att.level === 'red' ? 'red' : ''}`}>
+            <IconWarn />{att.message}
+          </div>
+        )}
+
+        <div className="pfoot">
+          <span className="upd">Updated {relative(p.updated_at)}</span>
+          <button className="btn btn-sm btn-petrol" onClick={(e) => { e.stopPropagation(); onOpen(); }}>
+            View details
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Compact relative time for "Updated X". */
+function relative(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const mins = Math.floor((Date.now() - d.getTime()) / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return d.toLocaleDateString('en-GH', { day: 'numeric', month: 'short', year: 'numeric' });
 }

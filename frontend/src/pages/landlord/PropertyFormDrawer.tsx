@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { landlordApi } from '@/lib/endpoints';
 import { fieldErrors } from '@/lib/api';
 import { humanize } from '@/lib/format';
-import type { ApiError, Property, PropertyType } from '@/lib/types';
+import type { ApiError, AddressVisibility, Property, PropertyType } from '@/lib/types';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/Button';
 import { Field, Input, Select, Textarea } from '@/components/ui/Field';
@@ -15,99 +15,20 @@ import {
 import { StepIndicator } from '@/components/ui/StepIndicator';
 import { DestructiveConfirmDialog } from '@/components/ui/DestructiveConfirmDialog';
 import { IconArrowRight, IconArrowLeft } from '@/components/ui/icons';
-import { PROPERTY_TYPES } from './property-constants';
-
-/* Ghana regions → 2-letter codes (backend requires state size:2, uppercase).
-   The codes are valid 2-letter uppercase strings; the list is Ghana-appropriate
-   because the app assumes Ghana. The select still surfaces any pre-existing
-   code on edit (see `regionOptions`). */
-const GHANA_REGIONS: { code: string; name: string }[] = [
-  { code: 'GA', name: 'Greater Accra' },
-  { code: 'AS', name: 'Ashanti' },
-  { code: 'WE', name: 'Western' },
-  { code: 'WN', name: 'Western North' },
-  { code: 'CE', name: 'Central' },
-  { code: 'EA', name: 'Eastern' },
-  { code: 'VO', name: 'Volta' },
-  { code: 'OT', name: 'Oti' },
-  { code: 'NO', name: 'Northern' },
-  { code: 'NE', name: 'North East' },
-  { code: 'SV', name: 'Savannah' },
-  { code: 'UE', name: 'Upper East' },
-  { code: 'UW', name: 'Upper West' },
-  { code: 'BO', name: 'Bono' },
-  { code: 'BE', name: 'Bono East' },
-  { code: 'AH', name: 'Ahafo' },
-];
-
-/* ISO-2 country codes (backend requires country size:2, uppercase). */
-const COUNTRIES: { code: string; name: string }[] = [
-  { code: 'GH', name: 'Ghana' },
-  { code: 'NG', name: 'Nigeria' },
-  { code: 'CI', name: 'Côte d’Ivoire' },
-  { code: 'TG', name: 'Togo' },
-  { code: 'BF', name: 'Burkina Faso' },
-  { code: 'GB', name: 'United Kingdom' },
-  { code: 'US', name: 'United States' },
-];
-
-interface PropertyForm {
-  name: string;
-  property_type: PropertyType | '';
-  street_address: string;
-  street_address_2: string;
-  city: string;
-  state: string;
-  zip_code: string;
-  country: string;
-  year_built: string;
-  description: string;
-}
-
-function emptyForm(): PropertyForm {
-  return {
-    name: '',
-    property_type: '',
-    street_address: '',
-    street_address_2: '',
-    city: 'Accra',
-    state: 'GA',
-    zip_code: '',
-    country: 'GH',
-    year_built: '',
-    description: '',
-  };
-}
-
-function formFromProperty(p: Property): PropertyForm {
-  return {
-    name: p.name,
-    property_type: p.property_type,
-    street_address: p.street_address,
-    street_address_2: p.street_address_2 ?? '',
-    city: p.city,
-    state: p.state,
-    zip_code: p.zip_code,
-    country: p.country,
-    year_built: p.year_built != null ? String(p.year_built) : '',
-    description: p.description ?? '',
-  };
-}
+import { ADDRESS_VISIBILITY_OPTIONS, PROPERTY_TYPES } from './property-constants';
+import {
+  type PropertyForm,
+  PROPERTY_FIELD_STEP as FIELD_STEP,
+  countryOptionsFor,
+  emptyPropertyForm as emptyForm,
+  propertyFormFromModel as formFromProperty,
+  propertyPayloadFromForm,
+  regionOptionsFor,
+  validatePropertyBasics,
+  validatePropertyLocation,
+} from './property-form-shared';
 
 const STEP_LABELS = ['Property basics', 'Location details'];
-/** Which step each field lives on — used to jump to a server error's step. */
-const FIELD_STEP: Record<string, 0 | 1> = {
-  name: 0,
-  property_type: 0,
-  year_built: 0,
-  description: 0,
-  street_address: 1,
-  street_address_2: 1,
-  city: 1,
-  state: 1,
-  zip_code: 1,
-  country: 1,
-};
 
 interface PropertyFormDrawerProps {
   open: boolean;
@@ -150,18 +71,8 @@ export function PropertyFormDrawer({
   );
 
   /* Edit may carry a region/country code not in our curated lists — surface it. */
-  const regionOptions = useMemo(() => {
-    if (form.state && !GHANA_REGIONS.some((r) => r.code === form.state)) {
-      return [{ code: form.state, name: form.state }, ...GHANA_REGIONS];
-    }
-    return GHANA_REGIONS;
-  }, [form.state]);
-  const countryOptions = useMemo(() => {
-    if (form.country && !COUNTRIES.some((c) => c.code === form.country)) {
-      return [{ code: form.country, name: form.country }, ...COUNTRIES];
-    }
-    return COUNTRIES;
-  }, [form.country]);
+  const regionOptions = useMemo(() => regionOptionsFor(form.state), [form.state]);
+  const countryOptions = useMemo(() => countryOptionsFor(form.country), [form.country]);
 
   function update<K extends keyof PropertyForm>(key: K, value: PropertyForm[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -170,35 +81,12 @@ export function PropertyFormDrawer({
 
   /* ── Validation (mirrors StorePropertyRequest, no invented rules) ── */
   function validate(which: 0 | 1 | 'all'): Record<string, string> {
-    const e: Record<string, string> = {};
     const checkBasics = which === 0 || which === 'all';
     const checkLocation = which === 1 || which === 'all';
-
-    if (checkBasics) {
-      if (!form.name.trim()) e.name = 'Property name is required.';
-      else if (form.name.length > 255) e.name = 'Keep the name under 255 characters.';
-      if (!form.property_type) e.property_type = 'Choose a property type.';
-      if (form.year_built.trim()) {
-        const y = Number(form.year_built);
-        const max = new Date().getFullYear() + 1;
-        if (!Number.isInteger(y)) e.year_built = 'Enter a valid year.';
-        else if (y < 1800) e.year_built = 'Year built must be 1800 or later.';
-        else if (y > max) e.year_built = 'Year built cannot be in the future.';
-      }
-      if (form.description.length > 2000)
-        e.description = 'Keep the description under 2000 characters.';
-    }
-
-    if (checkLocation) {
-      if (!form.street_address.trim()) e.street_address = 'Street address is required.';
-      if (!form.city.trim()) e.city = 'City is required.';
-      if (!/^[A-Z]{2}$/.test(form.state)) e.state = 'Select a region (2-letter code).';
-      if (!form.zip_code.trim()) e.zip_code = 'Digital address / postcode is required.';
-      else if (form.zip_code.length > 10) e.zip_code = 'Keep this under 10 characters.';
-      if (!/^[A-Z]{2}$/.test(form.country)) e.country = 'Select a country.';
-    }
-
-    return e;
+    return {
+      ...(checkBasics ? validatePropertyBasics(form) : {}),
+      ...(checkLocation ? validatePropertyLocation(form) : {}),
+    };
   }
 
   function goNext() {
@@ -227,18 +115,7 @@ export function PropertyFormDrawer({
 
     setSaving(true);
     setErrors({});
-    const payload: Partial<Property> = {
-      name: form.name.trim(),
-      property_type: form.property_type as PropertyType,
-      street_address: form.street_address.trim(),
-      street_address_2: form.street_address_2.trim() || null,
-      city: form.city.trim(),
-      state: form.state,
-      zip_code: form.zip_code.trim(),
-      country: form.country,
-      year_built: form.year_built ? Number(form.year_built) : null,
-      description: form.description.trim() || null,
-    };
+    const payload = propertyPayloadFromForm(form);
 
     try {
       if (editing) {
@@ -352,6 +229,43 @@ export function PropertyFormDrawer({
                   )}
                 </Field>
 
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Parking" error={errors.parking} hint="Optional">
+                    {(id, invalid) => (
+                      <Input
+                        id={id}
+                        invalid={invalid}
+                        placeholder="e.g. 1 covered space per unit"
+                        value={form.parking}
+                        onChange={(e) => update('parking', e.target.value)}
+                      />
+                    )}
+                  </Field>
+                  <Field label="Pet policy" error={errors.pet_policy} hint="Optional">
+                    {(id, invalid) => (
+                      <Input
+                        id={id}
+                        invalid={invalid}
+                        placeholder="e.g. Cats and small dogs allowed"
+                        value={form.pet_policy}
+                        onChange={(e) => update('pet_policy', e.target.value)}
+                      />
+                    )}
+                  </Field>
+                </div>
+
+                <Field label="Smoking policy" error={errors.smoking_policy} hint="Optional">
+                  {(id, invalid) => (
+                    <Input
+                      id={id}
+                      invalid={invalid}
+                      placeholder="e.g. No smoking indoors"
+                      value={form.smoking_policy}
+                      onChange={(e) => update('smoking_policy', e.target.value)}
+                    />
+                  )}
+                </Field>
+
                 <p className="text-xs text-ink-400">You can add more details later.</p>
               </>
             ) : (
@@ -440,6 +354,30 @@ export function PropertyFormDrawer({
                     )}
                   </Field>
                 </div>
+
+                <Field
+                  label="Address visibility"
+                  error={errors.address_visibility}
+                  hint={ADDRESS_VISIBILITY_OPTIONS.find((o) => o.value === form.address_visibility)?.hint}
+                  required
+                >
+                  {(id, invalid) => (
+                    <Select
+                      id={id}
+                      invalid={invalid}
+                      value={form.address_visibility}
+                      onChange={(e) =>
+                        update('address_visibility', e.target.value as AddressVisibility)
+                      }
+                    >
+                      {ADDRESS_VISIBILITY_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
               </>
             )}
           </form>

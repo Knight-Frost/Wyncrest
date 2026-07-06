@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers\Landlord;
 
+use App\Enums\ContractStatus;
+use App\Enums\ListingStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreUnitRequest;
 use App\Http\Requests\UpdateUnitRequest;
+use App\Models\Contract;
 use App\Models\Property;
 use App\Models\Unit;
 use App\Services\AuditService;
@@ -107,10 +110,28 @@ class UnitController extends Controller
     {
         $this->authorize('delete', $unit);
 
-        // Check if unit has active listings
-        if ($unit->listings()->where('status', 'active')->count() > 0) {
+        // Check if the unit has any listing that isn't archived — an active
+        // listing may still receive applications/contracts, so anything short
+        // of archived must be cleaned up first.
+        if ($unit->listings()->where('status', '!=', ListingStatus::ARCHIVED->value)->count() > 0) {
             return response()->json([
                 'message' => 'Cannot delete unit with active listings. Please deactivate all listings first.',
+            ], 422);
+        }
+
+        // Check if any of the unit's listings is referenced by a live contract
+        // (active or awaiting tenant signature) — deleting the unit out from
+        // under a real lease would orphan financial/contractual records.
+        $hasLiveContract = Contract::whereIn('listing_id', $unit->listings()->pluck('id'))
+            ->whereIn('status', [
+                ContractStatus::ACTIVE->value,
+                ContractStatus::PENDING_TENANT->value,
+            ])
+            ->exists();
+
+        if ($hasLiveContract) {
+            return response()->json([
+                'message' => 'Cannot delete unit with an active or pending contract. Terminate the contract first.',
             ], 422);
         }
 
