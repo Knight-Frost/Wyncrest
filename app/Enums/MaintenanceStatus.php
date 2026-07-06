@@ -11,7 +11,9 @@ enum MaintenanceStatus: string
 {
     case OPEN = 'open';
     case ACKNOWLEDGED = 'acknowledged';
+    case ASSIGNED = 'assigned';
     case IN_PROGRESS = 'in_progress';
+    case WAITING = 'waiting';
     case RESOLVED = 'resolved';
     case CLOSED = 'closed';
     case CANCELLED = 'cancelled';
@@ -21,7 +23,13 @@ enum MaintenanceStatus: string
      */
     public function isOpen(): bool
     {
-        return in_array($this, [self::OPEN, self::ACKNOWLEDGED, self::IN_PROGRESS], true);
+        return in_array($this, [
+            self::OPEN,
+            self::ACKNOWLEDGED,
+            self::ASSIGNED,
+            self::IN_PROGRESS,
+            self::WAITING,
+        ], true);
     }
 
     /**

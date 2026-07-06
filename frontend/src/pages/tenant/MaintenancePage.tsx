@@ -2,16 +2,16 @@ import { useMemo, useState } from 'react';
 import {
   Plus, Wrench, Hourglass, CircleCheck, Check, ChevronRight,
   CalendarDays, MapPin, Lightbulb, MessageCircle, HelpCircle,
-  Snowflake, Droplets, Fan, Zap, Hammer, Settings,
+  Snowflake, Droplets, Fan, Zap, Hammer, Settings, Bug, Lock,
+  PanelTop, LayoutGrid, Building2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { useApi } from '@/hooks/useApi';
 import { tenantApi } from '@/lib/endpoints';
 import { formatDate, humanize } from '@/lib/format';
-import { fieldErrors } from '@/lib/api';
 import type { ApiError } from '@/lib/types';
-import type { MaintenanceCategory, MaintenancePriority, MaintenanceRequest } from '@/lib/types';
+import type { MaintenanceCategory, MaintenanceRequest } from '@/lib/types';
 import {
   LoadingState,
   EmptyState,
@@ -24,7 +24,6 @@ import {
   NexusCard,
   StatusCard,
   SemanticBadge,
-  SectionHeader,
   DashboardSection,
   DataCardGrid,
   getMaintenanceVariant,
@@ -34,29 +33,20 @@ import './maintenance.css';
 
 /* ---- Category icons (lucide) -------------------------------------------- */
 const CATEGORY_ICONS: Record<MaintenanceCategory, LucideIcon> = {
-  plumbing:   Droplets,
-  electrical: Zap,
-  appliance:  Settings,
-  hvac:       Snowflake,
-  structural: Hammer,
-  general:    Wrench,
+  plumbing:     Droplets,
+  electrical:   Zap,
+  appliance:    Settings,
+  hvac:         Snowflake,
+  structural:   Hammer,
+  pest:         Bug,
+  security:     Lock,
+  locks:        Lock,
+  windows:      PanelTop,
+  flooring:     LayoutGrid,
+  water_damage: Droplets,
+  shared_area:  Building2,
+  general:      Wrench,
 };
-
-const CATEGORY_OPTIONS: { value: MaintenanceCategory; label: string }[] = [
-  { value: 'plumbing',   label: 'Plumbing' },
-  { value: 'electrical', label: 'Electrical' },
-  { value: 'appliance',  label: 'Appliance' },
-  { value: 'hvac',       label: 'HVAC / Air conditioning' },
-  { value: 'structural', label: 'Structural' },
-  { value: 'general',    label: 'General' },
-];
-
-const PRIORITY_OPTIONS: { value: MaintenancePriority; label: string }[] = [
-  { value: 'low',    label: 'Low priority (not urgent)' },
-  { value: 'medium', label: 'Medium priority (needs attention soon)' },
-  { value: 'high',   label: 'High priority (causing inconvenience)' },
-  { value: 'urgent', label: 'Urgent (safety or habitability concern)' },
-];
 
 const TIPS = [
   { icon: Snowflake, text: 'Clean AC filters monthly for better cooling.' },
@@ -157,8 +147,9 @@ function RequestCard({
           <SemanticBadge role={role} status={req.status} dot />
         </div>
         <Stepper step={step} accent={accent} />
-        {canCancel && (
-          <div className="mn-actions">
+        <div className="mn-actions">
+          <Link to={`/app/maintenance/${req.id}`} className="mn-btn-ghost">View details</Link>
+          {canCancel && (
             <button
               className="mn-btn-ghost"
               onClick={() => onCancel(req.id)}
@@ -166,182 +157,10 @@ function RequestCard({
             >
               {isCancelling ? 'Cancelling…' : 'Cancel request'}
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </NexusCard>
-  );
-}
-
-/* ---- Create request form ------------------------------------------------- */
-interface CreateForm {
-  title: string;
-  description: string;
-  category: MaintenanceCategory | '';
-  priority: MaintenancePriority | '';
-}
-const EMPTY_FORM: CreateForm = { title: '', description: '', category: '', priority: '' };
-
-function CreateRequestForm({
-  contractId,
-  onSuccess,
-}: {
-  contractId: string;
-  onSuccess: () => void;
-}) {
-  const [form, setForm]         = useState<CreateForm>(EMPTY_FORM);
-  const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors]     = useState<Record<string, string>>({});
-  const [notice, setNotice]     = useState<string | null>(null);
-  const [open, setOpen]         = useState(false);
-
-  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
-    const { name, value } = e.target;
-    setForm((f) => ({ ...f, [name]: value }));
-    setErrors((prev) => { const next = { ...prev }; delete next[name]; return next; });
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (submitting) return;
-
-    const newErrors: Record<string, string> = {};
-    if (!form.title.trim())       newErrors.title       = 'Title is required.';
-    if (!form.description.trim()) newErrors.description = 'Description is required.';
-    if (!form.category)           newErrors.category    = 'Please select a category.';
-    if (!form.priority)           newErrors.priority    = 'Please select a priority.';
-    if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
-
-    setSubmitting(true);
-    setErrors({});
-    try {
-      await tenantApi.createMaintenance({
-        contract_id: contractId,
-        title:       form.title.trim(),
-        description: form.description.trim(),
-        category:    form.category as MaintenanceCategory,
-        priority:    form.priority as MaintenancePriority,
-      });
-      setForm(EMPTY_FORM);
-      setOpen(false);
-      setNotice('Request submitted. Your landlord has been notified.');
-      onSuccess();
-    } catch (err) {
-      const apiErr = err as ApiError;
-      const fe = fieldErrors(apiErr);
-      if (Object.keys(fe).length > 0) {
-        setErrors(fe);
-      } else {
-        setNotice(`Error: ${apiErr.message}`);
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <div className="mn-create-wrap">
-      {notice && (
-        <div
-          role="alert"
-          className={`mn-notice${notice.startsWith('Error') ? ' mn-notice--error' : ''}`}
-        >
-          {notice}
-        </div>
-      )}
-      {!open ? (
-        <button className="mn-new" onClick={() => { setNotice(null); setOpen(true); }}>
-          <Plus size={17} /> New Request
-        </button>
-      ) : (
-        <form className="mn-form mn-card" onSubmit={handleSubmit} noValidate>
-          <div className="mn-form-head">
-            <h2 className="mn-form-title">Report a maintenance issue</h2>
-            <button type="button" className="mn-btn-ghost" onClick={() => setOpen(false)} disabled={submitting}>
-              Cancel
-            </button>
-          </div>
-
-          <div className="mn-field">
-            <label className="mn-label" htmlFor="mn-title">Title <span aria-hidden="true">*</span></label>
-            <input
-              id="mn-title"
-              name="title"
-              className={`mn-input${errors.title ? ' mn-input--err' : ''}`}
-              placeholder="e.g. Leaking kitchen tap"
-              value={form.title}
-              onChange={handleChange}
-              disabled={submitting}
-              maxLength={200}
-              aria-describedby={errors.title ? 'mn-title-err' : undefined}
-            />
-            {errors.title && <span id="mn-title-err" className="mn-field-err" role="alert">{errors.title}</span>}
-          </div>
-
-          <div className="mn-field">
-            <label className="mn-label" htmlFor="mn-description">Description <span aria-hidden="true">*</span></label>
-            <textarea
-              id="mn-description"
-              name="description"
-              className={`mn-textarea${errors.description ? ' mn-input--err' : ''}`}
-              placeholder="Describe the issue: when it started, where it is, and how severe it is."
-              rows={4}
-              value={form.description}
-              onChange={handleChange}
-              disabled={submitting}
-              aria-describedby={errors.description ? 'mn-desc-err' : undefined}
-            />
-            {errors.description && <span id="mn-desc-err" className="mn-field-err" role="alert">{errors.description}</span>}
-          </div>
-
-          <div className="mn-form-row">
-            <div className="mn-field">
-              <label className="mn-label" htmlFor="mn-category">Category <span aria-hidden="true">*</span></label>
-              <select
-                id="mn-category"
-                name="category"
-                className={`mn-select${errors.category ? ' mn-input--err' : ''}`}
-                value={form.category}
-                onChange={handleChange}
-                disabled={submitting}
-                aria-describedby={errors.category ? 'mn-cat-err' : undefined}
-              >
-                <option value="">Select category</option>
-                {CATEGORY_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-              {errors.category && <span id="mn-cat-err" className="mn-field-err" role="alert">{errors.category}</span>}
-            </div>
-
-            <div className="mn-field">
-              <label className="mn-label" htmlFor="mn-priority">Priority <span aria-hidden="true">*</span></label>
-              <select
-                id="mn-priority"
-                name="priority"
-                className={`mn-select${errors.priority ? ' mn-input--err' : ''}`}
-                value={form.priority}
-                onChange={handleChange}
-                disabled={submitting}
-                aria-describedby={errors.priority ? 'mn-prio-err' : undefined}
-              >
-                <option value="">Select priority</option>
-                {PRIORITY_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-              {errors.priority && <span id="mn-prio-err" className="mn-field-err" role="alert">{errors.priority}</span>}
-            </div>
-          </div>
-
-          <div className="mn-form-footer">
-            <button type="submit" className="mn-btn-update" disabled={submitting}>
-              {submitting ? 'Submitting…' : 'Submit request'}
-            </button>
-          </div>
-        </form>
-      )}
-    </div>
   );
 }
 
@@ -349,6 +168,7 @@ function CreateRequestForm({
 function ResolvedRow({ req }: { req: MaintenanceRequest }) {
   const Icon = CATEGORY_ICONS[req.category] ?? Wrench;
   return (
+    <Link to={`/app/maintenance/${req.id}`} className="mn-rrow-link">
     <NexusCard as="div" role="neutral" className="mn-rrow">
       <span className="mn-rrow-icon" aria-hidden="true"><Icon size={20} /></span>
       <div className="mn-rrow-body">
@@ -373,6 +193,7 @@ function ResolvedRow({ req }: { req: MaintenanceRequest }) {
         <ChevronRight size={18} className="mn-rrow-chev" aria-hidden="true" />
       </div>
     </NexusCard>
+    </Link>
   );
 }
 
@@ -429,7 +250,12 @@ export function MaintenancePage() {
   if (contractsQ.loading) {
     return (
       <div className="mn-page">
-        <SectionHeader eyebrow="My Rental" title="Maintenance" />
+        <div className="mn-header">
+          <div>
+            <p className="mn-eyebrow">My Rental</p>
+            <h1 className="mn-title">Maintenance</h1>
+          </div>
+        </div>
         <DataCardGrid cols={3}>
           {[0, 1, 2].map((i) => <SkeletonCard key={i} />)}
         </DataCardGrid>
@@ -463,11 +289,11 @@ export function MaintenancePage() {
     return (
       <div className="mn-page">
         <div className="mn-header">
-          <SectionHeader
-            eyebrow="My Rental"
-            title="Maintenance"
-            description="Report issues, track progress, and stay updated on every request for your unit."
-          />
+          <div>
+            <p className="mn-eyebrow">My Rental</p>
+            <h1 className="mn-title">Maintenance</h1>
+            <p className="mn-sub">Report issues, track progress, and stay updated on every request for your unit.</p>
+          </div>
         </div>
         <UnavailableState
           icon={<Wrench size={26} />}
@@ -505,16 +331,14 @@ export function MaintenancePage() {
     <div className="mn-page">
       {/* Header */}
       <div className="mn-header">
-        <SectionHeader
-          eyebrow="My Rental"
-          title="Maintenance"
-          description="Report issues, track progress, and stay updated on every request for your unit."
-          action={
-            <div className="mn-header-right">
-              <CreateRequestForm contractId={activeContract.id} onSuccess={reqQ.reload} />
-            </div>
-          }
-        />
+        <div>
+          <p className="mn-eyebrow">My Rental</p>
+          <h1 className="mn-title">Maintenance</h1>
+          <p className="mn-sub">Report issues, track progress, and stay updated on every request for your unit.</p>
+        </div>
+        <Link to="/app/maintenance/new" className="mn-new">
+          <Plus size={17} /> New Request
+        </Link>
       </div>
 
       {/* Cancel notice */}

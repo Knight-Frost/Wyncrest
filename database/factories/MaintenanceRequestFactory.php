@@ -2,9 +2,14 @@
 
 namespace Database\Factories;
 
+use App\Enums\MaintenanceAccess;
+use App\Enums\MaintenanceArea;
 use App\Enums\MaintenanceCategory;
+use App\Enums\MaintenanceContactMethod;
+use App\Enums\MaintenanceOnset;
 use App\Enums\MaintenancePriority;
 use App\Enums\MaintenanceStatus;
+use App\Enums\MaintenanceVisitWindow;
 use App\Models\Contract;
 use App\Models\Listing;
 use App\Models\Property;
@@ -48,6 +53,14 @@ class MaintenanceRequestFactory extends Factory
             'landlord_id' => $landlord->id,
             'title' => fake()->sentence(5),
             'description' => fake()->paragraph(),
+            'area' => fake()->randomElement(MaintenanceArea::cases())->value,
+            'specific_location' => fake()->optional()->words(3, true),
+            'onset' => fake()->randomElement(MaintenanceOnset::cases())->value,
+            'safety_flags' => null,
+            'access_permission' => MaintenanceAccess::CONTACT_FIRST->value,
+            'preferred_visit_window' => MaintenanceVisitWindow::ANY->value,
+            'preferred_contact_method' => MaintenanceContactMethod::MESSAGE->value,
+            'access_instructions' => null,
             'category' => MaintenanceCategory::GENERAL->value,
             'priority' => MaintenancePriority::MEDIUM->value,
             'status' => MaintenanceStatus::OPEN->value,

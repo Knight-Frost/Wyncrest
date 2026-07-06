@@ -3,9 +3,15 @@
 namespace Database\Seeders\Dev;
 
 use App\Enums\ContractStatus;
+use App\Enums\MaintenanceAccess;
+use App\Enums\MaintenanceArea;
 use App\Enums\MaintenanceCategory;
+use App\Enums\MaintenanceContactMethod;
+use App\Enums\MaintenanceOnset;
 use App\Enums\MaintenancePriority;
+use App\Enums\MaintenanceSafetyFlag;
 use App\Enums\MaintenanceStatus;
+use App\Enums\MaintenanceVisitWindow;
 use App\Models\Contract;
 use App\Models\MaintenanceRequest;
 
@@ -22,12 +28,18 @@ class MaintenanceSeeder extends DevSeeder
 {
     /** A small bank of realistic issues, cycled deterministically. */
     private const ISSUES = [
-        ['title' => 'Kitchen tap is leaking', 'cat' => MaintenanceCategory::PLUMBING, 'pri' => MaintenancePriority::MEDIUM, 'status' => MaintenanceStatus::OPEN],
-        ['title' => 'Bedroom socket has no power', 'cat' => MaintenanceCategory::ELECTRICAL, 'pri' => MaintenancePriority::HIGH, 'status' => MaintenanceStatus::ACKNOWLEDGED],
-        ['title' => 'Air conditioner not cooling', 'cat' => MaintenanceCategory::HVAC, 'pri' => MaintenancePriority::MEDIUM, 'status' => MaintenanceStatus::IN_PROGRESS],
-        ['title' => 'Fridge stopped working', 'cat' => MaintenanceCategory::APPLIANCE, 'pri' => MaintenancePriority::HIGH, 'status' => MaintenanceStatus::RESOLVED],
-        ['title' => 'Crack in living room ceiling', 'cat' => MaintenanceCategory::STRUCTURAL, 'pri' => MaintenancePriority::URGENT, 'status' => MaintenanceStatus::CLOSED],
-        ['title' => 'Replace blown corridor bulb', 'cat' => MaintenanceCategory::GENERAL, 'pri' => MaintenancePriority::LOW, 'status' => MaintenanceStatus::CANCELLED],
+        ['title' => 'Kitchen tap is leaking', 'cat' => MaintenanceCategory::PLUMBING, 'pri' => MaintenancePriority::MEDIUM, 'status' => MaintenanceStatus::OPEN,
+            'area' => MaintenanceArea::KITCHEN, 'spot' => 'Under the sink, near the cabinet door', 'onset' => MaintenanceOnset::YESTERDAY, 'flags' => [MaintenanceSafetyFlag::WATER_LEAK]],
+        ['title' => 'Bedroom socket has no power', 'cat' => MaintenanceCategory::ELECTRICAL, 'pri' => MaintenancePriority::HIGH, 'status' => MaintenanceStatus::ACKNOWLEDGED,
+            'area' => MaintenanceArea::BEDROOM, 'spot' => 'Wall socket beside the window', 'onset' => MaintenanceOnset::TODAY, 'flags' => [MaintenanceSafetyFlag::NO_POWER]],
+        ['title' => 'Air conditioner not cooling', 'cat' => MaintenanceCategory::HVAC, 'pri' => MaintenancePriority::MEDIUM, 'status' => MaintenanceStatus::IN_PROGRESS,
+            'area' => MaintenanceArea::LIVING_ROOM, 'spot' => 'Split unit above the sofa', 'onset' => MaintenanceOnset::THIS_WEEK, 'flags' => []],
+        ['title' => 'Fridge stopped working', 'cat' => MaintenanceCategory::APPLIANCE, 'pri' => MaintenancePriority::HIGH, 'status' => MaintenanceStatus::RESOLVED,
+            'area' => MaintenanceArea::KITCHEN, 'spot' => null, 'onset' => MaintenanceOnset::OVER_A_WEEK, 'flags' => [MaintenanceSafetyFlag::PROPERTY_DAMAGE]],
+        ['title' => 'Crack in living room ceiling', 'cat' => MaintenanceCategory::STRUCTURAL, 'pri' => MaintenancePriority::URGENT, 'status' => MaintenanceStatus::CLOSED,
+            'area' => MaintenanceArea::LIVING_ROOM, 'spot' => 'Above the TV wall', 'onset' => MaintenanceOnset::OVER_A_WEEK, 'flags' => [MaintenanceSafetyFlag::INJURY_RISK, MaintenanceSafetyFlag::PROPERTY_DAMAGE]],
+        ['title' => 'Replace blown corridor bulb', 'cat' => MaintenanceCategory::GENERAL, 'pri' => MaintenancePriority::LOW, 'status' => MaintenanceStatus::CANCELLED,
+            'area' => MaintenanceArea::HALLWAY, 'spot' => 'Ceiling fixture near the stairs', 'onset' => MaintenanceOnset::NOT_SURE, 'flags' => []],
     ];
 
     public function run(): void
@@ -65,6 +77,13 @@ class MaintenanceSeeder extends DevSeeder
             'landlord_id' => $contract->landlord_id,
             'title' => $issue['title'],
             'description' => $issue['title'].'. Please attend to this at your earliest convenience.',
+            'area' => $issue['area']->value,
+            'specific_location' => $issue['spot'],
+            'onset' => $issue['onset']->value,
+            'safety_flags' => array_map(fn (MaintenanceSafetyFlag $f) => $f->value, $issue['flags']),
+            'access_permission' => MaintenanceAccess::CONTACT_FIRST->value,
+            'preferred_visit_window' => MaintenanceVisitWindow::MORNING->value,
+            'preferred_contact_method' => MaintenanceContactMethod::MESSAGE->value,
             'category' => $issue['cat']->value,
             'priority' => $issue['pri']->value,
             'status' => $status->value,

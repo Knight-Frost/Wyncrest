@@ -3,6 +3,7 @@
 namespace App\Policies;
 
 use App\Enums\UserType;
+use App\Models\Contract;
 use App\Models\MaintenanceRequest;
 use App\Models\User;
 
@@ -58,10 +59,21 @@ class MaintenanceRequestPolicy
 
     /**
      * Determine whether the landlord can update the status of a request.
-     * Only the landlord named on the request may do so.
+     * Only the landlord named on the request may do so. Also governs
+     * assignment, reopening, and cost edits — all landlord-owns-record.
      */
     public function updateStatus(User $user, MaintenanceRequest $maintenanceRequest): bool
     {
         return (int) $user->id === (int) $maintenanceRequest->landlord_id;
+    }
+
+    /**
+     * Determine whether the landlord can log a maintenance request themselves
+     * against a given contract. Only the landlord who owns that contract may.
+     */
+    public function createAsLandlord(User $user, Contract $contract): bool
+    {
+        return $user->user_type === UserType::LANDLORD
+            && (int) $user->id === (int) $contract->landlord_id;
     }
 }
