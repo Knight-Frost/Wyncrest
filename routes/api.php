@@ -1,10 +1,12 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminAccessController;
-use App\Http\Controllers\Admin\AdminAuditController;
+use App\Http\Controllers\Admin\AdminAnalyticsController;
+use App\Http\Controllers\Admin\AdminAnalyticsOverviewController;
 // ============================================================================
 // AUTHENTICATION CONTROLLER
 // ============================================================================
+use App\Http\Controllers\Admin\AdminAuditController;
 use App\Http\Controllers\Admin\AdminContractController;
 use App\Http\Controllers\Admin\AdminDashboardController;
 // ============================================================================
@@ -16,6 +18,7 @@ use App\Http\Controllers\Admin\AdminFeatureController;
 // ============================================================================
 use App\Http\Controllers\Admin\AdminLedgerController;
 use App\Http\Controllers\Admin\AdminListingModerationController;
+use App\Http\Controllers\Admin\AdminMaintenanceController;
 use App\Http\Controllers\Admin\AdminNotificationController;
 use App\Http\Controllers\Admin\AdminReviewController;
 use App\Http\Controllers\Admin\AdminUserController;
@@ -30,6 +33,7 @@ use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\SocialAuthController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Landlord\LandlordAnalyticsController;
 use App\Http\Controllers\Landlord\LandlordApplicationController;
 use App\Http\Controllers\Landlord\LandlordContractController;
 use App\Http\Controllers\Landlord\LandlordDashboardController;
@@ -137,6 +141,7 @@ Route::middleware(['web'])->prefix('admin')->group(function () {
         Route::get('/me', [AdminAuthController::class, 'me']);
         Route::post('/logout', [AdminAuthController::class, 'logout']);
         Route::post('/password', [AdminAuthController::class, 'password']);
+        Route::patch('/profile', [AdminAuthController::class, 'updateProfile']);
     });
 });
 
@@ -220,11 +225,16 @@ Route::middleware(['metrics'])->group(function () {
         Route::post('/payments/initiate/{ledgerEntry}', [TenantPaymentController::class, 'initiate']);
         Route::get('/payments/balance', [TenantPaymentController::class, 'balance']);
 
-        // Applications
+        // Applications — static paths MUST come before the {application} wildcard
         Route::get('/applications', [ApplicationController::class, 'index']);
         Route::post('/applications', [ApplicationController::class, 'store']);
+        Route::post('/applications/draft', [ApplicationController::class, 'storeDraft']);
         Route::get('/applications/{application}', [ApplicationController::class, 'show']);
+        Route::patch('/applications/{application}', [ApplicationController::class, 'update']);
+        Route::delete('/applications/{application}', [ApplicationController::class, 'destroy']);
+        Route::post('/applications/{application}/submit', [ApplicationController::class, 'submit']);
         Route::post('/applications/{application}/withdraw', [ApplicationController::class, 'withdraw']);
+        Route::post('/applications/{application}/documents', [ApplicationController::class, 'storeDocument']);
 
         // Documents
         Route::get('/documents', [DocumentController::class, 'index']);
@@ -237,6 +247,9 @@ Route::middleware(['metrics'])->group(function () {
         Route::post('/maintenance', [MaintenanceRequestController::class, 'store']);
         Route::get('/maintenance/{maintenanceRequest}', [MaintenanceRequestController::class, 'show']);
         Route::post('/maintenance/{maintenanceRequest}/cancel', [MaintenanceRequestController::class, 'cancel']);
+        Route::get('/maintenance/{maintenanceRequest}/messages', [MaintenanceRequestController::class, 'messages']);
+        Route::post('/maintenance/{maintenanceRequest}/messages', [MaintenanceRequestController::class, 'sendMessage']);
+        Route::post('/maintenance/{maintenanceRequest}/media', [MediaController::class, 'storeForMaintenanceRequest']);
 
         // Messaging
         Route::get('/messageable-recipients', [MessageableRecipientController::class, 'index']);
@@ -271,6 +284,7 @@ Route::middleware(['metrics'])->group(function () {
         Route::get('/properties', [PropertyController::class, 'index']);
         Route::post('/properties', [PropertyController::class, 'store']);
         Route::get('/properties/{property}', [PropertyController::class, 'show']);
+        Route::get('/properties/{property}/detail', [PropertyController::class, 'detail']);
         Route::put('/properties/{property}', [PropertyController::class, 'update']);
         Route::delete('/properties/{property}', [PropertyController::class, 'destroy']);
 
@@ -288,6 +302,12 @@ Route::middleware(['metrics'])->group(function () {
         Route::get('/listings/{listing}', [LandlordListingController::class, 'show']);
         Route::put('/listings/{listing}', [LandlordListingController::class, 'update']);
         Route::post('/listings/{listing}/submit', [LandlordListingController::class, 'submit']);
+        Route::post('/listings/{listing}/withdraw', [LandlordListingController::class, 'withdraw']);
+        Route::post('/listings/{listing}/deactivate', [LandlordListingController::class, 'deactivate']);
+        Route::post('/listings/{listing}/reactivate', [LandlordListingController::class, 'reactivate']);
+        Route::post('/listings/{listing}/archive', [LandlordListingController::class, 'archive']);
+        Route::post('/listings/{listing}/restore', [LandlordListingController::class, 'restore']);
+        Route::get('/listings/{listing}/history', [LandlordListingController::class, 'history']);
         Route::delete('/listings/{listing}', [LandlordListingController::class, 'destroy']);
 
         // Contracts (Phase 3.1)
@@ -296,21 +316,42 @@ Route::middleware(['metrics'])->group(function () {
         Route::get('/contracts/{contract}', [LandlordContractController::class, 'show']);
         Route::post('/contracts/{contract}/send', [LandlordContractController::class, 'send']);
         Route::post('/contracts/{contract}/terminate', [LandlordContractController::class, 'terminate']);
+        Route::post('/contracts/{contract}/renew', [LandlordContractController::class, 'renew']);
+        Route::get('/contracts/{contract}/messages', [LandlordContractController::class, 'messages']);
+        Route::post('/contracts/{contract}/messages', [LandlordContractController::class, 'sendMessage']);
+        Route::get('/contracts/{contract}/notes', [LandlordContractController::class, 'notes']);
+        Route::post('/contracts/{contract}/notes', [LandlordContractController::class, 'addNote']);
 
-        // Ledger (Phase 3.2) — static export path MUST come before the {ledgerEntry} wildcard
+        // Ledger (Phase 3.2) — static export/statement paths MUST come before the {ledgerEntry} wildcard
         Route::get('/ledger/export', [LandlordExportController::class, 'ledger']);
+        Route::get('/ledger/statement/contract/{contract}', [LandlordLedgerController::class, 'contractStatement']);
+        Route::get('/ledger/statement/property/{property}', [LandlordLedgerController::class, 'propertyStatement']);
         Route::get('/ledger', [LandlordLedgerController::class, 'index']);
         Route::get('/ledger/{ledgerEntry}', [LandlordLedgerController::class, 'show']);
+        Route::post('/ledger/{ledgerEntry}/record-payment', [LandlordLedgerController::class, 'recordPayment'])->name('landlord.ledger.record-payment');
 
         // Applications — static export path MUST come before the {application} wildcard
         Route::get('/applications/export', [LandlordExportController::class, 'applications']);
         Route::get('/applications', [LandlordApplicationController::class, 'index']);
         Route::get('/applications/{application}', [LandlordApplicationController::class, 'show']);
         Route::post('/applications/{application}/decide', [LandlordApplicationController::class, 'decide']);
+        Route::post('/applications/{application}/request-info', [LandlordApplicationController::class, 'requestInfo']);
+        Route::post('/applications/{application}/shortlist', [LandlordApplicationController::class, 'toggleShortlist']);
+        Route::get('/applications/{application}/messages', [LandlordApplicationController::class, 'messages']);
+        Route::post('/applications/{application}/messages', [LandlordApplicationController::class, 'sendMessage']);
 
-        // Maintenance Requests
+        // Maintenance Requests — static /export path MUST come before the
+        // {maintenanceRequest} wildcard.
+        Route::get('/maintenance/export', [LandlordMaintenanceController::class, 'export']);
         Route::get('/maintenance', [LandlordMaintenanceController::class, 'index']);
+        Route::post('/maintenance', [LandlordMaintenanceController::class, 'store']);
+        Route::get('/maintenance/{maintenanceRequest}', [LandlordMaintenanceController::class, 'show']);
         Route::patch('/maintenance/{maintenanceRequest}/status', [LandlordMaintenanceController::class, 'updateStatus']);
+        Route::post('/maintenance/{maintenanceRequest}/reopen', [LandlordMaintenanceController::class, 'reopen']);
+        Route::patch('/maintenance/{maintenanceRequest}/costs', [LandlordMaintenanceController::class, 'updateCosts']);
+        Route::get('/maintenance/{maintenanceRequest}/messages', [LandlordMaintenanceController::class, 'messages']);
+        Route::post('/maintenance/{maintenanceRequest}/messages', [LandlordMaintenanceController::class, 'sendMessage']);
+        Route::post('/maintenance/{maintenanceRequest}/media', [MediaController::class, 'storeForMaintenanceRequest']);
 
         // Media (property/unit/listing galleries)
         Route::post('/properties/{property}/media', [MediaController::class, 'storeForProperty']);
@@ -332,6 +373,8 @@ Route::middleware(['metrics'])->group(function () {
         Route::delete('/documents/{document}', [DocumentController::class, 'destroy']);
 
         // Analytics (scoped to landlord's properties)
+        Route::get('/analytics/export', [LandlordExportController::class, 'analytics']);
+        Route::get('/analytics', [LandlordAnalyticsController::class, 'index']);
         Route::get('/analytics/financial', [FinancialAnalyticsController::class, 'index']);
         Route::get('/analytics/contracts', [ContractAnalyticsController::class, 'index']);
 
@@ -348,6 +391,15 @@ Route::middleware(['metrics'])->group(function () {
     Route::middleware(['web', 'auth:admin', 'auth.session', 'admin', 'rate.limit.role'])->prefix('admin')->group(function () {
         // Dashboard — available to any active admin (no specific capability).
         Route::get('/dashboard', [AdminDashboardController::class, 'index']);
+
+        // Admin Analytics — a permission-scoped work/risk dashboard for the
+        // SIGNED-IN admin, reachable by any active admin (no capability gate),
+        // same as /dashboard above. Distinct from the Super Admin "Platform
+        // Analytics" overview below (admin.can:view_analytics): the module
+        // SECTIONS in the response, not access to the route itself, are what
+        // AdminAnalyticsService scopes to the admin's real capabilities.
+        Route::get('/analytics/admin-summary', [AdminAnalyticsController::class, 'summary']);
+        Route::get('/analytics/admin-summary/export', [AdminAnalyticsController::class, 'export']);
 
         // Cross-role authenticated endpoints the admin console consumes via its
         // SESSION — mirrors the tenant/landlord bearer routes. The controllers
@@ -385,10 +437,11 @@ Route::middleware(['metrics'])->group(function () {
             Route::post('/admins/{admin}/activate', [AdminAccessController::class, 'activate']);
         });
 
-        // User Management
+        // User Management — reading the roster is available to any admin;
+        // only the moderation actions require manage_users.
+        Route::get('/users', [AdminUserController::class, 'index']);
+        Route::get('/users/{user}', [AdminUserController::class, 'show']);
         Route::middleware('admin.can:manage_users')->group(function () {
-            Route::get('/users', [AdminUserController::class, 'index']);
-            Route::get('/users/{user}', [AdminUserController::class, 'show']);
             Route::post('/users/{user}/suspend', [AdminUserController::class, 'suspend']);
             Route::post('/users/{user}/activate', [AdminUserController::class, 'activate']);
             Route::post('/users/{user}/block', [AdminUserController::class, 'block']);
@@ -398,16 +451,29 @@ Route::middleware(['metrics'])->group(function () {
         // Verification Management (Phase 4)
         Route::middleware('admin.can:review_verifications')->group(function () {
             Route::get('/verifications', [AdminVerificationController::class, 'index']);
+            // Declared BEFORE {verificationRequest} so "summary" is not captured as an id.
+            Route::get('/verifications/summary', [AdminVerificationController::class, 'summary']);
             Route::get('/verifications/{verificationRequest}', [AdminVerificationController::class, 'show']);
             Route::post('/verifications/{verificationRequest}/approve', [AdminVerificationController::class, 'approve']);
             Route::post('/verifications/{verificationRequest}/reject', [AdminVerificationController::class, 'reject']);
             Route::post('/verifications/{verificationRequest}/request-info', [AdminVerificationController::class, 'requestInfo']);
+            Route::post('/verifications/{verificationRequest}/notes', [AdminVerificationController::class, 'addNote']);
             // Stream applicant documents during moderation (admin-gated + audited).
             Route::get('/documents/{document}/download', [AdminVerificationController::class, 'downloadDocument']);
         });
 
-        // Listing Moderation
+        // Listing Moderation / Review
         Route::middleware('admin.can:moderate_listings')->group(function () {
+            // Review command centre: queue, detail, tenant preview, notes.
+            Route::get('/listings/review', [AdminListingModerationController::class, 'index']);
+            Route::get('/listings/review/{listing}', [AdminListingModerationController::class, 'show']);
+            Route::get('/listings/review/{listing}/preview', [AdminListingModerationController::class, 'preview']);
+            Route::post('/listings/review/{listing}/approve', [AdminListingModerationController::class, 'approve']);
+            Route::post('/listings/review/{listing}/reject', [AdminListingModerationController::class, 'reject']);
+            Route::post('/listings/review/{listing}/request-changes', [AdminListingModerationController::class, 'requestChanges']);
+            Route::post('/listings/review/{listing}/notes', [AdminListingModerationController::class, 'storeNote']);
+
+            // Legacy endpoints (kept for backward compatibility).
             Route::get('/listings/pending', [AdminListingModerationController::class, 'pending']);
             Route::post('/listings/{listing}/approve', [AdminListingModerationController::class, 'approve']);
             Route::post('/listings/{listing}/reject', [AdminListingModerationController::class, 'reject']);
@@ -433,23 +499,47 @@ Route::middleware(['metrics'])->group(function () {
             Route::get('/notifications/deliveries', [AdminNotificationController::class, 'deliveries']);
         });
 
-        // Contracts (Phase 3.1)
+        // Contracts (Phase 3.1; case-file command centre added July 2026) —
+        // reading contract records is available to any admin; only writes
+        // (notes, termination) require manage_contracts.
+        Route::get('/contracts', [AdminContractController::class, 'index']);
+        // Static path MUST come before the {contract} wildcard below, or
+        // "summary" is swallowed as a route param.
+        Route::get('/contracts/summary', [AdminContractController::class, 'summary']);
+        Route::get('/contracts/{contract}', [AdminContractController::class, 'show']);
+        Route::get('/contracts/{contract}/ledger', [AdminContractController::class, 'ledger']);
+        Route::get('/contracts/{contract}/payments', [AdminContractController::class, 'payments']);
+        Route::get('/contracts/{contract}/billing-schedule', [AdminContractController::class, 'billingSchedule']);
+        Route::get('/contracts/{contract}/timeline', [AdminContractController::class, 'timeline']);
+        Route::get('/contracts/{contract}/documents', [AdminContractController::class, 'documents']);
         Route::middleware('admin.can:manage_contracts')->group(function () {
-            Route::get('/contracts', [AdminContractController::class, 'index']);
-            Route::get('/contracts/{contract}', [AdminContractController::class, 'show']);
+            Route::post('/contracts/{contract}/notes', [AdminContractController::class, 'storeNote']);
             Route::post('/contracts/{contract}/terminate', [AdminContractController::class, 'terminate']);
         });
 
-        // Ledger (Phase 3.2)
+        // Ledger (Phase 3.2) — reading ledger entries is available to any
+        // admin; late-fee generation and waivers require manage_ledger.
+        Route::get('/ledger', [AdminLedgerController::class, 'index']);
+        // Static paths MUST come before the {ledgerEntry} wildcard below, or
+        // "reconciliation"/"export" are swallowed as a route param.
+        Route::get('/ledger/reconciliation', [AdminLedgerController::class, 'reconciliation']);
+        Route::get('/ledger/export', [AdminLedgerController::class, 'export']);
+        Route::get('/ledger/{ledgerEntry}', [AdminLedgerController::class, 'show']);
         Route::middleware('admin.can:manage_ledger')->group(function () {
-            Route::get('/ledger', [AdminLedgerController::class, 'index']);
-            Route::get('/ledger/{ledgerEntry}', [AdminLedgerController::class, 'show']);
             Route::post('/ledger/{ledgerEntry}/late-fee', [AdminLedgerController::class, 'generateLateFee']);
+            Route::post('/ledger/{ledgerEntry}/waive', [AdminLedgerController::class, 'waive']);
         });
+
+        // Maintenance — read-only admin visibility (Phase A dashboard rebuild).
+        // No admin.can: gate: viewing is a baseline admin privilege, same as
+        // Contracts/Ledger above. No mutating admin action exists yet.
+        Route::get('/maintenance', [AdminMaintenanceController::class, 'index']);
+        Route::get('/maintenance/summary', [AdminMaintenanceController::class, 'summary']);
 
         // Reviews moderation (Phase 8)
         Route::middleware('admin.can:moderate_reviews')->group(function () {
             Route::get('/reviews', [AdminReviewController::class, 'index']);
+            Route::get('/reviews/{review}', [AdminReviewController::class, 'show']);
             Route::post('/reviews/{review}/moderate', [AdminReviewController::class, 'moderate']);
         });
 
@@ -459,6 +549,8 @@ Route::middleware(['metrics'])->group(function () {
             Route::get('/financial', [FinancialAnalyticsController::class, 'index']);
             Route::get('/contracts', [ContractAnalyticsController::class, 'index']);
             Route::get('/platform', [PlatformAnalyticsController::class, 'index']);
+            // Composite Super Admin "Platform Analytics" page (all sections in one payload).
+            Route::get('/overview', [AdminAnalyticsOverviewController::class, 'overview']);
         });
     });
 
@@ -489,6 +581,13 @@ Route::middleware(['metrics'])->group(function () {
     Route::middleware(['auth:sanctum', 'rate.limit.role'])
         ->get('/media/{mediaAsset}', [MediaController::class, 'show'])
         ->name('media.show');
+
+    // Shared deletion route — a tenant needs to be able to remove their own
+    // maintenance evidence too, not just landlord galleries (which also keep
+    // their own /landlord/media/{mediaAsset} route above for parity).
+    // Authorization is enforced by MediaAssetPolicy::delete() inside the controller.
+    Route::middleware(['auth:sanctum', 'rate.limit.role'])
+        ->delete('/media/{mediaAsset}', [MediaController::class, 'destroy']);
 
     // ============================================================================
     // NOTIFICATION ROUTES - Phase 3.5

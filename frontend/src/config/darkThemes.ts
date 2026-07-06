@@ -13,8 +13,10 @@
  *   - appearance mode (light/dark/system) — context/theme.ts
  *   - accent colour (brand/action)        — config/accents.ts
  *
- * "Petrol Black" is the default and maps to the base @theme values (no CSS
- * override block needed); the other four are override blocks in index.css.
+ * "Midnight Slate" is the default (DEFAULT_DARK_THEME_KEY). "Petrol Black"
+ * remains the CSS base (@theme values, no override block needed) but is no
+ * longer the default selection; the other three (incl. Midnight Slate) are
+ * override blocks in index.css.
  */
 
 export interface DarkThemeDefinition {
@@ -58,7 +60,7 @@ export const DARK_THEMES: DarkThemeDefinition[] = [
   },
 ];
 
-export const DEFAULT_DARK_THEME_KEY = 'petrol-black';
+export const DEFAULT_DARK_THEME_KEY = 'midnight-slate';
 export const DARK_THEME_STORAGE_KEY = 'nexus.darkTheme'; // internal key retained
 
 export type DarkThemeKey = string;
@@ -90,5 +92,9 @@ export function applyDarkTheme(key: DarkThemeKey): void {
 
 /** Look up a dark theme by key; falls back to the default. */
 export function findDarkTheme(key: string): DarkThemeDefinition {
-  return DARK_THEMES.find((t) => t.key === key) ?? DARK_THEMES[0];
+  return (
+    DARK_THEMES.find((t) => t.key === key) ??
+    DARK_THEMES.find((t) => t.key === DEFAULT_DARK_THEME_KEY) ??
+    DARK_THEMES[0]
+  );
 }

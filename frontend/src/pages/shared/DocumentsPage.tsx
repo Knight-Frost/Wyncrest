@@ -11,7 +11,7 @@
  * Stat cards upgraded to StatusCard (DataCardGrid). Document verified/pending
  * status uses SemanticBadge. All Lucide imports replaced with Homecrest icons.
  */
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { tenantApi } from '@/lib/endpoints';
 import { fieldErrors } from '@/lib/api';
 import { formatDate, humanize } from '@/lib/format';
@@ -31,10 +31,10 @@ import {
   IconShield,
   IconUpload,
   IconSearch,
-  IconFilter,
   IconDownload,
   IconTrash,
   IconLock,
+  IconEye,
 } from '@/components/ui/icons';
 import type { TenantDocument, DocumentType, ApiError } from '@/lib/types';
 import './documents.css';
@@ -68,6 +68,7 @@ function IconFolderOpen({ size = 26 }: { size?: number }) {
 /** All document_type values the backend accepts. */
 const DOCUMENT_TYPES: DocumentType[] = [
   'identity_document',
+  'proof_of_address',
   'proof_of_income',
   'lease_document',
   'application_attachment',
@@ -78,6 +79,7 @@ const DOCUMENT_TYPES: DocumentType[] = [
 /** Human-readable labels for document_type values. */
 const TYPE_LABELS: Record<DocumentType, string> = {
   identity_document:       'Identity Document',
+  proof_of_address:        'Proof of Address',
   proof_of_income:         'Proof of Income',
   lease_document:          'Lease Document',
   application_attachment:  'Application Attachment',
@@ -90,6 +92,7 @@ type FilterKey = 'all' | 'identity' | 'financial' | 'lease' | 'maintenance' | 'o
 
 const TYPE_TO_FILTER: Record<DocumentType, FilterKey> = {
   identity_document:       'identity',
+  proof_of_address:        'identity',
   proof_of_income:         'financial',
   lease_document:          'lease',
   application_attachment:  'other',
@@ -202,6 +205,21 @@ const DEFAULT_UPLOAD: UploadForm = {
   success: false,
 };
 
+/* ── inline-preview state ───────────────────────────────────────────────── */
+
+/**
+ * Holds the currently-previewed document. `url` is a short-lived `blob:` object
+ * URL created from the Bearer-streamed file; it is null while the bytes are
+ * still loading and is always revoked when the viewer closes (see closeViewer).
+ */
+interface ViewerState {
+  doc: TenantDocument;
+  kind: FileKind;
+  url: string | null;
+  loading: boolean;
+  error: boolean;
+}
+
 /* ================================================================== page == */
 
 export function DocumentsPage() {
@@ -228,6 +246,9 @@ export function DocumentsPage() {
   const [downloading, setDownloading] = useState<Set<number>>(new Set());
   const [deleting, setDeleting] = useState<Set<number>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+
+  /* inline preview (view without download) — see handleView below */
+  const [viewer, setViewer] = useState<ViewerState | null>(null);
 
   /* toast */
   const [toast, setToast] = useState<string | null>(null);
@@ -320,6 +341,41 @@ export function DocumentsPage() {
     },
     [downloading, showToast],
   );
+
+  /* ── inline preview (view without download) ──────────────────────────── */
+
+  const handleView = useCallback(async (doc: TenantDocument) => {
+    const kind = mimeToKind(doc.mime_type);
+    // Open immediately in a loading state so the click feels responsive, then
+    // stream the same authorized Blob the download uses and swap in a blob URL.
+    setViewer({ doc, kind, url: null, loading: true, error: false });
+    try {
+      const blob = await tenantApi.downloadDocument(doc.id);
+      setViewer({ doc, kind, url: URL.createObjectURL(blob), loading: false, error: false });
+    } catch {
+      setViewer({ doc, kind, url: null, loading: false, error: true });
+    }
+  }, []);
+
+  const closeViewer = useCallback(() => {
+    // Revoke the object URL so the decrypted bytes don't linger in memory.
+    setViewer((v) => {
+      if (v?.url) URL.revokeObjectURL(v.url);
+      return null;
+    });
+  }, []);
+
+  // Escape-to-close + scroll lock while the viewer is open.
+  useEffect(() => {
+    if (!viewer) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeViewer(); };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [viewer, closeViewer]);
 
   /* ── delete ──────────────────────────────────────────────────────────── */
 
@@ -549,9 +605,6 @@ export function DocumentsPage() {
                 aria-label="Search documents"
               />
             </div>
-            <button className="dx-filter" aria-label="Filter documents" type="button">
-              <IconFilter size={17} />
-            </button>
           </div>
         </div>
 
@@ -653,6 +706,17 @@ export function DocumentsPage() {
 
                   {/* actions */}
                   <div className="dx-actions">
+                    {/* view (inline preview, no download) */}
+                    <button
+                      className="dx-iconbtn"
+                      aria-label={`View ${doc.original_filename}`}
+                      onClick={() => void handleView(doc)}
+                      disabled={isDeleting}
+                      title="View"
+                    >
+                      <IconEye size={17} />
+                    </button>
+
                     {/* download */}
                     <button
                       className="dx-iconbtn"
@@ -721,6 +785,78 @@ export function DocumentsPage() {
           </div>
         </div>
       </div>
+
+      {/* ── inline document viewer ── */}
+      {viewer && (
+        <div className="dx-viewer" role="dialog" aria-modal="true"
+          aria-label={`Preview: ${viewer.doc.original_filename}`}>
+          <div className="dx-viewer-scrim" onClick={closeViewer} aria-hidden="true" />
+          <div className="dx-viewer-panel">
+            {/* header */}
+            <div className="dx-viewer-head">
+              <div className="dx-viewer-head-body">
+                <span className={`dx-file ${viewer.kind}`}>
+                  {(() => { const G = FILE_ICON[viewer.kind]; return <G size={18} />; })()}
+                </span>
+                <div className="dx-viewer-titles">
+                  <div className="dx-viewer-name">{viewer.doc.original_filename}</div>
+                  <div className="dx-viewer-meta">
+                    {mimeToLabel(viewer.doc.mime_type)} · {formatBytes(viewer.doc.size_bytes)}
+                  </div>
+                </div>
+              </div>
+              <div className="dx-viewer-head-actions">
+                <button
+                  className="dx-btn dx-btn-ghost"
+                  onClick={() => void handleDownload(viewer.doc)}
+                  title="Download"
+                >
+                  <IconDownload size={16} /> Download
+                </button>
+                <button className="dx-iconbtn" aria-label="Close preview"
+                  title="Close" onClick={closeViewer}>✕</button>
+              </div>
+            </div>
+
+            {/* body */}
+            <div className="dx-viewer-stage">
+              {viewer.loading ? (
+                <div className="dx-viewer-msg">
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>Loading preview…</span>
+                </div>
+              ) : viewer.error ? (
+                <div className="dx-viewer-msg">
+                  <span className="dx-viewer-glyph"><IconEye size={30} /></span>
+                  <div className="dx-viewer-msg-title">Couldn’t load this document</div>
+                  <p className="dx-viewer-msg-text">Something went wrong fetching the file. You can try downloading it instead.</p>
+                  <button className="dx-btn dx-btn-primary" onClick={() => void handleDownload(viewer.doc)}>
+                    <IconDownload size={16} /> Download instead
+                  </button>
+                </div>
+              ) : viewer.kind === 'image' && viewer.url ? (
+                <img className="dx-viewer-img" src={viewer.url} alt={viewer.doc.original_filename} />
+              ) : viewer.kind === 'pdf' && viewer.url ? (
+                <iframe className="dx-viewer-frame" src={viewer.url}
+                  title={viewer.doc.original_filename} />
+              ) : (
+                /* ── DECISION POINT: fallback for files that can't render inline ──
+                   (e.g. .docx, .xlsx — browsers can't preview these).
+                   Default below offers a clear "download instead" path. */
+                <div className="dx-viewer-msg">
+                  <span className="dx-viewer-glyph"><IconDoc size={30} /></span>
+                  <div className="dx-viewer-msg-title">Preview isn’t available for this file type</div>
+                  <p className="dx-viewer-msg-text">
+                    {mimeToLabel(viewer.doc.mime_type)} files can’t be shown in the browser. Download it to view on your device.
+                  </p>
+                  <button className="dx-btn dx-btn-primary" onClick={() => void handleDownload(viewer.doc)}>
+                    <IconDownload size={16} /> Download to view
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* toast */}
       {toast && (

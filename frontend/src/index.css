@@ -339,15 +339,21 @@
   --color-money:    #CBD8D2; /* cool platinum for GH₵ amounts — dark default */
   --color-money-bg: rgba(45, 212, 191, 0.10);
 
-  /* ── Glass tokens — DARK defaults (translucent over dark surfaces) ──────── */
-  --glass-bg:             rgba(255,255,255,0.04);
-  --glass-bg-strong:      rgba(255,255,255,0.08);
-  --glass-border:         rgba(255,255,255,0.08);
-  --glass-border-strong:  rgba(255,255,255,0.14);
+  /* ── Glass tokens — DARK defaults (translucent over dark surfaces) ────────
+     Anchored to --color-surface/--color-ink-300 (via color-mix) rather than a
+     literal rgba: a raw low-alpha white/black tint barely lifts off a near-
+     black canvas and reads as a "harsh black card" — mixing in the real
+     surface color guarantees the same lift + contrast quality as a plain
+     `.ac-card` (Settings), and it automatically re-tunes for every dark
+     palette (data-dark-theme) since --color-surface/--color-ink-300 do. */
+  --glass-bg:             color-mix(in srgb, var(--color-surface) 62%, transparent);
+  --glass-bg-strong:      color-mix(in srgb, var(--color-surface) 90%, transparent);
+  --glass-border:         color-mix(in srgb, var(--color-ink-300) 55%, transparent);
+  --glass-border-strong:  color-mix(in srgb, var(--color-ink-300) 80%, transparent);
   --glass-blur:           16px;
-  --glass-highlight:      inset 0 1px 0 rgba(255,255,255,0.06);
-  --glass-shadow:         0 8px 32px rgb(0 0 0 / .50), 0 2px 8px rgb(0 0 0 / .40);
-  --glass-shadow-lg:      0 24px 64px rgb(0 0 0 / .65);
+  --glass-highlight:      inset 0 1px 0 rgba(255,255,255,0.05);
+  --glass-shadow:         0 1px 2px rgb(0 0 0 / .35), 0 10px 24px -12px rgb(0 0 0 / .40);
+  --glass-shadow-lg:      0 4px 10px -4px rgb(0 0 0 / .35), 0 22px 44px -18px rgb(0 0 0 / .45);
 
   /* Homecrest card system — fallbacks for contexts without the editorial skin.
      The editorial skin (light + dark) overrides these with tuned values. */

@@ -45,8 +45,9 @@
           var root = document.documentElement;
           var resolved = root.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
 
-          // Dark palette attribute (default = petrol-black, the base values).
-          var dt = localStorage.getItem('nexus.darkTheme') || 'petrol-black';
+          // Dark palette attribute (default = midnight-slate; keep in sync with
+          // src/config/darkThemes.ts DEFAULT_DARK_THEME_KEY).
+          var dt = localStorage.getItem('nexus.darkTheme') || 'midnight-slate';
           root.setAttribute('data-dark-theme', dt);
 
           // Accent ramp: 9 ordered vars [brand-50,500,600,700,900, action-400,500,600,700].

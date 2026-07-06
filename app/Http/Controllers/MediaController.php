@@ -7,6 +7,7 @@ use App\Enums\MediaVisibility;
 use App\Http\Requests\ReorderMediaRequest;
 use App\Http\Requests\StoreMediaRequest;
 use App\Models\Listing;
+use App\Models\MaintenanceRequest;
 use App\Models\MediaAsset;
 use App\Models\Property;
 use App\Models\Unit;
@@ -113,6 +114,33 @@ class MediaController extends Controller
         if ($request->filled('alt_text')) {
             $asset->update(['alt_text' => $request->input('alt_text')]);
         }
+        if ($request->filled('caption')) {
+            $asset->update(['caption' => $request->input('caption')]);
+        }
+
+        return response()->json($asset->refresh(), 201);
+    }
+
+    /**
+     * POST /tenant/maintenance/{maintenanceRequest}/media
+     * POST /landlord/maintenance/{maintenanceRequest}/media
+     * Attach a photo (evidence) or receipt to a maintenance request. Callable
+     * by the filing tenant or the responsible landlord; owner is always the
+     * tenant (the request's subject), uploader is whoever is authenticated.
+     */
+    public function storeForMaintenanceRequest(StoreMediaRequest $request, MaintenanceRequest $maintenanceRequest): JsonResponse
+    {
+        $this->authorize('upload', [MediaAsset::class, MediaCollection::MaintenanceEvidence->value, $maintenanceRequest]);
+
+        $asset = $this->mediaService->store(
+            file: $request->file('file'),
+            collection: MediaCollection::MaintenanceEvidence->value,
+            attachable: $maintenanceRequest,
+            uploader: $request->user(),
+            owner: $maintenanceRequest->tenant,
+            visibility: MediaVisibility::Restricted->value,
+        );
+
         if ($request->filled('caption')) {
             $asset->update(['caption' => $request->input('caption')]);
         }

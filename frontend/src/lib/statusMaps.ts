@@ -16,18 +16,22 @@ import type {
 
 /* ---- Applications -------------------------------------------------------- */
 export const applicationStatusLabel: Record<ApplicationStatus, string> = {
+  draft: 'Draft',
   submitted: 'New',
   in_review: 'In review',
   landlord_review: 'Ready to review',
+  needs_action: 'Needs action',
   approved: 'Approved',
   rejected: 'Declined',
   withdrawn: 'Withdrawn',
 };
 
 export const applicationStatusTone: Record<ApplicationStatus, Tone> = {
+  draft: 'neutral',
   submitted: 'info',
   in_review: 'warning',
   landlord_review: 'warning',
+  needs_action: 'warning',
   approved: 'success',
   rejected: 'danger',
   withdrawn: 'neutral',
@@ -35,9 +39,11 @@ export const applicationStatusTone: Record<ApplicationStatus, Tone> = {
 
 /* ---- Maintenance -------------------------------------------------------- */
 export const maintenanceStatusLabel: Record<MaintenanceStatus, string> = {
-  open: 'Open',
+  open: 'New',
   acknowledged: 'Acknowledged',
+  assigned: 'Assigned',
   in_progress: 'In progress',
+  waiting: 'Waiting',
   resolved: 'Resolved',
   closed: 'Closed',
   cancelled: 'Cancelled',
@@ -45,18 +51,25 @@ export const maintenanceStatusLabel: Record<MaintenanceStatus, string> = {
 
 export const maintenanceStatusTone: Record<MaintenanceStatus, Tone> = {
   open: 'danger',
-  acknowledged: 'warning',
-  in_progress: 'info',
+  acknowledged: 'info',
+  assigned: 'info',
+  in_progress: 'warning',
+  waiting: 'warning',
   resolved: 'success',
   closed: 'neutral',
   cancelled: 'neutral',
 };
 
+/** Every open (non-final) status, for pages that need to group them. */
+export const maintenanceOpenStatuses: MaintenanceStatus[] = [
+  'open', 'acknowledged', 'assigned', 'in_progress', 'waiting',
+];
+
 export const maintenancePriorityLabel: Record<MaintenancePriority, string> = {
   low: 'Low',
   medium: 'Medium',
   high: 'High',
-  urgent: 'Urgent',
+  urgent: 'Emergency',
 };
 
 export const maintenancePriorityTone: Record<MaintenancePriority, Tone> = {
@@ -72,7 +85,14 @@ export const maintenanceCategoryLabel: Record<MaintenanceCategory, string> = {
   appliance: 'Appliance',
   hvac: 'HVAC',
   structural: 'Structural',
-  general: 'General',
+  pest: 'Pest control',
+  security: 'Security',
+  locks: 'Locks',
+  windows: 'Windows',
+  flooring: 'Flooring',
+  water_damage: 'Water damage',
+  shared_area: 'Shared area',
+  general: 'Other',
 };
 
 /* ---- Ledger entry type -------------------------------------------------- */

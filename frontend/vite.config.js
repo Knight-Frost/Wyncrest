@@ -54,6 +54,9 @@ export default defineConfig(({ mode }) => {
                 // proxy it so the SPA can call it same-origin (sets the XSRF-TOKEN
                 // + session cookies for localhost, shared across the dev ports).
                 '/sanctum': { target: API_PROXY_TARGET, changeOrigin: true },
+                // Serve uploaded/seeded media (public disk) through the backend so
+                // relative /storage URLs resolve in dev exactly as they do in prod.
+                '/storage': { target: API_PROXY_TARGET, changeOrigin: true },
             },
         },
         // File types to support raw imports. Never add .css, .tsx, or .ts files to this.

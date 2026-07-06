@@ -200,9 +200,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setPortal(null);
   }, [portal]);
 
+  const updateUser = useCallback((u: AuthUser) => {
+    setUser(u);
+  }, []);
+
   const value = useMemo<AuthContextValue>(
-    () => ({ user, portal, initializing, login, adminLogin, register, logout }),
-    [user, portal, initializing, login, adminLogin, register, logout],
+    () => ({ user, portal, initializing, login, adminLogin, register, logout, updateUser }),
+    [user, portal, initializing, login, adminLogin, register, logout, updateUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

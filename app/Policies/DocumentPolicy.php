@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Models\Application;
 use App\Models\Document;
 use App\Models\User;
 
@@ -13,10 +14,11 @@ use App\Models\User;
  * SECURITY:
  * - All comparisons use strict === with (int) casts to prevent type-juggling
  *   attacks where an int user ID is compared against a string value.
- * - Landlord / admin cross-access is NOT granted in this pass.  A landlord
- *   cannot read a tenant's document even if they share a contract.  Admin
- *   access to documents should be added in a dedicated admin controller +
- *   policy gate in a future pass.
+ * - Landlord cross-access is granted ONLY for a document attached to an
+ *   Application on one of that landlord's own listings — a landlord reviewing
+ *   an applicant needs to open their proof-of-income/ID. No other cross-access
+ *   is granted; admin access to documents should be added in a dedicated admin
+ *   controller + policy gate in a future pass.
  */
 class DocumentPolicy
 {
@@ -31,9 +33,8 @@ class DocumentPolicy
     }
 
     /**
-     * A user may view a document only if they are the owner OR the uploader.
-     *
-     * NOTE: Landlord / admin cross-access intentionally not granted here.
+     * A user may view a document if they are the owner OR the uploader, OR
+     * they are the landlord of the Application this document is attached to.
      */
     public function view(User $user, Document $document): bool
     {
@@ -41,7 +42,15 @@ class DocumentPolicy
         $ownerId = (int) $document->owner_user_id;
         $uploaderId = (int) $document->uploaded_by_id;
 
-        return $userId === $ownerId || $userId === $uploaderId;
+        if ($userId === $ownerId || $userId === $uploaderId) {
+            return true;
+        }
+
+        if ($document->related_type === Application::class && $document->related !== null) {
+            return $userId === (int) $document->related->landlord_id;
+        }
+
+        return false;
     }
 
     /**

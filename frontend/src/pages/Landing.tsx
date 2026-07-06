@@ -386,7 +386,7 @@ export function Landing() {
           <div className="foot-links">
             <div className="fc"><h4>Platform</h4><a href="#discover">Discover</a><a href="#sides">Tenants</a><a href="#sides">Landlords</a><a href="#trust">Trust</a></div>
             <div className="fc"><h4>Company</h4><a href="#statement">About</a><a href="#trust">Security</a><a href={`mailto:${brand.supportEmail}`}>Contact</a></div>
-            <div className="fc"><h4>Account</h4><Link to="/login">Sign in</Link><Link to={ctaTo}>Get started</Link></div>
+            <div className="fc"><h4>Account</h4><Link to="/login">Sign in</Link><Link to={ctaTo}>Get started</Link><Link to="/admin/login">Admin console</Link></div>
           </div>
         </div>
         <div className="foot-bottom"><span>© {new Date().getFullYear()} {brand.appName} · Secure rental infrastructure</span><span>Accra, Ghana</span></div>

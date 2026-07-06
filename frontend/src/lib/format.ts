@@ -23,6 +23,18 @@ export function formatCents(cents: number): string {
   return 'GH₵ ' + GHS_FMT.format(cents / 100);
 }
 
+/**
+ * Compact GH&#8373; for tight spaces (chart axis ticks): "GH₵ 17k" instead of
+ * "GH₵ 17,000.00". Never used for a headline figure, only axis/tick labels.
+ */
+export function formatCentsCompact(cents: number): string {
+  const cedis = cents / 100;
+  if (Math.abs(cedis) < 1000) return 'GH₵ ' + GHS_NO_DEC.format(cedis);
+  const thousands = cedis / 1000;
+  const rounded = Number.isInteger(thousands) ? thousands.toFixed(0) : thousands.toFixed(1);
+  return `GH₵ ${rounded}k`;
+}
+
 /** Render a decimal cedi string from the API (Unit.rent_amount = "3500.00"). */
 export function formatDollars(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === '') return '—';

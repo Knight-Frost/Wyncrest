@@ -9,6 +9,7 @@ enum MediaCollection: string
     case ListingGallery = 'listing_gallery';
     case Avatar = 'avatar';
     case MaintenanceEvidence = 'maintenance_evidence';
+    case ContractDocument = 'contract_document';
 
     /**
      * Collections that are attached to landlord-owned resources.

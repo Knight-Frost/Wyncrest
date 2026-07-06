@@ -14,6 +14,7 @@
  *   neutral → cool slate ink (ordinary information)
  */
 import type {
+  ApplicationStatus,
   ContractStatus,
   LedgerStatus,
   ListingStatus,
@@ -184,20 +185,14 @@ export function getListingModerationVariant(status: ListingStatus): SemanticRole
   }
 }
 
-export function getApplicationVariant(
-  status:
-    | 'submitted'
-    | 'in_review'
-    | 'landlord_review'
-    | 'approved'
-    | 'rejected'
-    | 'withdrawn',
-): SemanticRole {
+export function getApplicationVariant(status: ApplicationStatus): SemanticRole {
   switch (status) {
     case 'approved':         return 'success';
     case 'rejected':         return 'danger';
+    case 'needs_action':     return 'warning';
     case 'withdrawn':        return 'neutral';
-    default:                 return 'warning'; // submitted / in_review / landlord_review
+    case 'draft':            return 'neutral';
+    default:                 return 'info'; // submitted / in_review / landlord_review
   }
 }
 

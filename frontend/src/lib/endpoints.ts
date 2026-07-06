@@ -16,58 +16,172 @@ import type {
   AccessSummary,
   Admin,
   AdminCapability,
+  AdminAnalyticsResponse,
   AdminDashboard,
+  PlatformAnalyticsResponse,
+  AdminMaintenanceCase,
   AdminNotificationDeliveriesResponse,
-  AdminReview,
+  AdminReviewDetail,
+  AdminReviewQueueResponse,
   AdminTeamMember,
   AdminUserDetail,
   AdminUserSummary,
+  AdminUsersResponse,
   AdminVerificationDetail,
   AdminVerificationRequest,
   AppNotification,
   Application,
+  ApplicationFormData,
+  ApplicationMessageThread,
+  DashboardMaintenanceSummary,
+  DocumentType,
   AuditLog,
   AuditLogDetail,
   AuditSummary,
   AuditVerify,
   AuthResponse,
   Contract,
+  ContractBillingPeriod,
+  ContractCaseFileDetail,
+  ContractDocument,
+  ContractLandlordNote,
+  ContractLedgerResponse,
+  ContractMessageThread,
+  ContractNote,
+  ContractPayment,
+  ContractQueue,
+  ContractTimelineEvent,
   ConversationDetail,
   ConversationMessage,
   ConversationSummary,
-  Feature,
   LandlordDashboard,
   LandlordOnboarding,
   LandlordReviewsResponse,
+  InitiatePaymentResponse,
   LedgerEntry,
+  LedgerEntryCaseFile,
+  LedgerListResponse,
+  LedgerQueryParams,
+  LandlordLedgerResponse,
+  LandlordLedgerCaseFile,
+  LedgerContractStatement,
+  LedgerPropertyStatement,
+  LedgerReconciliationReport,
   Listing,
+  ListingHistoryEntry,
+  ListingPreview,
+  ListingReviewDetail,
+  ListingReviewNote,
+  ListingReviewQueue,
+  CreateMaintenancePayload,
+  MaintenanceAssigneeType,
   MaintenanceCategory,
+  MaintenanceMessageThread,
   MaintenancePriority,
   MaintenanceRequest,
   MaintenanceStatus,
   MediaAsset,
   MessageableRecipient,
   Paginated,
+  PaginatedLedger,
+  PaymentMethod,
   Property,
+  PropertyDetailPayload,
   Review,
   ReviewEligibility,
-  ReviewStatus,
+  TenantBalance,
   TenantDashboard,
   TenantDocument,
   TenantProfileResponse,
   Unit,
   User,
   UserType,
+  VerificationNote,
   VerificationRequestStatus,
   VerificationStatusResponse,
   VerificationSubmitResponse,
+  VerificationSummary,
   WeatherData,
 } from './types';
 
-/** Shape returned by the scoped analytics endpoints. */
-export interface AnalyticsResponse {
-  analytics: Record<string, unknown>;
-  scoped_to: string;
+/** Real payload shape — mirrors App\Services\LandlordAnalyticsService::build(). */
+export interface PortfolioAnalytics {
+  range: {
+    key: 'this' | 'last' | '90' | 'ytd';
+    label: string;
+    from: string;
+    to: string;
+    prev_from: string;
+    prev_to: string;
+  };
+  property_id: number | null;
+  summary: {
+    collected_cents: number;
+    collected_prev_cents: number;
+    expected_cents: number;
+    outstanding_cents: number;
+    overdue_cents: number;
+    occupied_units: number;
+    total_units: number;
+    occupancy_pct: number;
+  };
+  financial_trend: Array<{ month: string; collected_cents: number; expected_cents: number }>;
+  revenue_by_property: Array<{ property_id: number; name: string; collected_cents: number }>;
+  occupancy: {
+    trend: Array<{ month: string; occupied: number; total: number; occupancy_pct: number }>;
+    unit_status: {
+      occupied: number;
+      vacant_listed: number;
+      vacant_draft: number;
+      vacant_unlisted: number;
+      total: number;
+    };
+    vacancy_by_property: Array<{ property_id: number; name: string; vacant: number }>;
+  };
+  listings: {
+    funnel: Array<{ step: string; value: number }>;
+    applications_by_listing: Array<{ listing_id: string; label: string; value: number; status: string }>;
+    status_breakdown: Array<{ status: string; count: number }>;
+  };
+  payments: {
+    behavior_trend: Array<{ month: string; on_time: number; late: number }>;
+    aging: Array<{ bucket: string; amount_cents: number; example: string | null }>;
+    overdue_tenants: Array<{
+      contract_id: string;
+      tenant_name: string | null;
+      property_name: string | null;
+      unit_number: string | null;
+      overdue_cents: number;
+      days_overdue: number;
+      last_payment_at: string | null;
+    }>;
+  };
+  maintenance: {
+    by_status: Array<{ status: string; count: number }>;
+    by_category: Array<{ category: string | null; count: number }>;
+    resolution_trend: Array<{ month: string; avg_days: number | null }>;
+  };
+  needs_attention: Array<{
+    tone: 'red' | 'amber' | 'blue';
+    category: 'overdue_rent' | 'maintenance' | 'vacancy' | 'listing_draft' | 'low_conversion' | 'lease_ending';
+    title: string;
+    description: string;
+    action_label: string;
+    action_route: string;
+  }>;
+  properties: Array<{
+    id: number;
+    name: string;
+    area: string;
+    units: number;
+    occupied: number;
+    occupancy_pct: number;
+    collected_cents: number;
+    outstanding_cents: number;
+    applications_count: number;
+    open_maintenance: number;
+    status: 'healthy' | 'attention' | 'vacancy';
+  }>;
 }
 
 /** Returns the active portal's axios instance for endpoints usable by any role. */
@@ -155,6 +269,12 @@ export const authApi = {
   /** Destroy the admin session server-side. */
   async adminLogout(): Promise<void> {
     await portalHttp.admin.post('/admin/logout');
+  },
+
+  /** Update the authenticated admin's own display name and email. */
+  async adminUpdateProfile(payload: { name: string; email: string }): Promise<Admin> {
+    const { data } = await portalHttp.admin.patch<{ user: Admin }>('/admin/profile', payload);
+    return data.user;
   },
 
   /** Returns which social providers are currently configured. */
@@ -269,10 +389,6 @@ export const publicApi = {
     const { data } = await http.get<Paginated<Listing>>('/listings', { params });
     return data;
   },
-  async featured(): Promise<Listing[]> {
-    const { data } = await http.get<Listing[]>('/listings/featured');
-    return data;
-  },
   async show(id: number): Promise<Listing> {
     const { data } = await http.get<Listing>(`/listings/${id}`);
     return data;
@@ -325,6 +441,49 @@ export const tenantApi = {
     });
     return data;
   },
+  /** Start a DRAFT application and open the guided form. */
+  async startApplicationDraft(listingId: number): Promise<Application> {
+    const { data } = await portalHttp.tenant.post<Application>('/tenant/applications/draft', {
+      listing_id: listingId,
+    });
+    return data;
+  },
+  /** Partial autosave of a draft's structured form. */
+  async saveApplicationDraft(
+    id: number,
+    formData: ApplicationFormData,
+  ): Promise<Application> {
+    const { data } = await portalHttp.tenant.patch<Application>(
+      `/tenant/applications/${id}`,
+      { form_data: formData },
+    );
+    return data;
+  },
+  async submitApplication(id: number, coverNote?: string): Promise<Application> {
+    const { data } = await portalHttp.tenant.post<Application>(
+      `/tenant/applications/${id}/submit`,
+      { cover_note: coverNote ?? null },
+    );
+    return data;
+  },
+  async deleteApplicationDraft(id: number): Promise<void> {
+    await portalHttp.tenant.delete(`/tenant/applications/${id}`);
+  },
+  /** Attach a document to a specific application. */
+  async uploadApplicationDocument(
+    id: number,
+    file: File,
+    documentType?: DocumentType,
+  ): Promise<{ document: TenantDocument; application: Application }> {
+    const form = new FormData();
+    form.append('file', file);
+    if (documentType) form.append('document_type', documentType);
+    const { data } = await portalHttp.tenant.post<{
+      document: TenantDocument;
+      application: Application;
+    }>(`/tenant/applications/${id}/documents`, form);
+    return data;
+  },
   async withdrawApplication(id: number): Promise<Application> {
     const { data } = await portalHttp.tenant.post<Application>(
       `/tenant/applications/${id}/withdraw`,
@@ -341,13 +500,7 @@ export const tenantApi = {
     const { data } = await portalHttp.tenant.get<MaintenanceRequest>(`/tenant/maintenance/${id}`);
     return data;
   },
-  async createMaintenance(payload: {
-    contract_id: string;
-    title: string;
-    description: string;
-    category: MaintenanceCategory;
-    priority: MaintenancePriority;
-  }): Promise<MaintenanceRequest> {
+  async createMaintenance(payload: CreateMaintenancePayload): Promise<MaintenanceRequest> {
     const { data } = await portalHttp.tenant.post<MaintenanceRequest>(
       '/tenant/maintenance',
       payload,
@@ -359,6 +512,35 @@ export const tenantApi = {
       `/tenant/maintenance/${id}/cancel`,
     );
     return data;
+  },
+  async maintenanceMessages(id: number): Promise<MaintenanceMessageThread> {
+    const { data } = await portalHttp.tenant.get<MaintenanceMessageThread>(
+      `/tenant/maintenance/${id}/messages`,
+    );
+    return data;
+  },
+  async sendMaintenanceMessage(id: number, body: string): Promise<MaintenanceMessageThread> {
+    const { data } = await portalHttp.tenant.post<MaintenanceMessageThread>(
+      `/tenant/maintenance/${id}/messages`,
+      { body },
+    );
+    return data;
+  },
+  async uploadMaintenanceMedia(id: number, file: File, caption?: string): Promise<MediaAsset> {
+    const form = new FormData();
+    form.append('file', file);
+    if (caption) form.append('caption', caption);
+    const { data } = await portalHttp.tenant.post<MediaAsset>(
+      `/tenant/maintenance/${id}/media`,
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return data;
+  },
+  /** Stream a restricted media asset (e.g. maintenance evidence) as a Bearer-authed Blob. */
+  async mediaBlob(mediaAssetId: string): Promise<Blob> {
+    const { data } = await portalHttp.tenant.get(`/media/${mediaAssetId}`, { responseType: 'blob' });
+    return data as Blob;
   },
 
   /* ---- Documents (private storage; authorized download) ------------------ */
@@ -464,12 +646,12 @@ export const tenantApi = {
     return data.contract;
   },
   async terminateContract(id: string, reason: string): Promise<void> {
-    await portalHttp.tenant.post(`/tenant/contracts/${id}/terminate`, {
-      termination_reason: reason,
-    });
+    await portalHttp.tenant.post(`/tenant/contracts/${id}/terminate`, { reason });
   },
-  async ledger(): Promise<LedgerEntry[]> {
-    const { data } = await portalHttp.tenant.get<LedgerEntry[]>('/tenant/ledger');
+  async ledger(contractId?: string): Promise<LedgerListResponse> {
+    const { data } = await portalHttp.tenant.get<LedgerListResponse>('/tenant/ledger', {
+      params: contractId ? { contract_id: contractId } : undefined,
+    });
     return data;
   },
 
@@ -524,14 +706,12 @@ export const tenantApi = {
     return data;
   },
 
-  async balance(): Promise<{ balance_cents: number; balance_dollars: number }> {
-    const { data } = await portalHttp.tenant.get('/tenant/payments/balance');
+  async balance(): Promise<TenantBalance> {
+    const { data } = await portalHttp.tenant.get<TenantBalance>('/tenant/payments/balance');
     return data;
   },
-  async initiatePayment(
-    ledgerEntryId: string,
-  ): Promise<{ client_secret: string; payment_intent_id: string }> {
-    const { data } = await portalHttp.tenant.post(
+  async initiatePayment(ledgerEntryId: string): Promise<InitiatePaymentResponse> {
+    const { data } = await portalHttp.tenant.post<InitiatePaymentResponse>(
       `/tenant/payments/initiate/${ledgerEntryId}`,
     );
     return data;
@@ -551,8 +731,8 @@ export const landlordApi = {
   },
 
   /* ---- Applications (decide on tenant applications) ---------------------- */
-  async applications(): Promise<Application[]> {
-    const { data } = await portalHttp.landlord.get<Application[]>('/landlord/applications');
+  async applications(params?: { listing_id?: number }): Promise<Application[]> {
+    const { data } = await portalHttp.landlord.get<Application[]>('/landlord/applications', { params });
     return data;
   },
   async application(id: number): Promise<Application> {
@@ -570,46 +750,191 @@ export const landlordApi = {
     );
     return data;
   },
+  /** Ask the tenant for more info / a document replacement (→ needs_action). */
+  async requestApplicationInfo(
+    id: number,
+    payload: {
+      message: string;
+      type?: 'document_replacement' | 'more_info' | 'general';
+      document_type?: DocumentType | null;
+      reason?: string | null;
+      due_at?: string | null;
+    },
+  ): Promise<Application> {
+    const { data } = await portalHttp.landlord.post<Application>(
+      `/landlord/applications/${id}/request-info`,
+      payload,
+    );
+    return data;
+  },
+  /** Internal organisational flag — toggles on/off, independent of status. */
+  async toggleApplicationShortlist(id: number): Promise<Application> {
+    const { data } = await portalHttp.landlord.post<Application>(
+      `/landlord/applications/${id}/shortlist`,
+    );
+    return data;
+  },
+  /** The message thread with this applicant about their listing (may be empty). */
+  async applicationMessages(id: number): Promise<ApplicationMessageThread> {
+    const { data } = await portalHttp.landlord.get<ApplicationMessageThread>(
+      `/landlord/applications/${id}/messages`,
+    );
+    return data;
+  },
+  /** Send a message to the applicant, creating the conversation on first use. */
+  async sendApplicationMessage(id: number, body: string): Promise<ApplicationMessageThread> {
+    const { data } = await portalHttp.landlord.post<ApplicationMessageThread>(
+      `/landlord/applications/${id}/messages`,
+      { body },
+    );
+    return data;
+  },
 
   /* ---- Maintenance (manage requests on owned properties) ---------------- */
   async maintenance(): Promise<MaintenanceRequest[]> {
     const { data } = await portalHttp.landlord.get<MaintenanceRequest[]>('/landlord/maintenance');
     return data;
   },
+  async maintenanceDetail(id: number): Promise<MaintenanceRequest> {
+    const { data } = await portalHttp.landlord.get<MaintenanceRequest>(`/landlord/maintenance/${id}`);
+    return data;
+  },
+  async createLandlordMaintenance(payload: {
+    contract_id: string;
+    title: string;
+    description?: string;
+    category: MaintenanceCategory;
+    priority: MaintenancePriority;
+    mode: 'new' | 'assign' | 'resolved';
+    assignee_name?: string;
+    assignee_phone?: string;
+    assignee_type?: MaintenanceAssigneeType;
+    appointment_at?: string;
+    expected_completion_date?: string;
+    resolution_notes?: string;
+  }): Promise<MaintenanceRequest> {
+    const { data } = await portalHttp.landlord.post<MaintenanceRequest>('/landlord/maintenance', payload);
+    return data;
+  },
   async updateMaintenanceStatus(
     id: number,
-    status: MaintenanceStatus,
-    resolutionNotes?: string,
+    payload: {
+      status: MaintenanceStatus;
+      resolution_notes?: string;
+      waiting_reason?: string;
+      assignee_name?: string;
+      assignee_phone?: string;
+      assignee_type?: MaintenanceAssigneeType;
+      appointment_at?: string;
+      expected_completion_date?: string;
+      labor_cost_cents?: number;
+      parts_cost_cents?: number;
+    },
   ): Promise<MaintenanceRequest> {
     const { data } = await portalHttp.landlord.patch<MaintenanceRequest>(
       `/landlord/maintenance/${id}/status`,
-      { status, resolution_notes: resolutionNotes ?? null },
+      payload,
     );
     return data;
+  },
+  async reopenMaintenance(id: number, reason: string): Promise<MaintenanceRequest> {
+    const { data } = await portalHttp.landlord.post<MaintenanceRequest>(
+      `/landlord/maintenance/${id}/reopen`,
+      { reason },
+    );
+    return data;
+  },
+  async updateMaintenanceCosts(id: number, payload: {
+    labor_cost_cents?: number;
+    parts_cost_cents?: number;
+    invoice_reference?: string;
+    cost_notes?: string;
+    cost_paid?: boolean;
+  }): Promise<MaintenanceRequest> {
+    const { data } = await portalHttp.landlord.patch<MaintenanceRequest>(
+      `/landlord/maintenance/${id}/costs`,
+      payload,
+    );
+    return data;
+  },
+  async maintenanceMessages(id: number): Promise<MaintenanceMessageThread> {
+    const { data } = await portalHttp.landlord.get<MaintenanceMessageThread>(
+      `/landlord/maintenance/${id}/messages`,
+    );
+    return data;
+  },
+  async sendMaintenanceMessage(id: number, body: string): Promise<MaintenanceMessageThread> {
+    const { data } = await portalHttp.landlord.post<MaintenanceMessageThread>(
+      `/landlord/maintenance/${id}/messages`,
+      { body },
+    );
+    return data;
+  },
+  async uploadMaintenanceMedia(id: number, file: File, caption?: string): Promise<MediaAsset> {
+    const form = new FormData();
+    form.append('file', file);
+    if (caption) form.append('caption', caption);
+    const { data } = await portalHttp.landlord.post<MediaAsset>(
+      `/landlord/maintenance/${id}/media`,
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return data;
+  },
+  /** Stream a restricted media asset (maintenance evidence) as a Bearer-authed Blob. */
+  async mediaBlob(mediaAssetId: string): Promise<Blob> {
+    const { data } = await portalHttp.landlord.get(`/media/${mediaAssetId}`, { responseType: 'blob' });
+    return data as Blob;
+  },
+  /** Scoped CSV export; the checksum is a real SHA-256 of the returned bytes. */
+  async exportMaintenance(params: {
+    scope: 'filtered' | 'property' | 'tenant' | 'single' | 'full';
+    status?: string;
+    priority?: string;
+    property_id?: number;
+    tenant_id?: number;
+    maintenance_request_id?: number;
+    reason?: string;
+  }): Promise<{ blob: Blob; filename: string; checksum: string; rowCount: number }> {
+    const response = await portalHttp.landlord.get('/landlord/maintenance/export', {
+      params,
+      responseType: 'blob',
+    });
+    const disposition = String(response.headers['content-disposition'] ?? '');
+    const filenameMatch = /filename="?([^"]+)"?/.exec(disposition);
+    return {
+      blob: response.data,
+      filename: filenameMatch?.[1] ?? 'maintenance.csv',
+      checksum: String(response.headers['x-export-checksum'] ?? ''),
+      rowCount: Number(response.headers['x-export-row-count'] ?? 0),
+    };
   },
 
   /* ---- Analytics (scoped to the landlord's portfolio) ------------------- */
-  async analyticsFinancial(params?: {
-    start_date?: string;
-    end_date?: string;
-    property_id?: number;
-  }): Promise<AnalyticsResponse> {
-    const { data } = await portalHttp.landlord.get<AnalyticsResponse>(
-      '/landlord/analytics/financial',
-      { params },
-    );
+  /** Full Portfolio Analytics page payload — real, portfolio-wide by default, optionally scoped to one property. */
+  async analyticsPortfolio(range?: 'this' | 'last' | '90' | 'ytd', propertyId?: number): Promise<PortfolioAnalytics> {
+    const { data } = await portalHttp.landlord.get<PortfolioAnalytics>('/landlord/analytics', {
+      params: { range, property_id: propertyId },
+    });
     return data;
   },
-  async analyticsContracts(params?: {
-    start_date?: string;
-    end_date?: string;
-    property_id?: number;
-  }): Promise<AnalyticsResponse> {
-    const { data } = await portalHttp.landlord.get<AnalyticsResponse>(
-      '/landlord/analytics/contracts',
-      { params },
-    );
-    return data;
+  /** Scoped, multi-section CSV export; the checksum is a real SHA-256 of the returned bytes. */
+  async exportAnalytics(
+    range?: 'this' | 'last' | '90' | 'ytd',
+    propertyId?: number,
+  ): Promise<{ blob: Blob; filename: string; checksum: string; rowCount: number }> {
+    const response = await portalHttp.landlord.get('/landlord/analytics/export', {
+      params: { range, property_id: propertyId },
+      responseType: 'blob',
+    });
+    const disposition = String(response.headers['content-disposition'] ?? '');
+    const filenameMatch = /filename="?([^"]+)"?/.exec(disposition);
+    return {
+      blob: response.data,
+      filename: filenameMatch?.[1] ?? 'analytics.csv',
+      checksum: String(response.headers['x-export-checksum'] ?? ''),
+      rowCount: Number(response.headers['x-export-row-count'] ?? 0),
+    };
   },
   async properties(): Promise<Property[]> {
     const { data } = await portalHttp.landlord.get<Property[]>('/landlord/properties');
@@ -617,6 +942,13 @@ export const landlordApi = {
   },
   async property(id: number): Promise<Property> {
     const { data } = await portalHttp.landlord.get<Property>(`/landlord/properties/${id}`);
+    return data;
+  },
+  /** Rich Property page payload: summary, attention, units, listings, contracts, ledger, maintenance, documents, photos, activity. */
+  async propertyDetail(id: number): Promise<PropertyDetailPayload> {
+    const { data } = await portalHttp.landlord.get<PropertyDetailPayload>(
+      `/landlord/properties/${id}/detail`,
+    );
     return data;
   },
   async createProperty(payload: Partial<Property>): Promise<Property> {
@@ -632,9 +964,6 @@ export const landlordApi = {
       payload,
     );
     return data.property ?? (data as unknown as Property);
-  },
-  async deleteProperty(id: number): Promise<void> {
-    await portalHttp.landlord.delete(`/landlord/properties/${id}`);
   },
   async units(): Promise<Unit[]> {
     const { data } = await portalHttp.landlord.get<Unit[]>('/landlord/units');
@@ -659,9 +988,6 @@ export const landlordApi = {
     );
     return data.unit ?? (data as unknown as Unit);
   },
-  async deleteUnit(id: number): Promise<void> {
-    await portalHttp.landlord.delete(`/landlord/units/${id}`);
-  },
   async listings(): Promise<Listing[]> {
     const { data } = await portalHttp.landlord.get<Listing[]>('/landlord/listings');
     return data;
@@ -685,14 +1011,50 @@ export const landlordApi = {
     );
     return data.listing ?? (data as unknown as Listing);
   },
+  /** Submits a draft, or resubmits a rejected listing (clears the prior rejection reason). */
   async submitListing(id: number): Promise<void> {
     await portalHttp.landlord.post(`/landlord/listings/${id}/submit`);
+  },
+  /** Pulls a pending submission back to draft before an admin has decided. */
+  async withdrawListing(id: number): Promise<Listing> {
+    const { data } = await portalHttp.landlord.post<{ listing: Listing }>(`/landlord/listings/${id}/withdraw`);
+    return data.listing ?? (data as unknown as Listing);
+  },
+  /** Hides an active listing from tenants without deleting it. */
+  async deactivateListing(id: number): Promise<Listing> {
+    const { data } = await portalHttp.landlord.post<{ listing: Listing }>(`/landlord/listings/${id}/deactivate`);
+    return data.listing ?? (data as unknown as Listing);
+  },
+  /** Makes a previously-active listing live again, no re-review needed. */
+  async reactivateListing(id: number): Promise<Listing> {
+    const { data } = await portalHttp.landlord.post<{ listing: Listing }>(`/landlord/listings/${id}/reactivate`);
+    return data.listing ?? (data as unknown as Listing);
+  },
+  /** Archives a draft/rejected/inactive listing for record-keeping (read-only until restored). */
+  async archiveListing(id: number): Promise<Listing> {
+    const { data } = await portalHttp.landlord.post<{ listing: Listing }>(`/landlord/listings/${id}/archive`);
+    return data.listing ?? (data as unknown as Listing);
+  },
+  /** Restores an archived listing back to an editable draft. */
+  async restoreListing(id: number): Promise<Listing> {
+    const { data } = await portalHttp.landlord.post<{ listing: Listing }>(`/landlord/listings/${id}/restore`);
+    return data.listing ?? (data as unknown as Listing);
+  },
+  /** Real audit-log-backed timeline for a listing (review decisions, edits, uploads). */
+  async listingHistory(id: number): Promise<ListingHistoryEntry[]> {
+    const { data } = await portalHttp.landlord.get<ListingHistoryEntry[]>(`/landlord/listings/${id}/history`);
+    return data;
   },
   async deleteListing(id: number): Promise<void> {
     await portalHttp.landlord.delete(`/landlord/listings/${id}`);
   },
   async contracts(): Promise<Contract[]> {
     const { data } = await portalHttp.landlord.get<Contract[]>('/landlord/contracts');
+    return data;
+  },
+  /** Single contract detail — eager-loads listing/tenant/admin/renewals. */
+  async contract(id: string): Promise<Contract> {
+    const { data } = await portalHttp.landlord.get<Contract>(`/landlord/contracts/${id}`);
     return data;
   },
   async createContract(payload: {
@@ -717,18 +1079,118 @@ export const landlordApi = {
     await portalHttp.landlord.post(`/landlord/contracts/${id}/send`);
   },
   async terminateContract(id: string, reason: string): Promise<void> {
-    await portalHttp.landlord.post(`/landlord/contracts/${id}/terminate`, {
-      termination_reason: reason,
-    });
+    await portalHttp.landlord.post(`/landlord/contracts/${id}/terminate`, { reason });
   },
-  async ledger(): Promise<LedgerEntry[]> {
-    const { data } = await portalHttp.landlord.get<LedgerEntry[]>('/landlord/ledger');
+  /**
+   * Renews an ACTIVE contract in-place (new end date / rent amount take
+   * effect immediately — there is no separate tenant re-signature step).
+   * Records a ContractRenewal history row server-side.
+   */
+  async renewContract(
+    id: string,
+    payload: { new_end_date: string; new_rent_amount?: number; note?: string },
+  ): Promise<{ message: string; contract: Contract }> {
+    const { data } = await portalHttp.landlord.post<{ message: string; contract: Contract }>(
+      `/landlord/contracts/${id}/renew`,
+      payload,
+    );
+    return data;
+  },
+  /** The message thread with this contract's tenant, if one exists yet. */
+  async contractMessages(id: string): Promise<ContractMessageThread> {
+    const { data } = await portalHttp.landlord.get<ContractMessageThread>(
+      `/landlord/contracts/${id}/messages`,
+    );
+    return data;
+  },
+  /** Send a message to this contract's tenant, creating the conversation on first use. */
+  async sendContractMessage(id: string, body: string): Promise<ContractMessageThread> {
+    const { data } = await portalHttp.landlord.post<ContractMessageThread>(
+      `/landlord/contracts/${id}/messages`,
+      { body },
+    );
+    return data;
+  },
+  /** Landlord-authored, landlord-visible notes on this tenancy's case file. */
+  async contractNotes(id: string): Promise<ContractLandlordNote[]> {
+    const { data } = await portalHttp.landlord.get<ContractLandlordNote[]>(
+      `/landlord/contracts/${id}/notes`,
+    );
+    return data;
+  },
+  async addContractNote(id: string, body: string): Promise<ContractLandlordNote> {
+    const { data } = await portalHttp.landlord.post<ContractLandlordNote>(
+      `/landlord/contracts/${id}/notes`,
+      { body },
+    );
+    return data;
+  },
+  async ledger(): Promise<LandlordLedgerResponse> {
+    const { data } = await portalHttp.landlord.get<LandlordLedgerResponse>('/landlord/ledger');
+    return data;
+  },
+  /** Single-entry case file: decorated entry + audit trail + linked entries. */
+  async ledgerEntry(id: string): Promise<LandlordLedgerCaseFile> {
+    const { data } = await portalHttp.landlord.get<LandlordLedgerCaseFile>(`/landlord/ledger/${id}`);
+    return data;
+  },
+  /** Tenant/contract statement for one billing month (defaults to current month). */
+  async contractStatement(
+    contractId: string,
+    period?: { year: number; month: number },
+  ): Promise<LedgerContractStatement> {
+    const { data } = await portalHttp.landlord.get<LedgerContractStatement>(
+      `/landlord/ledger/statement/contract/${contractId}`,
+      { params: period },
+    );
+    return data;
+  },
+  /** Property statement for one billing month, broken down by unit. */
+  async propertyStatement(
+    propertyId: number,
+    period?: { year: number; month: number },
+  ): Promise<LedgerPropertyStatement> {
+    const { data } = await portalHttp.landlord.get<LedgerPropertyStatement>(
+      `/landlord/ledger/statement/property/${propertyId}`,
+      { params: period },
+    );
+    return data;
+  },
+  /**
+   * Record a full-amount manual/offline payment against a chosen open
+   * rent/late-fee ledger entry. There is no free-typed amount — the full
+   * `display_amount_cents` of `entryId` is what gets recorded (partial
+   * payments are not a real backend concept).
+   */
+  async recordLedgerPayment(
+    entryId: string,
+    payload: { method: PaymentMethod; reference?: string },
+  ): Promise<{ entry: LedgerEntry; payment: LedgerEntry }> {
+    const { data } = await portalHttp.landlord.post<{ entry: LedgerEntry; payment: LedgerEntry }>(
+      `/landlord/ledger/${entryId}/record-payment`,
+      payload,
+    );
     return data;
   },
 
   /* ---- CSV exports (real server-generated, owner-scoped) ---------------- */
-  async exportLedger(): Promise<void> {
-    await downloadCsv(portalHttp.landlord, '/landlord/ledger/export', 'rent-ledger.csv');
+  /**
+   * Ledger CSV export, optionally scoped to one contract, one property,
+   * and/or a date range, with a stated reason recorded to the audit log.
+   */
+  async exportLedger(params?: {
+    contract_id?: string;
+    property_id?: number;
+    date_from?: string;
+    date_to?: string;
+    reason?: string;
+  }): Promise<void> {
+    await downloadCsv(
+      portalHttp.landlord,
+      '/landlord/ledger/export',
+      'rent-ledger.csv',
+      params as Record<string, unknown> | undefined,
+    );
   },
   async exportListings(): Promise<void> {
     await downloadCsv(portalHttp.landlord, '/landlord/listings/export', 'listings.csv');
@@ -889,14 +1351,39 @@ export const adminApi = {
     return data;
   },
 
+  /* ---- Platform Analytics (Super Admin) ---------------------------------- */
+  async platformAnalytics(params?: {
+    range?: '7d' | '30d' | '90d' | 'this_month' | 'last_month' | 'ytd' | 'custom';
+    start_date?: string;
+    end_date?: string;
+  }): Promise<PlatformAnalyticsResponse> {
+    const { data } = await portalHttp.admin.get<PlatformAnalyticsResponse>('/admin/analytics/overview', { params });
+    return data;
+  },
+
+  /* ---- Admin Analytics (scoped to the signed-in admin) ------------------- */
+  async adminAnalytics(params?: {
+    range?: '7d' | '30d' | '90d' | 'this_month' | 'last_month' | 'ytd' | 'custom';
+    start_date?: string;
+    end_date?: string;
+  }): Promise<AdminAnalyticsResponse> {
+    const { data } = await portalHttp.admin.get<AdminAnalyticsResponse>('/admin/analytics/admin-summary', { params });
+    return data;
+  },
+
+  async exportAdminAnalytics(params?: { range?: string; start_date?: string; end_date?: string }): Promise<void> {
+    await downloadCsv(portalHttp.admin, '/admin/analytics/admin-summary/export', 'wyncrest-admin-analytics.csv', params);
+  },
+
   /* ---- User management -------------------------------------------------- */
   async users(params?: {
     type?: UserType;
-    status?: 'active' | 'suspended';
+    status?: 'active' | 'suspended' | 'blocked' | 'archived' | 'unverified';
     search?: string;
+    sort?: 'review' | 'joined' | 'name';
     page?: number;
-  }): Promise<Paginated<AdminUserSummary>> {
-    const { data } = await portalHttp.admin.get<Paginated<AdminUserSummary>>('/admin/users', {
+  }): Promise<AdminUsersResponse> {
+    const { data } = await portalHttp.admin.get<AdminUsersResponse>('/admin/users', {
       params,
     });
     return data;
@@ -921,15 +1408,84 @@ export const adminApi = {
     const { data } = await portalHttp.admin.post(`/admin/users/${id}/archive`, { reason });
     return data;
   },
-  async pendingListings(): Promise<Listing[]> {
-    const { data } = await portalHttp.admin.get<Listing[]>('/admin/listings/pending');
+  // ── Maintenance (read-only admin visibility; no capability gate) ───────
+  async maintenanceQueue(params?: {
+    status?: 'open' | 'urgent' | 'overdue' | 'waiting' | 'all';
+    limit?: number;
+  }): Promise<{ data: AdminMaintenanceCase[] }> {
+    const { data } = await portalHttp.admin.get<{ data: AdminMaintenanceCase[] }>('/admin/maintenance', {
+      params,
+    });
     return data;
   },
-  async approveListing(id: number): Promise<void> {
-    await portalHttp.admin.post(`/admin/listings/${id}/approve`);
+  async maintenanceSummary(): Promise<DashboardMaintenanceSummary> {
+    const { data } = await portalHttp.admin.get<DashboardMaintenanceSummary>('/admin/maintenance/summary');
+    return data;
   },
-  async rejectListing(id: number, reason: string): Promise<void> {
-    await portalHttp.admin.post(`/admin/listings/${id}/reject`, { rejection_reason: reason });
+  /** Review queue with truthful per-status counts + filtered/sorted summaries. */
+  async listingReviewQueue(params?: {
+    status?: 'pending' | 'approved' | 'rejected' | 'all';
+    search?: string;
+    sort?: 'newest' | 'oldest' | 'rent_high' | 'rent_low' | 'attention';
+  }): Promise<ListingReviewQueue> {
+    const { data } = await portalHttp.admin.get<ListingReviewQueue>('/admin/listings/review', {
+      params,
+    });
+    return data;
+  },
+  /** Full review detail for a single listing. */
+  async listingReviewDetail(id: number): Promise<ListingReviewDetail> {
+    const { data } = await portalHttp.admin.get<ListingReviewDetail>(
+      `/admin/listings/review/${id}`,
+    );
+    return data;
+  },
+  /** Tenant-safe preview payload (what tenants see once published). */
+  async listingReviewPreview(id: number): Promise<ListingPreview> {
+    const { data } = await portalHttp.admin.get<ListingPreview>(
+      `/admin/listings/review/${id}/preview`,
+    );
+    return data;
+  },
+  /** Approve (publish) a listing, with an optional admin-only note. Returns fresh detail. */
+  async approveListing(id: number, internalNote?: string): Promise<ListingReviewDetail> {
+    const { data } = await portalHttp.admin.post<{ listing: ListingReviewDetail }>(
+      `/admin/listings/review/${id}/approve`,
+      internalNote ? { internal_note: internalNote } : {},
+    );
+    return data.listing;
+  },
+  /** Reject a listing with a required, landlord-facing reason + optional internal note. */
+  async rejectListing(
+    id: number,
+    reason: string,
+    internalNote?: string,
+  ): Promise<ListingReviewDetail> {
+    const { data } = await portalHttp.admin.post<{ listing: ListingReviewDetail }>(
+      `/admin/listings/review/${id}/reject`,
+      { reason, ...(internalNote ? { internal_note: internalNote } : {}) },
+    );
+    return data.listing;
+  },
+  /** Send a listing back to the landlord for changes (returns it to draft). */
+  async requestListingChanges(
+    id: number,
+    reason: string,
+    internalNote?: string,
+  ): Promise<ListingReviewDetail> {
+    const { data } = await portalHttp.admin.post<{ listing: ListingReviewDetail }>(
+      `/admin/listings/review/${id}/request-changes`,
+      { reason, ...(internalNote ? { internal_note: internalNote } : {}) },
+    );
+    return data.listing;
+  },
+  /** Attach an internal, admin-only note to a listing. */
+  async addListingNote(id: number, body: string): Promise<ListingReviewNote> {
+    const { data } = await portalHttp.admin.post<{ note: ListingReviewNote }>(
+      `/admin/listings/review/${id}/notes`,
+      { body },
+    );
+    return data.note;
   },
   async auditLogs(params?: {
     severity?: 'info' | 'warning' | 'critical';
@@ -979,25 +1535,84 @@ export const adminApi = {
       tz: clientTimezone(),
     });
   },
-  async contracts(params?: { page?: number }): Promise<Paginated<Contract>> {
-    const { data } = await portalHttp.admin.get<Paginated<Contract>>('/admin/contracts', {
-      params,
-    });
+  // ── Contracts case-file command centre ─────────────────────────────────
+  /** The contracts queue: truthful segment counts + filtered/sorted summaries. */
+  async contractQueue(params?: {
+    status?: 'all' | 'active' | 'awaiting' | 'expiring' | 'overdue' | 'ended' | 'draft';
+    search?: string;
+    sort?: 'ending_soonest' | 'newest' | 'rent' | 'property';
+  }): Promise<ContractQueue> {
+    const { data } = await portalHttp.admin.get<ContractQueue>('/admin/contracts', { params });
     return data;
   },
-  async ledger(params?: { page?: number }): Promise<Paginated<LedgerEntry>> {
-    const { data } = await portalHttp.admin.get<Paginated<LedgerEntry>>('/admin/ledger', {
-      params,
-    });
+  /** Full case-file detail for a single contract. */
+  async contract(id: string): Promise<ContractCaseFileDetail> {
+    const { data } = await portalHttp.admin.get<ContractCaseFileDetail>(`/admin/contracts/${id}`);
     return data;
   },
-  async landlordFeatures(landlordId: number): Promise<Feature[]> {
-    const { data } = await portalHttp.admin.get<Feature[]>(
-      `/admin/landlords/${landlordId}/features`,
+  /** Contract-scoped, decorated ledger entries + financial summary. */
+  async contractLedger(id: string): Promise<ContractLedgerResponse> {
+    const { data } = await portalHttp.admin.get<ContractLedgerResponse>(`/admin/contracts/${id}/ledger`);
+    return data;
+  },
+  /** Contract-scoped payment history. */
+  async contractPayments(id: string): Promise<ContractPayment[]> {
+    const { data } = await portalHttp.admin.get<{ data: ContractPayment[] }>(`/admin/contracts/${id}/payments`);
+    return data.data;
+  },
+  /** Computed billing schedule (real generated periods + at most one projected upcoming period). */
+  async contractBillingSchedule(id: string): Promise<ContractBillingPeriod[]> {
+    const { data } = await portalHttp.admin.get<{ data: ContractBillingPeriod[] }>(
+      `/admin/contracts/${id}/billing-schedule`,
     );
+    return data.data;
+  },
+  /** Real lifecycle timeline, sourced from the audit log. */
+  async contractTimeline(id: string): Promise<ContractTimelineEvent[]> {
+    const { data } = await portalHttp.admin.get<{ data: ContractTimelineEvent[] }>(`/admin/contracts/${id}/timeline`);
+    return data.data;
+  },
+  /** Real contract-attached documents (truthfully empty until one is uploaded). */
+  async contractDocuments(id: string): Promise<ContractDocument[]> {
+    const { data } = await portalHttp.admin.get<{ data: ContractDocument[] }>(`/admin/contracts/${id}/documents`);
+    return data.data;
+  },
+  /** Attach an internal, admin-only note to a contract's case file. */
+  async addContractNote(id: string, body: string): Promise<ContractNote> {
+    const { data } = await portalHttp.admin.post<{ note: ContractNote }>(`/admin/contracts/${id}/notes`, { body });
+    return data.note;
+  },
+  /** Force-terminate an active contract. Reason is required and audited. */
+  async terminateContract(id: string, reason: string): Promise<void> {
+    await portalHttp.admin.post(`/admin/contracts/${id}/terminate`, { reason });
+  },
+  async ledger(params?: LedgerQueryParams): Promise<PaginatedLedger> {
+    const { data } = await portalHttp.admin.get<PaginatedLedger>('/admin/ledger', {
+      params,
+    });
     return data;
   },
-
+  async ledgerEntry(id: string): Promise<LedgerEntryCaseFile> {
+    const { data } = await portalHttp.admin.get<LedgerEntryCaseFile>(`/admin/ledger/${id}`);
+    return data;
+  },
+  async ledgerReconciliation(): Promise<LedgerReconciliationReport> {
+    const { data } = await portalHttp.admin.get<LedgerReconciliationReport>('/admin/ledger/reconciliation');
+    return data;
+  },
+  /** Waive a pending/overdue rent or late fee entry. Reason is required and audited. */
+  async waiveLedgerEntry(id: string, reason: string): Promise<LedgerEntryCaseFile> {
+    const { data } = await portalHttp.admin.post<LedgerEntryCaseFile>(`/admin/ledger/${id}/waive`, { reason });
+    return data;
+  },
+  /** Generate a late fee against an overdue rent entry. */
+  async generateLateFee(id: string, amountCents: number): Promise<void> {
+    await portalHttp.admin.post(`/admin/ledger/${id}/late-fee`, { amount_cents: amountCents });
+  },
+  /** CSV export of the (optionally filtered) platform ledger. Audit-logged server-side. */
+  async exportLedger(params?: LedgerQueryParams): Promise<void> {
+    await downloadCsv(portalHttp.admin, '/admin/ledger/export', 'wyncrest-ledger.csv', params as Record<string, unknown> | undefined);
+  },
   /**
    * Platform-wide notification delivery monitor (email/SMS outcomes across all
    * users). Admin-only. All filters optional; paginated via `meta`.
@@ -1025,6 +1640,12 @@ export const adminApi = {
     // vocabulary (terminal = 'approved'), matching the backend's
     // `in:pending,under_review,approved,rejected,needs_more_information` rule.
     status?: VerificationRequestStatus;
+    role?: 'tenant' | 'landlord';
+    search?: string;
+    from_date?: string;
+    to_date?: string;
+    needs_documents?: boolean;
+    sort?: 'newest' | 'oldest' | 'needs_attention_first';
     page?: number;
   }): Promise<Paginated<AdminVerificationRequest>> {
     const { data } = await portalHttp.admin.get<Paginated<AdminVerificationRequest>>(
@@ -1033,11 +1654,25 @@ export const adminApi = {
     );
     return data;
   },
+  /** Truthful counts for the queue's summary cards. */
+  async verificationsSummary(): Promise<VerificationSummary> {
+    const { data } = await portalHttp.admin.get<VerificationSummary>(
+      '/admin/verifications/summary',
+    );
+    return data;
+  },
   async verification(id: string): Promise<AdminVerificationDetail> {
     const { data } = await portalHttp.admin.get<AdminVerificationDetail>(
       `/admin/verifications/${id}`,
     );
     return data;
+  },
+  async addVerificationNote(id: string, body: string): Promise<VerificationNote> {
+    const { data } = await portalHttp.admin.post<{ message: string; note: VerificationNote }>(
+      `/admin/verifications/${id}/notes`,
+      { body },
+    );
+    return data.note;
   },
   async approveVerification(
     id: string,
@@ -1091,25 +1726,43 @@ export const adminApi = {
     a.remove();
     URL.revokeObjectURL(blobUrl);
   },
+  /**
+   * Fetch a document as a blob and hand back an object URL for inline preview
+   * (image/PDF viewer). Reuses the same admin-gated, audited download route —
+   * the Content-Disposition header is irrelevant once fetched as a blob, since
+   * the frontend controls how the object URL is used. Caller must revoke the
+   * URL (URL.revokeObjectURL) when done.
+   */
+  async previewDocumentBlob(id: number): Promise<{ url: string; mimeType: string }> {
+    const res = await portalHttp.admin.get(`/admin/documents/${id}/download`, {
+      responseType: 'blob',
+    });
+    const blob = res.data as Blob;
+    return { url: URL.createObjectURL(blob), mimeType: blob.type };
+  },
 
   /* ---- Review moderation ------------------------------------------------- */
-  async adminReviews(params?: {
-    status?: ReviewStatus;
-    property_id?: number;
-    page?: number;
-  }): Promise<Paginated<AdminReview>> {
-    const { data } = await portalHttp.admin.get<Paginated<AdminReview>>(
+  async adminReviewQueue(params?: {
+    status?: 'queue' | 'approved' | 'rejected' | 'hidden' | 'flagged' | 'all';
+    search?: string;
+    sort?: 'risk' | 'newest' | 'oldest' | 'lowrating';
+  }): Promise<AdminReviewQueueResponse> {
+    const { data } = await portalHttp.admin.get<AdminReviewQueueResponse>(
       '/admin/reviews',
       { params },
     );
+    return data;
+  },
+  async adminReviewDetail(id: number): Promise<AdminReviewDetail> {
+    const { data } = await portalHttp.admin.get<AdminReviewDetail>(`/admin/reviews/${id}`);
     return data;
   },
   async moderateReview(
     id: number,
     action: 'approve' | 'reject' | 'hide' | 'flag',
     reason?: string,
-  ): Promise<AdminReview> {
-    const { data } = await portalHttp.admin.post<AdminReview>(
+  ): Promise<AdminReviewDetail> {
+    const { data } = await portalHttp.admin.post<AdminReviewDetail>(
       `/admin/reviews/${id}/moderate`,
       { action, reason: reason ?? null },
     );
@@ -1212,12 +1865,6 @@ export const notificationApi = {
     const { data } = await activePortalClient().get<Paginated<AppNotification>>(
       crossRolePath('/notifications'),
       { params },
-    );
-    return data;
-  },
-  async unread(): Promise<AppNotification[]> {
-    const { data } = await activePortalClient().get<AppNotification[]>(
-      crossRolePath('/notifications/unread'),
     );
     return data;
   },

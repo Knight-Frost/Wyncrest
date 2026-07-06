@@ -523,3 +523,21 @@ export const IconImage = mkIcon(
     <polyline points="21 15 16 10 5 21" />
   </>,
 );
+export const IconZoomIn = mkIcon(
+  <>
+    <circle cx="11" cy="11" r="7" />
+    <path d="m21 21-4.3-4.3M11 8v6M8 11h6" />
+  </>,
+);
+export const IconZoomOut = mkIcon(
+  <>
+    <circle cx="11" cy="11" r="7" />
+    <path d="m21 21-4.3-4.3M8 11h6" />
+  </>,
+);
+export const IconRotate = mkIcon(
+  <>
+    <path d="M21 12a9 9 0 1 1-3.2-6.9" />
+    <path d="M21 3v6h-6" />
+  </>,
+);

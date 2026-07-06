@@ -314,10 +314,23 @@
     0 22px 44px -22px rgb(0 0 0 / 0.55),
     0 6px 16px -8px rgb(0 0 0 / 0.5);
 
-  /* Glass over photography — petrol scrim */
-  --glass-bg:     rgba(7, 16, 17, 0.55);
-  --glass-strong: rgba(7, 16, 17, 0.74);
-  --glass-border: rgba(243, 247, 245, 0.14);
+  /* Glass — anchored to --color-surface/--color-ink-300 (via color-mix)
+     instead of a literal petrol-black rgba. The old rgba(7,16,17,*) tint was
+     mixed from --color-canvas's OWN color, so a card's fill converged back
+     toward the page background almost regardless of opacity — that's what
+     produced the "harsh, disconnected black card" look here (this block is
+     the one actually active across the app: AppShell always sets
+     data-skin="editorial"). Mixing --color-surface in instead guarantees the
+     same lift + contrast as a plain `.ac-card` (Settings, the reference), and
+     it re-tunes automatically for every dark palette (data-dark-theme) since
+     --color-surface/--color-ink-300 do — the old literal did not. */
+  --glass-bg:             color-mix(in srgb, var(--color-surface) 62%, transparent);
+  --glass-bg-strong:      color-mix(in srgb, var(--color-surface) 90%, transparent);
+  --glass-border:         color-mix(in srgb, var(--color-ink-300) 55%, transparent);
+  --glass-border-strong:  color-mix(in srgb, var(--color-ink-300) 80%, transparent);
+  --glass-highlight:      inset 0 1px 0 rgba(255,255,255,0.05);
+  --glass-shadow:         0 1px 2px rgb(0 0 0 / .35), 0 10px 24px -12px rgb(0 0 0 / .40);
+  --glass-shadow-lg:      0 4px 10px -4px rgb(0 0 0 / .35), 0 22px 44px -18px rgb(0 0 0 / .45);
 }
 
 /* ==========================================================================
@@ -538,20 +551,27 @@
    ========================================================================== */
 
 .audit-center {
-  --audit-accent:        #9E3024;
-  --audit-accent-strong: #872117;
-  --audit-accent-bg:     #F7E7E2;
-  --audit-accent-border: #E2B4A8;
-  --audit-accent-muted:  rgba(158, 48, 36, 0.12);
+  /* The red identity now FOLLOWS the user's chosen accent. Marks on the page
+     surface (eyebrow, the "log." title word, focus rings, hover chevrons) take
+     the accent's IDENTITY ramp; brand-600 stays deep on the light surface. The
+     dark block below swaps to a luminous step for the dark surface. Fallbacks
+     keep the page's original oxblood if the accent vars are ever absent. */
+  --audit-accent:        var(--color-brand-600, #9E3024);
+  --audit-accent-strong: var(--color-brand-700, #872117);
+  --audit-accent-bg:     color-mix(in srgb, var(--color-brand-600, #9E3024) 12%, var(--color-surface, #fff));
+  --audit-accent-border: color-mix(in srgb, var(--color-brand-600, #9E3024) 34%, transparent);
+  --audit-accent-muted:  color-mix(in srgb, var(--color-brand-600, #9E3024) 12%, transparent);
   --audit-ink:           #14110D;
 }
 
 [data-theme='dark'] .audit-center {
-  --audit-accent:        #E06A5A;
-  --audit-accent-strong: #F2998A;
-  --audit-accent-bg:     rgba(224, 106, 90, 0.14);
-  --audit-accent-border: rgba(224, 106, 90, 0.30);
-  --audit-accent-muted:  rgba(224, 106, 90, 0.10);
+  /* Dark surface → luminous accent step (the accent's dark ramp inverts, so the
+     500 step is bright) so marks stay legible on near-black. */
+  --audit-accent:        var(--color-brand-500, #E06A5A);
+  --audit-accent-strong: var(--color-brand-400, #F2998A);
+  --audit-accent-bg:     color-mix(in srgb, var(--color-brand-500, #E06A5A) 14%, transparent);
+  --audit-accent-border: color-mix(in srgb, var(--color-brand-500, #E06A5A) 30%, transparent);
+  --audit-accent-muted:  color-mix(in srgb, var(--color-brand-500, #E06A5A) 10%, transparent);
   --audit-ink:           #F3F7F5;
 }
 
@@ -570,6 +590,9 @@
 }
 
 /* ---- Page header ---- */
+/* Hero sits on a liquid-glass card (compose with the global .glass-panel), matching
+   the Users & Permissions hero. Padding tracks the same clamp as .wacc .pagehead. */
+.au-hero { padding: clamp(1.4rem, 3vw, 2.2rem); }
 .au-eyebrow {
   font-family: var(--font-mono);
   font-size: .62rem; letter-spacing: .24em; text-transform: uppercase;
@@ -772,9 +795,11 @@
 
 /* Verify-integrity button — uses the page's own audit accent (oxblood is this
    page's identity colour, not a danger signal here). */
-.au-verify { background: var(--audit-accent); transition: background .18s ease, transform .18s ease; }
-.au-verify:hover:not(:disabled) { background: var(--audit-accent-strong); }
-.au-verify:focus-visible { outline: 2px solid var(--audit-accent); outline-offset: 2px; }
+/* Primary action → the accent's BUTTON ramp (action-600/700 hold white text at
+   AA in both light and dark), independent of the luminous mark tokens above. */
+.au-verify { background: var(--color-action-600); transition: background .18s ease, transform .18s ease; }
+.au-verify:hover:not(:disabled) { background: var(--color-action-700); }
+.au-verify:focus-visible { outline: 2px solid var(--color-action-600); outline-offset: 2px; }
 
 /* ---- Detail page ---- */
 .au-back {

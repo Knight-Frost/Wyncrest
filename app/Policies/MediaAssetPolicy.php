@@ -157,6 +157,12 @@ class MediaAssetPolicy
             return true;
         }
 
+        // Landlord of a maintenance request may remove evidence on it too
+        // (owner_user_id is always the tenant for this collection).
+        if ($attachable instanceof MaintenanceRequest && (int) $user->id === (int) $attachable->landlord_id) {
+            return true;
+        }
+
         return false;
     }
 }

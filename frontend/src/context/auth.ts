@@ -26,6 +26,8 @@ export interface AuthContextValue {
     user_type: UserType;
   }) => Promise<AuthUser>;
   logout: () => Promise<void>;
+  /** Patch the in-memory user (e.g. after a self-service profile edit). */
+  updateUser: (user: AuthUser) => void;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);

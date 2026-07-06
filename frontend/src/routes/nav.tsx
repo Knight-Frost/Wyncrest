@@ -1,4 +1,5 @@
 import type { Role } from '@/lib/types';
+import { adminHasCapability } from '@/lib/permissions';
 import {
   IconActivity,
   IconBarChart,
@@ -50,12 +51,14 @@ export interface NavGateUser {
   capabilities?: string[];
 }
 
-/** Can the given user see a capability-gated nav item? */
+/**
+ * Can the given user see a capability-gated nav item? Ungated items are always
+ * visible; gated items defer to the shared RBAC rule (super admin bypasses,
+ * scoped admin needs the exact capability).
+ */
 function canSeeNavItem(item: NavItem, user?: NavGateUser): boolean {
   if (!item.requiresCapability) return true;
-  if (!user || user.role !== 'admin') return false;
-  if (user.is_super_admin) return true;
-  return (user.capabilities ?? []).includes(item.requiresCapability);
+  return adminHasCapability(user, item.requiresCapability);
 }
 
 export interface NavGroup {
@@ -144,19 +147,29 @@ const ADMIN_GROUPS: NavGroup[] = [
     title: 'Platform',
     items: [
       { to: '/app', label: 'Overview', icon: <IconDashboard {...ICON} />, end: true },
-      { to: '/app/verifications', label: 'Verifications', icon: <IconCircleCheck {...ICON} /> },
-      { to: '/app/moderation', label: 'Listing Review', icon: <IconShield {...ICON} /> },
+      { to: '/app/verifications', label: 'Verifications', icon: <IconCircleCheck {...ICON} />, requiresCapability: 'review_verifications' },
+      { to: '/app/listing-review', label: 'Listing Review', icon: <IconShield {...ICON} />, requiresCapability: 'moderate_listings' },
+      // Viewing the user roster is a baseline admin privilege; only the
+      // moderation actions inside the page require manage_users.
       { to: '/app/users', label: 'Users', icon: <IconUsers {...ICON} /> },
       { to: '/app/manage-access', label: 'Manage Users & Permissions', icon: <IconKey {...ICON} />, requiresCapability: 'manage_access' },
-      { to: '/app/review-moderation', label: 'Reviews', icon: <IconStar {...ICON} /> },
+      { to: '/app/review-moderation', label: 'Reviews', icon: <IconStar {...ICON} />, requiresCapability: 'moderate_reviews' },
     ],
   },
   {
     title: 'Oversight',
     items: [
+      // Same rule as Users: viewing is universal, only mutating actions
+      // (terminate/notes, late fees) require manage_contracts/manage_ledger.
       { to: '/app/contracts', label: 'Contracts', icon: <IconScale {...ICON} /> },
       { to: '/app/ledger', label: 'Ledger', icon: <IconLedger {...ICON} /> },
-      { to: '/app/audit', label: 'Audit Logs', icon: <IconActivity {...ICON} /> },
+      { to: '/app/audit', label: 'Audit Logs', icon: <IconActivity {...ICON} />, requiresCapability: 'view_audit' },
+      // Reachable by any admin — the scoped "your own workload" analytics
+      // page. Distinct from Platform Analytics below (full platform, requires
+      // view_analytics); this page shows only the modules this admin holds
+      // capabilities for.
+      { to: '/app/admin-analytics', label: 'My Analytics', icon: <IconBarChart {...ICON} /> },
+      { to: '/app/platform-analytics', label: 'Platform Analytics', icon: <IconBarChart {...ICON} />, requiresCapability: 'view_analytics' },
     ],
   },
   {
