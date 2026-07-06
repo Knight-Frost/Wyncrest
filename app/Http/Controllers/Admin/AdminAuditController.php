@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\AuditLogDetailResource;
 use App\Http\Resources\AuditLogResource;
 use App\Models\AuditLog;
+use App\Services\Audit\AuditEventPresenter;
 use App\Services\AuditLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,7 +14,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AdminAuditController extends Controller
 {
-    public function __construct(private readonly AuditLogService $service) {}
+    public function __construct(
+        private readonly AuditLogService $service,
+        private readonly AuditEventPresenter $presenter,
+    ) {}
 
     /**
      * Paginated list of audit logs with enriched derived fields.
@@ -56,9 +60,17 @@ class AdminAuditController extends Controller
      */
     public function show(AuditLog $auditLog): JsonResponse
     {
-        $resource = new AuditLogDetailResource($auditLog->load(['actor', 'subject']));
+        $auditLog->load(['actor', 'subject']);
+        $resource = new AuditLogDetailResource($auditLog);
 
-        return response()->json($resource->toArray(request()));
+        // The presenter's output (case-file narrative + record-aware
+        // recommended_steps) is layered on top of — not instead of — the raw
+        // resource fields, so nothing the existing detail contract relies on
+        // (metadata/old_values/new_values/hash/etc.) is lost.
+        return response()->json(array_merge(
+            $resource->toArray(request()),
+            $this->presenter->present($auditLog)
+        ));
     }
 
     /**

@@ -576,7 +576,7 @@ class AdminAuditLogTest extends TestCase
         $steps = $response->json('recommended_steps');
         $this->assertNotEmpty($steps);
         $routes = array_column($steps, 'to');
-        $this->assertContains('/app/moderation', $routes);
+        $this->assertContains('/app/listing-review', $routes);
     }
 
     public function test_show_returns_404_for_missing_audit_log(): void

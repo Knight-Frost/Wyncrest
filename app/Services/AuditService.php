@@ -114,6 +114,21 @@ class AuditService
     }
 
     /**
+     * Log listing sent back for changes
+     */
+    public function logListingChangesRequested(Model $listing, Model $admin, string $reason): AuditLog
+    {
+        return $this->log(
+            actor: $admin,
+            action: 'listing_changes_requested',
+            subject: $listing,
+            description: "Changes requested on listing: {$listing->title}",
+            metadata: ['reason' => $reason],
+            severity: 'info'
+        );
+    }
+
+    /**
      * Log feature enabled
      */
     public function logFeatureEnabled(Model $landlord, string $featureKey, Model $admin): AuditLog
