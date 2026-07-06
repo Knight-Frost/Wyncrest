@@ -47,7 +47,14 @@ class FinancialAnalyticsService
             ->where('type', LedgerType::RENT)
             ->sum('amount_cents') / 100;
 
-        // Total payments received (paid entries)
+        // NOTE on naming: despite the field name, this is rent RECOGNIZED as
+        // paid (RENT entries with status=PAID), an accrual-style figure —
+        // not a sum of PAYMENT-type ledger entries. It intentionally does
+        // NOT use LedgerComputationEngine::computeCollected(), which is the
+        // cash-basis "money actually received" figure shown on the ledger
+        // page/dashboards. Left as its own long-standing, separately-tested
+        // metric rather than renamed/merged, to avoid an unrelated behavior
+        // change to this analytics module during the ledger-page fix.
         $totalPaymentsReceived = (clone $query)
             ->where('type', LedgerType::RENT)
             ->where('ledger_entries.status', LedgerStatus::PAID)

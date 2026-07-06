@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Analytics;
 
+use App\Http\Controllers\Analytics\Concerns\ResolvesAnalyticsScope;
 use App\Http\Controllers\Controller;
 use App\Services\Analytics\NotificationAnalyticsService;
 use App\Support\Cache\AnalyticsCache;
@@ -20,6 +21,8 @@ use Illuminate\Support\Facades\Validator;
  */
 class NotificationAnalyticsController extends Controller
 {
+    use ResolvesAnalyticsScope;
+
     protected NotificationAnalyticsService $analyticsService;
 
     public function __construct(NotificationAnalyticsService $analyticsService)
@@ -64,15 +67,11 @@ class NotificationAnalyticsController extends Controller
 
         // Apply role-based scoping
         $user = $request->user();
-        $role = $user->user_type->value;
+        $role = $this->resolveAnalyticsRole($user);
         $scopedTo = 'all';
 
-        if ($user->user_type->value === 'tenant') {
-            // Tenants see only their own notifications
-            $filters['user_id'] = $user->id;
-            $scopedTo = 'personal';
-        } elseif ($user->user_type->value === 'landlord') {
-            // Landlords see only their notifications
+        if ($role === 'tenant' || $role === 'landlord') {
+            // Tenants and landlords see only their own notifications
             $filters['user_id'] = $user->id;
             $scopedTo = 'personal';
         }

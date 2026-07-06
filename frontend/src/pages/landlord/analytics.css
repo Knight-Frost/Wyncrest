@@ -1,0 +1,386 @@
+/* ============================================================================
+   Landlord Analytics — White Liquid Glass, faithfully ported from
+   wyncrest-landlord-analytics.html. Everything is scoped under `.wana` so
+   these petrol/oxblood glass tokens never leak into the rest of the app.
+   Fonts follow the project's approved set (Fraunces / Big Shoulders Display /
+   Hanken Grotesque) rather than the mockup's placeholder Inter.
+
+   All --wa-* aliases below resolve to the SHARED design tokens (index.css),
+   never a literal hex/rgba. That's what makes this page re-theme correctly:
+   dark mode isn't a separate stylesheet, it's the same rules reading
+   different variable values. Tinted badge/notice/delta backgrounds use
+   color-mix(in srgb, <token> X%, transparent) instead of a hand-picked rgba,
+   so the tint always tracks its paired text color in both themes. The
+   --wa-c1..c6 chart-series palette is derived from the same semantic tokens
+   (petrol/green/amber/oxblood/purple/slate) so every chart re-themes too;
+   --wa-purple has no shared semantic token (it's decorative/chart-only) so
+   it uses light-dark() with a lighter dark-mode tint chosen to stay clearly
+   distinct from the green/amber/danger/petrol series on a dark canvas.
+   ========================================================================== */
+
+.wana {
+  --wa-petrol: var(--color-action-600);
+  --wa-petrol-2: var(--color-action-500);
+  --wa-oxblood: var(--color-danger-600);
+  --wa-green: var(--color-success-600);
+  --wa-amber: var(--color-warning-600);
+  --wa-slate: var(--color-ink-500);
+  --wa-purple: light-dark(#604996, #c3aef0);
+  --wa-ink: var(--color-ink-900);
+  --wa-ink-2: var(--color-ink-700);
+  --wa-mute: var(--color-ink-400);
+  --wa-line: var(--color-ink-200);
+  --wa-line-2: var(--color-ink-100);
+  --wa-glass: var(--glass-bg-strong);
+  --wa-glass-2: var(--glass-bg);
+  --wa-white: var(--color-surface);
+  --wa-shadow: var(--shadow-sm);
+  --wa-shadow-lg: var(--shadow-lg);
+  --wa-r: 16px;
+  --wa-r-sm: 11px;
+  --wa-r-lg: 22px;
+  --wa-serif: 'Fraunces', Georgia, serif;
+  --wa-disp: 'Big Shoulders Display', var(--wa-serif);
+  --wa-sans: 'Hanken Grotesque', system-ui, -apple-system, sans-serif;
+  --wa-c1: var(--wa-petrol);
+  --wa-c2: var(--wa-green);
+  --wa-c3: var(--wa-amber);
+  --wa-c4: var(--wa-oxblood);
+  --wa-c5: var(--wa-purple);
+  --wa-c6: var(--wa-slate);
+
+  font-family: var(--wa-sans);
+  color: var(--wa-ink);
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.wana *,
+.wana *::before,
+.wana *::after {
+  box-sizing: border-box;
+}
+.wana button { font-family: inherit; cursor: pointer; background: none; border: none; color: inherit; }
+.wana input, .wana select, .wana textarea { font-family: inherit; font-size: 14px; color: inherit; }
+/* :not(.cs) matters: without it, this icon reset's `stroke: currentColor` is
+   inherited by every unstyled <rect>/<path> inside the hand-rolled chart SVGs
+   below (class "cs"), drawing an unwanted halo around every bar. Chart
+   primitives set their own fill/stroke per-element, so the "cs" root gets a
+   clean none/none base instead. */
+.wana svg:not(.cs) { width: 16px; height: 16px; flex: none; vertical-align: middle; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.wana svg.cs { width: 100%; height: auto; flex: initial; vertical-align: baseline; stroke: none; fill: none; }
+
+/* ---- glass surfaces ------------------------------------------------------ */
+.wana .glass {
+  background: var(--wa-glass);
+  border: 1px solid var(--glass-border-strong);
+  box-shadow: var(--wa-shadow), var(--glass-highlight);
+  border-radius: var(--wa-r);
+}
+.wana .glass-2 {
+  background: var(--wa-glass-2);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--wa-r);
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .wana .glass { -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%); }
+  .wana .glass-2 { -webkit-backdrop-filter: blur(18px) saturate(150%); backdrop-filter: blur(18px) saturate(150%); }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .wana .glass { background: var(--color-surface); }
+  .wana .glass-2 { background: var(--color-surface); }
+}
+
+/* ---- page head ------------------------------------------------------------ */
+.wana .eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--wa-petrol);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+}
+.wana .eyebrow::before { content: ''; width: 24px; height: 1px; background: var(--wa-petrol); }
+.wana h1.page {
+  font-family: var(--wa-serif);
+  font-weight: 400;
+  font-size: clamp(2.1rem, 4.4vw, 3rem);
+  line-height: 1.02;
+  color: var(--wa-petrol);
+  margin: 0.6rem 0 0.4rem;
+}
+.wana .lede { color: var(--wa-ink-2); font-size: 15px; max-width: 72ch; }
+.wana .pagehead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: clamp(1.4rem, 3vw, 2.1rem);
+}
+.wana .pagehead .acts { display: flex; gap: 9px; flex-wrap: wrap; padding-top: 6px; align-items: center; }
+
+/* ---- buttons -------------------------------------------------------------- */
+.wana .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 15px;
+  border-radius: 10px;
+  transition: 0.15s;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.wana .btn svg { width: 15px; height: 15px; }
+.wana .btn-p { background: var(--wa-petrol); color: var(--color-on-action); box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--wa-petrol) 55%, transparent); }
+.wana .btn-p:hover { background: var(--color-action-700); }
+.wana .btn-g { background: var(--glass-bg-strong); border-color: var(--wa-line); color: var(--wa-ink-2); }
+.wana .btn-g:hover { border-color: var(--color-ink-300); background: var(--color-ink-50); }
+.wana .btn.sm { font-size: 12px; padding: 7px 11px; border-radius: 9px; }
+.wana .btn.sm svg { width: 13px; height: 13px; }
+.wana .iconbtn {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  color: var(--wa-slate);
+  border: 1px solid var(--wa-line);
+  background: var(--glass-bg);
+  transition: 0.15s;
+}
+.wana .iconbtn:hover { color: var(--wa-ink); border-color: var(--color-ink-300); }
+
+/* ---- filter bar ------------------------------------------------------------ */
+.wana .filters { display: flex; gap: 10px; align-items: center; padding: 11px 12px; flex-wrap: wrap; }
+.wana .filters .fl { font-size: 12px; color: var(--wa-slate); font-weight: 600; display: flex; align-items: center; gap: 7px; }
+.wana .filters .fl svg { width: 15px; height: 15px; color: var(--wa-petrol-2); }
+.wana .filters .fl b { color: var(--wa-petrol); }
+.wana .sel { position: relative; display: inline-flex; align-items: center; }
+.wana .sel select {
+  appearance: none;
+  -webkit-appearance: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--wa-ink-2);
+  padding: 9px 30px 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--wa-line);
+  background: var(--glass-bg-strong);
+  cursor: pointer;
+  transition: 0.15s;
+}
+.wana .sel select:hover { border-color: var(--color-ink-300); }
+.wana .sel select:focus { outline: none; border-color: var(--wa-petrol-2); }
+.wana .sel .cv { position: absolute; right: 10px; pointer-events: none; color: var(--wa-slate); }
+.wana .sel .cv svg { width: 13px; height: 13px; }
+
+/* ---- summary cards ---------------------------------------------------------- */
+.wana .cards { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; margin-bottom: 10px; }
+.wana .card { padding: 22px 22px 20px; position: relative; overflow: visible; }
+.wana .card .k { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--wa-mute); line-height: 1.3; }
+.wana .card .v { font-family: var(--wa-disp); font-weight: 800; font-size: 26px; line-height: 1; margin-top: 12px; color: var(--wa-petrol); font-variant-numeric: tabular-nums; }
+.wana .card .n { font-size: 11.5px; color: var(--wa-slate); margin-top: 9px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; line-height: 1.4; }
+.wana .card.bad .v { color: var(--wa-oxblood); }
+.wana .card.warn .v { color: var(--wa-amber); }
+.wana .card.good .v { color: var(--wa-green); }
+.wana .card.info .v { color: var(--wa-petrol-2); }
+.wana .card .edge { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: 3px; background: var(--wa-petrol-2); }
+.wana .card.bad .edge { background: var(--wa-oxblood); }
+.wana .card.warn .edge { background: var(--wa-amber); }
+.wana .card.good .edge { background: var(--wa-green); }
+.wana .delta { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; font-size: 11px; padding: 2px 6px; border-radius: 6px; font-variant-numeric: tabular-nums; }
+.wana .delta svg { width: 11px; height: 11px; }
+.wana .delta.up { color: var(--color-success-600); background: color-mix(in srgb, currentColor 13%, transparent); }
+.wana .delta.dn { color: var(--color-danger-600); background: color-mix(in srgb, currentColor 12%, transparent); }
+.wana .delta.flat { color: var(--wa-slate); background: color-mix(in srgb, currentColor 12%, transparent); }
+
+/* ---- tooltip ---------------------------------------------------------------- */
+.wana .tip { position: relative; display: inline-flex; align-items: center; }
+.wana .tip > .ti { width: 14px; height: 14px; color: var(--wa-mute); cursor: help; }
+.wana .tip > .ti svg { width: 14px; height: 14px; }
+.wana .tip .tipbox {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: var(--wa-ink);
+  color: var(--color-canvas);
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.5;
+  padding: 9px 11px;
+  border-radius: 9px;
+  width: 230px;
+  opacity: 0;
+  pointer-events: none;
+  transition: 0.16s;
+  z-index: 60;
+  box-shadow: var(--wa-shadow-lg);
+  text-transform: none;
+  letter-spacing: normal;
+}
+.wana .tip:hover .tipbox, .wana .tip:focus-within .tipbox { opacity: 1; transform: translateX(-50%); pointer-events: auto; }
+
+/* ---- sections ---------------------------------------------------------------- */
+/* .wana is a flex column with `gap: 18px` between direct children, so this
+   margin-top STACKS on top of that gap. Top-only (rather than symmetric
+   top+bottom) keeps spacing consistent before every section regardless of
+   what precedes it, and lands at the project's 40px section-spacing floor
+   (18px gap + 22px margin). */
+.wana .section { margin: 22px 0 0; }
+.wana .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.wana .section-head h2 { font-family: var(--wa-sans); font-weight: 700; font-size: 21px; letter-spacing: -0.01em; color: var(--wa-petrol); }
+.wana .section-head .sq { font-size: 13px; color: var(--wa-slate); }
+.wana .chart-grid { display: grid; gap: 20px; margin-bottom: 20px; }
+.wana .cg-2 { grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); }
+.wana .cg-1 { grid-template-columns: 1fr; }
+.wana .chart-card { padding: 26px 28px 28px; min-width: 0; }
+.wana .chart-card .ct { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 3px; }
+.wana .chart-card .ct h3 { font-weight: 600; font-size: 16px; color: var(--wa-ink); display: flex; align-items: center; gap: 8px; }
+.wana .chart-card .cd { font-size: 13px; color: var(--wa-slate); margin-bottom: 22px; line-height: 1.4; }
+.wana .chart-wrap { width: 100%; overflow: visible; }
+.wana .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 16px; }
+.wana .legend .li { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--wa-ink-2); }
+.wana .legend .sw { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+
+/* ---- chart primitives -------------------------------------------------------- */
+/* Labels stay at a calmer regular/medium weight; only bar-val (the actual
+   number) keeps semibold, so the numbers stand out and the labels don't
+   compete with them — see reporting_style guidance on hierarchy. */
+.wana .axis-l { font-size: 12.5px; fill: var(--wa-mute); font-family: var(--wa-sans); font-weight: 500; }
+.wana .axis-v { font-size: 12.5px; fill: var(--wa-mute); font-family: var(--wa-sans); font-weight: 500; font-variant-numeric: tabular-nums; }
+.wana .grid-l { stroke: var(--wa-line-2); stroke-width: 1; }
+.wana .bar-lbl { font-size: 13.5px; fill: var(--wa-ink-2); font-weight: 500; font-family: var(--wa-sans); }
+.wana .bar-val { font-size: 13.5px; fill: var(--wa-ink); font-weight: 600; font-family: var(--wa-sans); font-variant-numeric: tabular-nums; }
+.wana .hbar-row { cursor: default; }
+.wana .hbar-row.clk { cursor: pointer; }
+.wana .hbar-row.clk:hover rect.bar { opacity: 0.82; }
+.wana .wa-chart-empty { font-size: 13.5px; color: var(--wa-slate); padding: 20px 0; }
+
+/* ---- flat (all-zero) bar-list state -------------------------------------------- */
+/* When every row in an HBarChart is genuinely zero (e.g. no outstanding
+   balance in any aging bucket), a proportional bar collapses to an
+   indistinguishable sliver — that reads as broken, not "zero". This renders
+   a calm, intentional flat state instead: a muted track + the real value. */
+.wana .wa-hbar-flat { display: flex; flex-direction: column; }
+.wana .wa-hbar-flat-row { display: grid; grid-template-columns: var(--wa-flat-label-w, 120px) 1fr auto; align-items: center; gap: 14px; padding: 9px 0; }
+.wana .wa-hbar-flat-label { font-size: 13.5px; font-weight: 500; color: var(--wa-ink-2); }
+.wana .wa-hbar-flat-track { height: 6px; border-radius: 4px; background: var(--wa-line-2); }
+.wana .wa-hbar-flat-value { font-size: 13.5px; font-weight: 600; color: var(--wa-mute); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---- segmented bar (unit status) ---------------------------------------------- */
+.wana .segbar { display: flex; height: 32px; border-radius: 9px; overflow: hidden; border: 1px solid var(--wa-line-2); }
+/* segbar/funnel fills are the theme-aware --wa-cN series colors, which (like
+   the rest of the semantic scale) intentionally invert brightness in dark
+   mode — deep/saturated on light canvas, pale/luminous on dark canvas. A
+   fixed white label would wash out against the pale dark-mode fills, so the
+   overlay text uses --color-canvas instead: it flips the OTHER direction
+   (near-white in light theme, near-black in dark theme), which is exactly
+   the contrast the fill needs in both cases. */
+.wana .segbar .seg { display: flex; align-items: center; justify-content: center; color: var(--color-canvas); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 2px; }
+.wana .unit-break { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 22px; margin-top: 18px; }
+.wana .ub { display: flex; justify-content: space-between; font-size: 13.5px; padding: 7px 0; border-bottom: 1px solid var(--wa-line-2); }
+.wana .ub .k { color: var(--wa-slate); display: flex; align-items: center; gap: 7px; }
+.wana .ub .k .sw { width: 10px; height: 10px; border-radius: 3px; }
+.wana .ub .v { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ---- funnel --------------------------------------------------------------------- */
+.wana .funnel { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.wana .fstep { display: flex; align-items: center; gap: 16px; }
+.wana .fstep .fbar { height: 42px; border-radius: 8px; display: flex; align-items: center; padding: 0 14px; color: var(--color-canvas); font-weight: 700; font-size: 15px; font-family: var(--wa-disp); min-width: 64px; max-width: 100%; transition: width 0.4s; }
+.wana .fstep .fmeta { font-size: 13.5px; color: var(--wa-slate); white-space: nowrap; }
+.wana .fstep .fmeta b { color: var(--wa-ink); font-weight: 600; }
+.wana .fdrop { font-size: 12px; color: var(--wa-mute); margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---- needs attention ------------------------------------------------------------- */
+.wana .attn { display: flex; flex-direction: column; gap: 10px; }
+.wana .attn-item { display: flex; gap: 14px; align-items: center; padding: 16px 18px; border-radius: var(--wa-r-sm); transition: 0.15s; }
+.wana .attn-item .ai { width: 38px; height: 38px; border-radius: 10px; flex: none; display: grid; place-items: center; }
+.wana .attn-item .ai svg { width: 18px; height: 18px; }
+.wana .attn-item .atxt { flex: 1; min-width: 0; }
+.wana .attn-item .att { font-weight: 600; font-size: 14px; color: var(--wa-ink); }
+.wana .attn-item .atd { font-size: 12.5px; color: var(--wa-slate); margin-top: 2px; }
+.wana .attn-item .abtn { flex: none; }
+.wana .attn-red .ai { background: color-mix(in srgb, currentColor 12%, transparent); color: var(--wa-oxblood); }
+.wana .attn-amber .ai { background: color-mix(in srgb, currentColor 13%, transparent); color: var(--wa-amber); }
+.wana .attn-blue .ai { background: color-mix(in srgb, currentColor 12%, transparent); color: var(--wa-petrol-2); }
+
+/* ---- property table ---------------------------------------------------------------- */
+.wana .tblwrap { overflow-x: auto; border-radius: var(--wa-r); -webkit-overflow-scrolling: touch; }
+.wana .ptbl { width: 100%; border-collapse: collapse; min-width: 860px; }
+.wana .ptbl thead th { font-family: var(--wa-disp); font-weight: 700; font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--wa-slate); text-align: left; padding: 13px 14px; border-bottom: 1px solid var(--wa-line); white-space: nowrap; }
+.wana .ptbl thead th.r { text-align: right; }
+.wana .ptbl tbody td { padding: 16px 14px; border-bottom: 1px solid var(--wa-line-2); font-size: 13.5px; vertical-align: middle; }
+.wana .ptbl tbody tr { cursor: pointer; transition: background 0.12s; }
+.wana .ptbl tbody tr:hover { background: color-mix(in srgb, var(--wa-petrol-2) 5%, transparent); }
+.wana .ptbl tbody tr:last-child td { border-bottom: none; }
+.wana .ptbl .r { text-align: right; font-variant-numeric: tabular-nums; }
+.wana .ptbl .pn { font-weight: 600; }
+.wana .ptbl .pn .ps { font-size: 12px; color: var(--wa-slate); font-weight: 400; }
+.wana .occ { display: inline-flex; align-items: center; gap: 8px; }
+.wana .occ .track { width: 52px; height: 6px; border-radius: 4px; background: var(--wa-line); overflow: hidden; }
+.wana .occ .fill { height: 100%; border-radius: 4px; }
+.wana .mini-tbl { width: 100%; border-collapse: collapse; }
+.wana .mini-tbl th { font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--wa-slate); text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--wa-line); font-family: var(--wa-disp); font-weight: 700; }
+.wana .mini-tbl th.r { text-align: right; }
+.wana .mini-tbl td { padding: 15px 12px; border-bottom: 1px solid var(--wa-line-2); font-size: 14px; }
+.wana .mini-tbl td.r { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.wana .mini-tbl tr:last-child td { border-bottom: none; }
+.wana .mini-tbl tr.clk { cursor: pointer; }
+.wana .mini-tbl tr.clk:hover { background: color-mix(in srgb, var(--wa-petrol-2) 5%, transparent); }
+
+/* ---- badges ------------------------------------------------------------------------- */
+.wana .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; padding: 4px 9px; border-radius: 20px; white-space: nowrap; }
+.wana .badge svg { width: 12px; height: 12px; }
+.wana .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.wana .b-green { color: var(--color-success-600); background: color-mix(in srgb, currentColor 13%, transparent); }
+.wana .b-amber { color: var(--color-warning-600); background: color-mix(in srgb, currentColor 15%, transparent); }
+.wana .b-red { color: var(--color-danger-600); background: color-mix(in srgb, currentColor 13%, transparent); }
+.wana .b-blue { color: var(--color-info-600); background: color-mix(in srgb, currentColor 13%, transparent); }
+.wana .b-gray { color: var(--color-ink-600); background: color-mix(in srgb, currentColor 13%, transparent); }
+
+/* ---- notices / empty ------------------------------------------------------------------ */
+.wana .notice { display: flex; gap: 11px; padding: 13px 15px; border-radius: var(--wa-r-sm); margin-bottom: 16px; }
+.wana .notice svg { width: 18px; height: 18px; margin-top: 1px; }
+.wana .notice.info { background: color-mix(in srgb, var(--wa-petrol-2) 8%, transparent); border: 1px solid color-mix(in srgb, var(--wa-petrol-2) 16%, transparent); }
+.wana .notice.info svg { color: var(--wa-petrol-2); }
+.wana .notice.info .nt { color: var(--wa-ink-2); font-size: 12.5px; line-height: 1.5; }
+.wana .notice.info b { color: var(--wa-petrol); }
+.wana .empty { text-align: center; padding: 52px 24px; }
+.wana .empty .ei { width: 56px; height: 56px; border-radius: 15px; background: color-mix(in srgb, var(--wa-petrol-2) 10%, transparent); display: grid; place-items: center; margin: 0 auto 14px; color: var(--wa-petrol-2); }
+.wana .empty .ei svg { width: 26px; height: 26px; }
+.wana .empty .et { font-family: var(--wa-serif); font-size: 19px; font-weight: 600; color: var(--wa-petrol); }
+.wana .empty .em { font-size: 13.5px; margin-top: 6px; max-width: 46ch; margin-inline: auto; color: var(--wa-slate); line-height: 1.5; }
+
+/* ---- export certificate ------------------------------------------------------------------ */
+.wana .cert { border: 1px dashed color-mix(in srgb, var(--wa-petrol) 30%, transparent); border-radius: var(--wa-r-sm); padding: 18px; background: var(--glass-bg-strong); }
+.wana .cert .ct { display: flex; align-items: center; gap: 9px; font-family: var(--wa-serif); font-weight: 600; font-size: 15px; color: var(--wa-petrol); margin-bottom: 12px; }
+.wana .cert .ct svg { width: 18px; height: 18px; }
+.wana .cert .crow { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--wa-line-2); font-size: 12.5px; }
+.wana .cert .crow:last-of-type { border-bottom: none; }
+.wana .cert .crow .k { color: var(--wa-slate); }
+.wana .cert .crow .v { font-weight: 600; text-align: right; word-break: break-all; }
+.wana .cert .cksum { font-family: var(--wa-disp); letter-spacing: 0.03em; }
+
+/* ---- footer ------------------------------------------------------------------------------ */
+.wana .foot { padding: 16px 20px; font-size: 12px; color: var(--wa-slate); line-height: 1.6; display: flex; gap: 11px; align-items: flex-start; }
+.wana .foot svg { width: 16px; height: 16px; color: var(--wa-mute); margin-top: 1px; flex: none; }
+
+@media (max-width: 1080px) {
+  .wana .cards { grid-template-columns: repeat(3, 1fr); }
+  .wana .cg-2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .wana .cards { grid-template-columns: 1fr 1fr; }
+  .wana .unit-break { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wana * { transition: none !important; animation: none !important; }
+}

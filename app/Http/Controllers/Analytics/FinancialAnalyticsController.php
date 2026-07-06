@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Analytics;
 
+use App\Http\Controllers\Analytics\Concerns\ResolvesAnalyticsScope;
 use App\Http\Controllers\Controller;
 use App\Services\Analytics\FinancialAnalyticsService;
 use App\Support\Cache\AnalyticsCache;
@@ -19,6 +20,8 @@ use Illuminate\Support\Facades\Validator;
  */
 class FinancialAnalyticsController extends Controller
 {
+    use ResolvesAnalyticsScope;
+
     protected FinancialAnalyticsService $analyticsService;
 
     public function __construct(FinancialAnalyticsService $analyticsService)
@@ -67,21 +70,17 @@ class FinancialAnalyticsController extends Controller
 
         // Apply role-based scoping
         $user = $request->user();
-        $role = $user->user_type->value;
+        $role = $this->resolveAnalyticsRole($user);
         $scopedTo = 'all';
 
-        if ($user->user_type->value === 'tenant') {
+        if ($role === 'tenant') {
             // Tenants see only their own financial data
             $filters['user_id'] = $user->id;
             $scopedTo = 'personal';
-        } elseif ($user->user_type->value === 'landlord') {
+        } elseif ($role === 'landlord') {
             // Landlords see only their properties
-            if (! isset($filters['property_id'])) {
-                // Get first property owned by landlord
-                $property = $user->properties()->first();
-                if ($property) {
-                    $filters['property_id'] = $property->id;
-                }
+            if ($denied = $this->applyLandlordPropertyScope($user, $filters)) {
+                return $denied;
             }
             $scopedTo = 'landlord';
         }

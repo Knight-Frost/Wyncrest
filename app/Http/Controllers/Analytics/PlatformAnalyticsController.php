@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Analytics;
 
+use App\Http\Controllers\Analytics\Concerns\ResolvesAnalyticsScope;
 use App\Http\Controllers\Controller;
 use App\Services\Analytics\PlatformAnalyticsService;
 use App\Support\Cache\AnalyticsCache;
@@ -18,6 +19,8 @@ use Illuminate\Support\Facades\Validator;
  */
 class PlatformAnalyticsController extends Controller
 {
+    use ResolvesAnalyticsScope;
+
     protected PlatformAnalyticsService $analyticsService;
 
     public function __construct(PlatformAnalyticsService $analyticsService)
@@ -51,22 +54,18 @@ class PlatformAnalyticsController extends Controller
 
         // Apply role-based scoping
         $user = $request->user();
-        $role = $user->user_type->value;
+        $role = $this->resolveAnalyticsRole($user);
         $scopedTo = 'all';
 
-        if ($user->user_type->value === 'tenant') {
+        if ($role === 'tenant') {
             // Tenants cannot access platform-wide analytics
             return response()->json([
                 'message' => 'Unauthorized. Tenants cannot access platform analytics.',
             ], 403);
-        } elseif ($user->user_type->value === 'landlord') {
+        } elseif ($role === 'landlord') {
             // Landlords see only their properties
-            if (! isset($filters['property_id'])) {
-                // Get first property owned by landlord
-                $property = $user->properties()->first();
-                if ($property) {
-                    $filters['property_id'] = $property->id;
-                }
+            if ($denied = $this->applyLandlordPropertyScope($user, $filters)) {
+                return $denied;
             }
             $scopedTo = 'landlord';
         }

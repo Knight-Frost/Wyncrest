@@ -2,6 +2,7 @@
 
 namespace App\Support\Cache;
 
+use App\Models\Admin;
 use Illuminate\Http\Request;
 
 /**
@@ -27,8 +28,9 @@ class AnalyticsCacheKey
         // Environment prefix
         $env = config('app.env', 'local');
 
-        // User role (user_type enum value)
-        $role = $user->user_type?->value ?? 'guest';
+        // Role: admins are a separate model with no user_type; everyone else
+        // is scoped by their user_type enum (tenant/landlord).
+        $role = self::resolveRole($user);
 
         // Build scope data for hashing
         $scopeData = self::buildScopeData($user, $request);
@@ -48,17 +50,23 @@ class AnalyticsCacheKey
      */
     protected static function buildScopeData($user, Request $request): array
     {
+        $role = self::resolveRole($user);
+
         $scopeData = [
-            'user_type' => $user->user_type?->value ?? 'guest',
+            'user_type' => $role,
         ];
 
-        // For tenants, include user_id for personal scoping
-        if ($user->user_type?->value === 'tenant') {
+        // Tenants and landlords are scoped per-user — without this, two
+        // different tenants/landlords hitting the same endpoint with no query
+        // params would collide on the same cache key and see each other's
+        // data. Admins are intentionally unscoped (platform-wide view), so
+        // the role alone is a sufficient key for them.
+        if ($role === 'tenant' || $role === 'landlord') {
             $scopeData['user_id'] = $user->id;
         }
 
         // For landlords, include property_id if applicable
-        if ($user->user_type?->value === 'landlord') {
+        if ($role === 'landlord') {
             // Property ID might come from query params or be auto-assigned
             if ($request->has('property_id')) {
                 $scopeData['property_id'] = $request->input('property_id');
@@ -75,6 +83,23 @@ class AnalyticsCacheKey
         }
 
         return $scopeData;
+    }
+
+    /**
+     * Resolve a role label for the cache key. Admins are a separate,
+     * non-Sanctum model with no `user_type` attribute, so they must be
+     * detected by class rather than by reading that property (which would
+     * error/return null on an Admin).
+     *
+     * @param  mixed  $user  The authenticated user or admin
+     */
+    protected static function resolveRole($user): string
+    {
+        if ($user instanceof Admin) {
+            return 'admin';
+        }
+
+        return $user?->user_type?->value ?? 'guest';
     }
 
     /**
