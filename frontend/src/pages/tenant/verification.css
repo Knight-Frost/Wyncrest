@@ -1,0 +1,396 @@
+/* ==========================================================================
+   IDENTITY VERIFICATION — White Liquid Glass, tenant account/security.
+   Every colour comes from the shared design tokens so the page adapts to the
+   accent picker and dark themes automatically. No raw brand hex here.
+   ========================================================================== */
+
+.vfy {
+  --vfy-glass-bg: color-mix(in srgb, var(--color-surface) 78%, transparent);
+  --vfy-glass-border: color-mix(in srgb, var(--color-ink-300) 55%, transparent);
+  --vfy-glass-shadow: 0 1px 0 color-mix(in srgb, #fff 60%, transparent) inset,
+    0 18px 44px -26px color-mix(in srgb, var(--color-ink-950) 45%, transparent),
+    0 3px 10px -6px color-mix(in srgb, var(--color-ink-950) 22%, transparent);
+
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  color: var(--color-ink-700);
+}
+
+.vfy-glass {
+  position: relative;
+  background: var(--vfy-glass-bg);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  backdrop-filter: blur(22px) saturate(150%);
+  border: 1px solid var(--vfy-glass-border);
+  border-radius: 20px;
+  box-shadow: var(--vfy-glass-shadow);
+}
+.vfy-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 40%;
+  background: linear-gradient(to bottom, color-mix(in srgb, #fff 32%, transparent), transparent);
+  border-radius: 20px 20px 0 0;
+  pointer-events: none;
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .vfy-glass { background: var(--color-surface); }
+}
+
+/* ── Intro ───────────────────────────────────────────────────────────────── */
+.vfy-intro {
+  padding: clamp(1.4rem, 3vw, 2rem);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+.vfy-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--color-brand-600);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+}
+.vfy-eyebrow::before {
+  content: '';
+  width: 24px;
+  height: 1px;
+  background: var(--color-brand-600);
+}
+.vfy-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(1.7rem, 3.6vw, 2.4rem);
+  line-height: 1.05;
+  color: var(--color-ink-950);
+  margin: 0.55rem 0 0.4rem;
+}
+.vfy-title em { font-style: italic; color: var(--color-brand-600); }
+.vfy-sub { color: var(--color-ink-600); max-width: 50ch; margin: 0; font-size: 0.94rem; }
+
+/* ── Hero ────────────────────────────────────────────────────────────────── */
+.vfy-hero {
+  padding: clamp(1.4rem, 3vw, 2rem);
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.vfy-hero-ic {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  position: relative;
+}
+.vfy-hero-body { flex: 1 1 260px; min-width: 0; }
+.vfy-hero-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.vfy-hero-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.vfy-hero-h {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(1.3rem, 2.6vw, 1.6rem);
+  line-height: 1.1;
+  color: var(--color-ink-950);
+  margin: 0.35rem 0 0.45rem;
+}
+.vfy-hero-s { color: var(--color-ink-600); font-size: 0.94rem; max-width: 56ch; line-height: 1.55; }
+.vfy-hero-meta { font-size: 0.8rem; color: var(--color-ink-500); margin-top: 0.6rem; }
+
+.vfy-hero.role-neutral .vfy-hero-ic { background: color-mix(in srgb, var(--color-ink-500) 12%, transparent); color: var(--color-ink-600); }
+.vfy-hero.role-info    .vfy-hero-ic { background: color-mix(in srgb, var(--color-info-500) 16%, transparent); color: var(--color-info-600); }
+.vfy-hero.role-info    .vfy-hero-eyebrow { color: var(--color-info-600); }
+.vfy-hero.role-warning .vfy-hero-ic { background: color-mix(in srgb, var(--color-warning-500) 16%, transparent); color: var(--color-warning-600); }
+.vfy-hero.role-warning .vfy-hero-eyebrow { color: var(--color-warning-600); }
+.vfy-hero.role-danger  .vfy-hero-ic { background: color-mix(in srgb, var(--color-danger-500) 15%, transparent); color: var(--color-danger-600); }
+.vfy-hero.role-danger  .vfy-hero-eyebrow { color: var(--color-danger-600); }
+.vfy-hero.role-success .vfy-hero-ic { background: color-mix(in srgb, var(--color-success-500) 16%, transparent); color: var(--color-success-600); }
+.vfy-hero.role-success .vfy-hero-eyebrow { color: var(--color-success-600); }
+.vfy-hero.role-neutral .vfy-hero-eyebrow { color: var(--color-ink-500); }
+
+.vfy-hero-tick {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-success-500);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 4px 10px -3px color-mix(in srgb, var(--color-success-500) 60%, transparent);
+}
+
+.vfy-reason {
+  background: var(--color-ink-50);
+  border-left: 3px solid currentColor;
+  border-radius: 4px 10px 10px 4px;
+  padding: 10px 14px;
+  margin-top: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--color-ink-800);
+}
+.vfy-reason-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-ink-500); }
+.vfy-reason-text { font-size: 0.9rem; }
+
+.vfy-hero-cta { margin-top: 1.1rem; display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.vfy-btn {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.88rem;
+  border: none;
+  padding: 0.68em 1.25em;
+  border-radius: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+  text-decoration: none;
+}
+.vfy-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+.vfy-btn-primary {
+  background: var(--color-action-600);
+  color: var(--color-on-action);
+  box-shadow: 0 12px 24px -14px color-mix(in srgb, var(--color-action-600) 85%, transparent);
+}
+.vfy-btn-primary:hover:not(:disabled) { background: var(--color-action-500); transform: translateY(-2px); }
+.vfy-btn-glass {
+  background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+  color: var(--color-ink-800);
+  box-shadow: inset 0 0 0 1px var(--vfy-glass-border);
+}
+.vfy-btn-glass:hover:not(:disabled) { background: var(--color-surface); transform: translateY(-2px); }
+.vfy-btn-ghost {
+  background: transparent;
+  color: var(--color-ink-600);
+  box-shadow: inset 0 0 0 1px var(--vfy-glass-border);
+}
+.vfy-btn-ghost:hover:not(:disabled) { background: var(--color-ink-50); color: var(--color-ink-900); }
+.vfy-btn-sm { padding: 0.5em 0.9em; font-size: 0.8rem; border-radius: 9px; }
+
+/* ── Why we ask ──────────────────────────────────────────────────────────── */
+.vfy-why-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.9rem; }
+@media (max-width: 680px) { .vfy-why-grid { grid-template-columns: 1fr; } }
+.vfy-why-card {
+  border: 1px solid var(--vfy-glass-border);
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  background: color-mix(in srgb, var(--color-surface) 55%, transparent);
+}
+.vfy-why-ic {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-brand-500) 12%, transparent);
+  color: var(--color-brand-600);
+  display: grid; place-items: center;
+  margin-bottom: 0.6rem;
+}
+.vfy-why-t { font-weight: 600; color: var(--color-ink-900); margin-bottom: 0.2rem; font-size: 0.92rem; }
+.vfy-why-s { font-size: 0.83rem; color: var(--color-ink-500); line-height: 1.5; }
+
+/* ── Section ─────────────────────────────────────────────────────────────── */
+.vfy-section { padding: clamp(1.3rem, 2.6vw, 1.7rem); display: flex; flex-direction: column; gap: 14px; }
+.vfy-section-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.02rem;
+  color: var(--color-ink-900);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.vfy-section-tag {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-ink-400);
+  font-weight: 500;
+}
+.vfy-section-desc { font-size: 0.86rem; color: var(--color-ink-500); line-height: 1.5; margin-top: -6px; }
+
+/* ── Uploader ────────────────────────────────────────────────────────────── */
+.vfy-uploader {
+  border: 2px dashed var(--vfy-glass-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-ink-50) 70%, transparent);
+  padding: 1.5rem 1.3rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  user-select: none;
+  outline: none;
+  text-align: center;
+}
+.vfy-uploader:focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+.vfy-uploader:hover, .vfy-uploader.drag-over {
+  border-color: var(--color-brand-500);
+  background: color-mix(in srgb, var(--color-brand-500) 6%, transparent);
+}
+.vfy-uploader.uploading { opacity: 0.6; cursor: not-allowed; }
+.vfy-uploader-icon { color: var(--color-brand-600); }
+.vfy-uploader-label { font-size: 0.9rem; font-weight: 600; color: var(--color-ink-800); }
+.vfy-uploader-hint { font-size: 0.78rem; color: var(--color-ink-400); }
+
+.vfy-spinner {
+  display: inline-block;
+  width: 20px; height: 20px;
+  border: 2.5px solid color-mix(in srgb, var(--color-brand-500) 30%, transparent);
+  border-top-color: var(--color-brand-600);
+  border-radius: 50%;
+  animation: vfy-spin 0.75s linear infinite;
+}
+@keyframes vfy-spin { to { transform: rotate(360deg); } }
+
+/* ── Uploaded docs list ──────────────────────────────────────────────────── */
+.vfy-docs-list { display: flex; flex-direction: column; gap: 8px; }
+.vfy-doc-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--color-ink-50) 70%, transparent);
+  border: 1px solid var(--vfy-glass-border);
+}
+.vfy-doc-icon { color: var(--color-ink-400); flex: none; }
+.vfy-doc-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.vfy-doc-name { font-size: 0.86rem; font-weight: 500; color: var(--color-ink-800); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vfy-doc-meta { font-size: 0.74rem; color: var(--color-ink-400); }
+.vfy-doc-del {
+  flex: none;
+  width: 30px; height: 30px;
+  border-radius: 9px;
+  display: grid; place-items: center;
+  color: var(--color-ink-400);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.vfy-doc-del:hover:not(:disabled) { background: color-mix(in srgb, var(--color-danger-500) 12%, transparent); color: var(--color-danger-600); }
+.vfy-doc-del:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Requirement alert ───────────────────────────────────────────────────── */
+.vfy-alert {
+  background: color-mix(in srgb, var(--color-warning-500) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-warning-500) 30%, transparent);
+  border-radius: 11px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  color: var(--color-warning-600);
+}
+
+/* ── Timeline ────────────────────────────────────────────────────────────── */
+.vfy-tl { position: relative; padding-left: 1.5rem; }
+.vfy-tl::before {
+  content: '';
+  position: absolute;
+  left: 5px; top: 6px; bottom: 6px;
+  width: 2px;
+  background: var(--vfy-glass-border);
+}
+.vfy-tl-item { position: relative; padding: 0.3rem 0 0.9rem; }
+.vfy-tl-item::before {
+  content: '';
+  position: absolute;
+  left: -1.5rem; top: 0.5rem;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  box-shadow: 0 0 0 2px var(--color-ink-300);
+}
+.vfy-tl-item.is-done::before { box-shadow: 0 0 0 2px var(--color-success-500); background: var(--color-success-500); }
+.vfy-tl-item.is-current::before { box-shadow: 0 0 0 2px var(--color-info-500); }
+.vfy-tl-item.is-pending .vfy-tl-e { color: var(--color-ink-500); }
+.vfy-tl-e { font-weight: 600; font-size: 0.88rem; color: var(--color-ink-900); }
+.vfy-tl-m { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-ink-400); margin-top: 0.15rem; }
+.vfy-tl-note { margin-top: 0.4rem; font-size: 0.84rem; color: var(--color-ink-500); }
+
+/* ── Submit section ──────────────────────────────────────────────────────── */
+.vfy-field-label { font-size: 0.85rem; font-weight: 500; color: var(--color-ink-700); }
+.vfy-textarea {
+  width: 100%;
+  border-radius: 11px;
+  border: 1.5px solid var(--vfy-glass-border);
+  background: color-mix(in srgb, var(--color-ink-50) 70%, transparent);
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  color: var(--color-ink-800);
+  resize: vertical;
+  font-family: inherit;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+.vfy-textarea:focus { outline: none; border-color: var(--color-brand-500); }
+
+/* ── Unlocks (verified) ──────────────────────────────────────────────────── */
+.vfy-badgebar {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.9rem 1.1rem;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--color-success-500) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-success-500) 25%, transparent);
+  flex-wrap: wrap;
+}
+.vfy-badgebar-ic {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-success-500) 16%, transparent);
+  color: var(--color-success-600);
+  display: grid; place-items: center;
+  flex: none;
+}
+.vfy-badgebar-t { font-weight: 600; color: var(--color-ink-900); font-size: 0.92rem; }
+.vfy-badgebar-s { font-family: var(--font-mono); font-size: 0.72rem; color: var(--color-ink-500); margin-top: 0.1rem; }
+.vfy-unlock-row { display: flex; align-items: center; gap: 0.6rem; font-size: 0.88rem; color: var(--color-ink-700); }
+.vfy-unlock-check { color: var(--color-success-500); flex: none; }
+.vfy-verified-cta {
+  margin-top: 0.2rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Privacy / how we handle it ──────────────────────────────────────────── */
+.vfy-privacy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; }
+@media (max-width: 620px) { .vfy-privacy-grid { grid-template-columns: 1fr; } }
+.vfy-privacy-card { border: 1px solid var(--vfy-glass-border); border-radius: 13px; padding: 0.95rem 1.05rem; }
+.vfy-privacy-h { display: flex; align-items: center; gap: 0.55rem; font-weight: 600; font-size: 0.88rem; color: var(--color-ink-900); margin-bottom: 0.3rem; }
+.vfy-privacy-h svg { color: var(--color-brand-600); }
+.vfy-privacy-p { font-size: 0.82rem; color: var(--color-ink-500); line-height: 1.55; }
+
+@media (prefers-reduced-motion: reduce) {
+  .vfy-spinner { animation: none; }
+  .vfy-btn:hover { transform: none; }
+}

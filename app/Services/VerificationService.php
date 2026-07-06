@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\AccountStatus;
 use App\Enums\NotificationType;
 use App\Enums\VerificationStatus;
 use App\Events\IdentityVerified;
@@ -45,6 +46,17 @@ class VerificationService
             'submitted_at' => now(),
         ]);
 
+        // Documents are uploaded via the generic /documents endpoint before a
+        // request exists, so nothing else associates them to a case. Attach the
+        // applicant's not-yet-linked identity/proof-of-address documents here so
+        // the admin case-review page shows what was actually submitted, instead
+        // of an empty list. Documents already linked to an earlier (e.g.
+        // rejected) request are left alone, preserving per-attempt history.
+        $user->documents()
+            ->whereIn('document_type', ['identity_document', 'proof_of_address'])
+            ->whereNull('related_id')
+            ->update(['related_type' => VerificationRequest::class, 'related_id' => $req->id]);
+
         $user->update(['verification_status' => VerificationStatus::PENDING->value]);
 
         $this->auditService->log(
@@ -69,8 +81,43 @@ class VerificationService
         return $req;
     }
 
+    /**
+     * A verification request can only be decided while it is queued for review.
+     * Re-deciding an already-approved/rejected/needs-info request would silently
+     * overwrite a prior decision and its audit trail context.
+     */
+    protected function assertReviewable(VerificationRequest $req): void
+    {
+        if (! in_array($req->status, ['pending', 'under_review'], true)) {
+            throw new VerificationException(
+                'This verification request has already been decided and cannot be reviewed again.'
+            );
+        }
+    }
+
     public function approve(VerificationRequest $req, Admin $admin, ?string $reason): VerificationRequest
     {
+        $this->assertReviewable($req);
+
+        $user = $req->user;
+
+        $hasIdDoc = $user->documents()
+            ->where('document_type', 'identity_document')
+            ->whereNull('deleted_at')
+            ->exists();
+
+        if (! $hasIdDoc) {
+            throw new VerificationException(
+                'This request cannot be approved: no identity document is on file for this applicant.'
+            );
+        }
+
+        if ($user->account_status !== null && $user->account_status !== AccountStatus::ACTIVE) {
+            throw new VerificationException(
+                'This request cannot be approved: the applicant\'s account is not active.'
+            );
+        }
+
         $req->update([
             'status' => 'approved',
             'reviewed_by_admin_id' => $admin->id,
@@ -78,7 +125,6 @@ class VerificationService
             'decision_reason' => $reason,
         ]);
 
-        $user = $req->user;
         $user->update([
             'verification_status' => VerificationStatus::VERIFIED->value,
             'identity_verified' => true,
@@ -112,6 +158,8 @@ class VerificationService
 
     public function reject(VerificationRequest $req, Admin $admin, string $reason): VerificationRequest
     {
+        $this->assertReviewable($req);
+
         $req->update([
             'status' => 'rejected',
             'reviewed_by_admin_id' => $admin->id,
@@ -147,6 +195,8 @@ class VerificationService
 
     public function requestMoreInfo(VerificationRequest $req, Admin $admin, string $note): VerificationRequest
     {
+        $this->assertReviewable($req);
+
         $req->update([
             'status' => 'needs_more_information',
             'reviewed_by_admin_id' => $admin->id,

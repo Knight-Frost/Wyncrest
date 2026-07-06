@@ -2,10 +2,16 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exceptions\VerificationException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\AddVerificationNoteRequest;
+use App\Http\Requests\Admin\ApproveVerificationRequest;
+use App\Http\Requests\Admin\RejectVerificationRequest;
+use App\Http\Requests\Admin\RequestMoreInfoVerificationRequest;
 use App\Models\Document;
 use App\Models\VerificationRequest;
 use App\Services\AuditService;
+use App\Services\VerificationCaseService;
 use App\Services\VerificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,52 +21,61 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class AdminVerificationController extends Controller
 {
     public function __construct(
-        protected VerificationService $verificationService
+        protected VerificationService $verificationService,
+        protected VerificationCaseService $caseService,
     ) {}
 
     /**
-     * List all verification requests (paginated, filterable by status).
+     * List verification requests (paginated, filterable, sortable).
      */
     public function index(Request $request): JsonResponse
     {
         $filters = $request->validate([
             'status' => ['sometimes', 'string', 'in:pending,under_review,approved,rejected,needs_more_information'],
+            'role' => ['sometimes', 'string', 'in:tenant,landlord'],
+            'search' => ['sometimes', 'string', 'max:255'],
+            'from_date' => ['sometimes', 'date'],
+            'to_date' => ['sometimes', 'date', 'after_or_equal:from_date'],
+            'needs_documents' => ['sometimes', 'boolean'],
+            'sort' => ['sometimes', 'string', 'in:newest,oldest,needs_attention_first'],
+            'page' => ['sometimes', 'integer', 'min:1'],
         ]);
 
-        $query = VerificationRequest::with(['user', 'reviewer'])
-            ->orderByDesc('submitted_at');
-
-        if (! empty($filters['status'])) {
-            $query->where('status', $filters['status']);
-        }
-
-        return response()->json($query->paginate(20));
+        return response()->json($this->caseService->paginate($filters));
     }
 
     /**
-     * Show a single verification request.
+     * Truthful counts for the queue's summary cards.
+     */
+    public function summary(): JsonResponse
+    {
+        return response()->json($this->caseService->summary());
+    }
+
+    /**
+     * Full case-file payload for the detail page: applicant profile,
+     * documents, computed checklist/warnings, history, previous attempts,
+     * and internal notes.
      */
     public function show(VerificationRequest $verificationRequest): JsonResponse
     {
-        return response()->json(
-            $verificationRequest->load(['user', 'reviewer', 'documents'])
-        );
+        return response()->json($this->caseService->caseDetail($verificationRequest));
     }
 
     /**
      * Approve a verification request.
      */
-    public function approve(Request $request, VerificationRequest $verificationRequest): JsonResponse
+    public function approve(ApproveVerificationRequest $request, VerificationRequest $verificationRequest): JsonResponse
     {
-        $validated = $request->validate([
-            'reason' => ['nullable', 'string', 'max:1000'],
-        ]);
-
-        $req = $this->verificationService->approve(
-            req: $verificationRequest,
-            admin: $request->user(),
-            reason: $validated['reason'] ?? null
-        );
+        try {
+            $req = $this->verificationService->approve(
+                req: $verificationRequest,
+                admin: $request->user(),
+                reason: $request->validated('reason')
+            );
+        } catch (VerificationException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         return response()->json([
             'message' => 'Verification request approved.',
@@ -71,17 +86,17 @@ class AdminVerificationController extends Controller
     /**
      * Reject a verification request.
      */
-    public function reject(Request $request, VerificationRequest $verificationRequest): JsonResponse
+    public function reject(RejectVerificationRequest $request, VerificationRequest $verificationRequest): JsonResponse
     {
-        $validated = $request->validate([
-            'reason' => ['required', 'string', 'min:5', 'max:1000'],
-        ]);
-
-        $req = $this->verificationService->reject(
-            req: $verificationRequest,
-            admin: $request->user(),
-            reason: $validated['reason']
-        );
+        try {
+            $req = $this->verificationService->reject(
+                req: $verificationRequest,
+                admin: $request->user(),
+                reason: $request->validated('reason')
+            );
+        } catch (VerificationException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         return response()->json([
             'message' => 'Verification request rejected.',
@@ -92,22 +107,39 @@ class AdminVerificationController extends Controller
     /**
      * Request more information for a verification request.
      */
-    public function requestInfo(Request $request, VerificationRequest $verificationRequest): JsonResponse
+    public function requestInfo(RequestMoreInfoVerificationRequest $request, VerificationRequest $verificationRequest): JsonResponse
     {
-        $validated = $request->validate([
-            'note' => ['required', 'string', 'min:5', 'max:1000'],
-        ]);
-
-        $req = $this->verificationService->requestMoreInfo(
-            req: $verificationRequest,
-            admin: $request->user(),
-            note: $validated['note']
-        );
+        try {
+            $req = $this->verificationService->requestMoreInfo(
+                req: $verificationRequest,
+                admin: $request->user(),
+                note: $request->validated('note')
+            );
+        } catch (VerificationException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         return response()->json([
             'message' => 'Additional information requested.',
             'verification_request' => $req,
         ]);
+    }
+
+    /**
+     * Add an internal, admin-only note to a verification request.
+     */
+    public function addNote(AddVerificationNoteRequest $request, VerificationRequest $verificationRequest): JsonResponse
+    {
+        $note = $this->caseService->addNote(
+            req: $verificationRequest,
+            admin: $request->user(),
+            body: $request->validated('body')
+        );
+
+        return response()->json([
+            'message' => 'Note added.',
+            'note' => $note,
+        ], 201);
     }
 
     /**
@@ -117,6 +149,9 @@ class AdminVerificationController extends Controller
      * authenticated admin reaches it. Admins (super-admins in the current phase)
      * may view applicant documents in the verification-moderation context; every
      * access is audited. The file is streamed directly — no public URL is created.
+     * The frontend re-uses this same endpoint for inline preview by fetching it
+     * as a blob and constructing an object URL, so no separate preview route is
+     * needed.
      */
     public function downloadDocument(Request $request, Document $document): StreamedResponse|JsonResponse
     {

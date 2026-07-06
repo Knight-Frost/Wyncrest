@@ -28,6 +28,7 @@ import {
   IconXCircle,
 } from '@/components/ui/icons';
 import type {
+  DocumentType,
   TenantDocument,
   VerificationStatus,
   VerificationStatusResponse,
@@ -93,12 +94,14 @@ function isPending(s: VerificationStatus | null): boolean {
 /* ── Document uploader ───────────────────────────────────────────────────── */
 
 interface DocumentUploaderProps {
+  documentType: DocumentType;
+  label: string;
   onUploaded: () => void;
   uploading: boolean;
   setUploading: (v: boolean) => void;
 }
 
-function DocumentUploader({ onUploaded, uploading, setUploading }: DocumentUploaderProps) {
+function DocumentUploader({ documentType, label, onUploaded, uploading, setUploading }: DocumentUploaderProps) {
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -116,7 +119,7 @@ function DocumentUploader({ onUploaded, uploading, setUploading }: DocumentUploa
     }
     setUploading(true);
     try {
-      await landlordApi.uploadDocument(file, 'identity_document');
+      await landlordApi.uploadDocument(file, documentType);
       toast(`Document uploaded: ${file.name}`, 'success');
       onUploaded();
     } catch (err: unknown) {
@@ -142,7 +145,7 @@ function DocumentUploader({ onUploaded, uploading, setUploading }: DocumentUploa
       onClick={() => !uploading && inputRef.current?.click()}
       role="button"
       tabIndex={0}
-      aria-label="Upload identity document"
+      aria-label={`Upload ${label.toLowerCase()}`}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click(); }}
     >
       <input
@@ -160,7 +163,7 @@ function DocumentUploader({ onUploaded, uploading, setUploading }: DocumentUploa
         }
       </span>
       <span className="lv-uploader-label">
-        {uploading ? 'Uploading…' : 'Upload identity document'}
+        {uploading ? 'Uploading…' : `Upload ${label.toLowerCase()}`}
       </span>
       <span className="lv-uploader-hint">PDF or image · max 10 MB · drag or click</span>
     </div>
@@ -169,14 +172,22 @@ function DocumentUploader({ onUploaded, uploading, setUploading }: DocumentUploa
 
 /* ── Uploaded documents list ─────────────────────────────────────────────── */
 
-function UploadedDocsList({ docs }: { docs: TenantDocument[] }) {
-  const idDocs = docs.filter((d) => d.document_type === 'identity_document');
-  if (idDocs.length === 0) return null;
+function UploadedDocsList({
+  docs,
+  documentType,
+  label,
+}: {
+  docs: TenantDocument[];
+  documentType: DocumentType;
+  label: string;
+}) {
+  const matching = docs.filter((d) => d.document_type === documentType);
+  if (matching.length === 0) return null;
 
   return (
     <div className="lv-docs-list">
-      <p className="lv-docs-label">Uploaded identity documents</p>
-      {idDocs.map((doc) => (
+      <p className="lv-docs-label">{label}</p>
+      {matching.map((doc) => (
         <div key={doc.id} className="lv-doc-row">
           <span className="lv-doc-icon"><IconDoc size={16} /></span>
           <div className="lv-doc-info">
@@ -339,6 +350,7 @@ export function LandlordVerification() {
 
       {/* Page header */}
       <div className="lv-page-header">
+        <p className="lv-eyebrow">Account · Security</p>
         <h1 className="lv-page-title">Identity Verification</h1>
         <p className="lv-page-desc">
           Verified landlords display a trust badge on their listings, building confidence with prospective tenants.
@@ -362,6 +374,8 @@ export function LandlordVerification() {
 
             {showUploader && (
               <DocumentUploader
+                documentType="identity_document"
+                label="identity document"
                 onUploaded={handleUploaded}
                 uploading={uploading}
                 setUploading={setUploading}
@@ -379,7 +393,30 @@ export function LandlordVerification() {
                     description="Upload a government ID to get started."
                   />
                 )
-                : <UploadedDocsList docs={docs} />
+                : <UploadedDocsList docs={docs} documentType="identity_document" label="Uploaded identity documents" />
+            )}
+          </div>
+
+          {/* Proof of address — recommended for landlords managing physical properties */}
+          <div className="lv-section">
+            <h3 className="lv-section-title">Proof of address (recommended)</h3>
+            <p className="lv-section-desc">
+              A recent utility bill or bank statement showing your name and address. Recommended
+              before approval since you manage physical properties, though not required to submit.
+            </p>
+
+            {showUploader && (
+              <DocumentUploader
+                documentType="proof_of_address"
+                label="proof of address"
+                onUploaded={handleUploaded}
+                uploading={uploading}
+                setUploading={setUploading}
+              />
+            )}
+
+            {docs && !docsLoading && (
+              <UploadedDocsList docs={docs} documentType="proof_of_address" label="Uploaded proof of address" />
             )}
           </div>
 
@@ -416,15 +453,36 @@ const LV_CSS = `
   gap: 24px;
 }
 
-.lv-page-header { display: flex; flex-direction: column; gap: 6px; }
+.lv-page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-ink-200, #E5E7EB);
+  border-radius: var(--radius-2xl, 20px);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,.05));
+  padding: clamp(1.4rem, 3vw, 2.1rem);
+}
+.lv-eyebrow {
+  font-family: var(--font-mono, ui-monospace);
+  font-size: 0.6rem;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--color-brand-700, #4338CA);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+}
+.lv-eyebrow::before { content: ''; width: 24px; height: 1px; background: var(--color-brand-700, #4338CA); }
 .lv-page-title {
   font-family: 'Fraunces', Georgia, serif;
-  font-size: 2rem;
-  font-weight: 700;
+  font-size: clamp(2.1rem, 4.4vw, 3rem);
+  font-weight: 400;
   color: var(--color-ink-950, #0C0A09);
-  line-height: 1.15;
+  line-height: 1.02;
+  margin: 0.6rem 0 0.4rem;
 }
-.lv-page-desc { font-size: 0.9375rem; color: var(--color-ink-500, #6B7280); }
+.lv-page-desc { font-size: 0.9375rem; color: var(--color-ink-500, #6B7280); margin: 0; }
 
 /* Hero */
 .lv-hero {

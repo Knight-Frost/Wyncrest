@@ -3,14 +3,23 @@
  *
  * Truth contract:
  * - GET /tenant/verification → current status + latest_request
- * - POST /tenant/documents   → upload identity_document (multipart)
+ * - POST /tenant/documents   → upload identity_document / proof_of_address (multipart)
+ * - DELETE /tenant/documents/{id} → remove an uploaded document (owner-only)
  * - POST /tenant/verification/submit → submit for review (requires ≥1 identity_document)
  * - GET /tenant/documents    → list uploaded docs (to show what's already there)
+ *
+ * There is no selfie/liveness capture, no document-subtype (Ghana Card vs. passport)
+ * tracking, no re-verification/expiry, and reviewer notes are internal-only — the
+ * single tenant-visible signal is `decision_reason` on the latest request. The only
+ * feature actually gated on verification is submitting a rental application
+ * (see ApplicationController::store); leases, payments, and messaging are not
+ * gated, so this page never claims otherwise.
  *
  * No fake data, no dead buttons. Every action calls a real endpoint.
  */
 import { useCallback, useRef, useState } from 'react';
 import { Link } from 'react-router';
+import { useAuth } from '@/context/auth';
 import { useApi } from '@/hooks/useApi';
 import { tenantApi } from '@/lib/endpoints';
 import { formatDate } from '@/lib/format';
@@ -25,61 +34,25 @@ import {
   IconDoc,
   IconXCircle,
   IconFolder,
+  IconAlertTriangle,
+  IconTrash,
+  IconLock,
+  IconEye,
+  IconArrowUpRight,
 } from '@/components/ui/icons';
 import type {
   VerificationStatus,
   VerificationStatusResponse,
+  VerificationRequest,
   TenantDocument,
+  DocumentType,
+  ApiError,
 } from '@/lib/types';
+import './verification.css';
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 
-const STATUS_COPY: Record<
-  VerificationStatus,
-  { label: string; role: 'success' | 'warning' | 'danger' | 'info' | 'neutral'; headline: string; sub: string }
-> = {
-  unverified: {
-    label: 'Not submitted',
-    role: 'neutral',
-    headline: 'Get verified to unlock the full platform',
-    sub: 'Upload a government-issued identity document, then submit your request. Admin review usually takes one to two business days.',
-  },
-  pending: {
-    label: 'Pending',
-    role: 'info',
-    headline: 'Your request is queued',
-    sub: 'We\'ve received your submission. An admin will begin review shortly.',
-  },
-  under_review: {
-    label: 'Under review',
-    role: 'warning',
-    headline: 'Your identity is being reviewed',
-    sub: 'An admin is reviewing your documents. You\'ll be notified when a decision is made.',
-  },
-  verified: {
-    label: 'Verified',
-    role: 'success',
-    headline: 'Your identity is verified',
-    sub: 'You have full access to the Wyncrest platform.',
-  },
-  rejected: {
-    label: 'Rejected',
-    role: 'danger',
-    headline: 'Verification was not approved',
-    sub: 'Your request was rejected. Please review the reason below, upload updated documents, and resubmit.',
-  },
-  needs_more_information: {
-    label: 'More info needed',
-    role: 'warning',
-    headline: 'Additional information required',
-    sub: 'The review team needs more from you. Review the note below, upload updated documents, and resubmit.',
-  },
-};
-
-function statusRole(s: VerificationStatus | null): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
-  if (!s) return 'neutral';
-  return STATUS_COPY[s]?.role ?? 'neutral';
-}
+type Role = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
 function canResubmit(s: VerificationStatus | null): boolean {
   return s === 'unverified' || s === 'rejected' || s === 'needs_more_information';
@@ -89,11 +62,108 @@ function isPending(s: VerificationStatus | null): boolean {
   return s === 'pending' || s === 'under_review';
 }
 
+function scrollToId(id: string) {
+  document.getElementById(id)?.scrollIntoView({ block: 'start' });
+}
+
+function statusBadgeLabel(s: VerificationStatus | null): string {
+  switch (s) {
+    case 'verified': return 'Verified';
+    case 'pending':
+    case 'under_review': return 'Under review';
+    case 'rejected': return 'Rejected';
+    case 'needs_more_information': return 'More info needed';
+    default: return 'Not submitted';
+  }
+}
+
+function statusBadgeRole(s: VerificationStatus | null): Role {
+  switch (s) {
+    case 'verified': return 'success';
+    case 'pending':
+    case 'under_review': return 'info';
+    case 'rejected': return 'danger';
+    case 'needs_more_information': return 'warning';
+    default: return 'neutral';
+  }
+}
+
+/* ── Hero content, computed from real state only ────────────────────────── */
+
+interface HeroContent {
+  role: Role;
+  icon: React.ReactNode;
+  eyebrow: string;
+  headline: string;
+  sub: string;
+  tick?: boolean;
+}
+
+function heroContent(vs: VerificationStatus, hasIdDoc: boolean, firstName: string): HeroContent {
+  if (vs === 'verified') {
+    return {
+      role: 'success',
+      icon: <IconCheckCircle size={26} />,
+      tick: true,
+      eyebrow: 'Verified',
+      headline: 'You are verified',
+      sub: 'Your identity has been confirmed. You can apply to any listing on Wyncrest.',
+    };
+  }
+  if (isPending(vs)) {
+    return {
+      role: 'info',
+      icon: <IconClock size={26} />,
+      eyebrow: 'Under review',
+      headline: `Thanks, ${firstName || 'there'} — we're reviewing your identity`,
+      sub: "An admin will review your documents and decide. We'll notify you as soon as there's an update.",
+    };
+  }
+  if (vs === 'needs_more_information') {
+    return {
+      role: 'warning',
+      icon: <IconAlertTriangle size={26} />,
+      eyebrow: 'Needs action',
+      headline: 'One thing needs another look',
+      sub: 'A reviewer needs more from you before they can decide. Read the note below, update your documents, and resubmit.',
+    };
+  }
+  if (vs === 'rejected') {
+    return {
+      role: 'danger',
+      icon: <IconXCircle size={26} />,
+      eyebrow: 'Not verified',
+      headline: 'We could not verify your identity',
+      sub: 'Read the reason below, then upload corrected documents and try again.',
+    };
+  }
+  if (hasIdDoc) {
+    return {
+      role: 'info',
+      icon: <IconShield size={26} />,
+      eyebrow: 'In progress',
+      headline: "You've added your documents",
+      sub: "Review what you've uploaded and submit when you're ready. It only takes a moment.",
+    };
+  }
+  return {
+    role: 'neutral',
+    icon: <IconShield size={26} />,
+    eyebrow: 'Get verified',
+    headline: 'Verify your identity',
+    sub: 'A one-time check that keeps Wyncrest trustworthy for everyone. Have a government ID ready — it takes about two minutes.',
+  };
+}
+
 /* ── Document uploader ───────────────────────────────────────────────────── */
 
 function DocumentUploader({
+  documentType,
+  label,
   onUploaded,
 }: {
+  documentType: DocumentType;
+  label: string;
   onUploaded: () => void;
 }) {
   const { toast } = useToast();
@@ -103,7 +173,6 @@ function DocumentUploader({
 
   async function handleFile(file: File) {
     if (uploading) return;
-    // Accept images + pdf
     const ok = file.type.startsWith('image/') || file.type === 'application/pdf';
     if (!ok) {
       toast('Please upload a PDF or image file.', 'error');
@@ -115,39 +184,33 @@ function DocumentUploader({
     }
     setUploading(true);
     try {
-      await tenantApi.uploadDocument(file, 'identity_document');
-      toast(`Document uploaded: ${file.name}`, 'success');
+      await tenantApi.uploadDocument(file, documentType);
+      toast(`Uploaded: ${file.name}`, 'success');
       onUploaded();
-    } catch {
-      toast('Upload failed. Please try again.', 'error');
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message ?? 'Upload failed. Please try again.';
+      toast(msg, 'error');
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = '';
     }
   }
 
-  function onInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) void handleFile(file);
-  }
-
-  function onDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) void handleFile(file);
-  }
-
   return (
     <div
-      className={`vc-uploader${dragOver ? ' drag-over' : ''}${uploading ? ' uploading' : ''}`}
+      className={`vfy-uploader${dragOver ? ' drag-over' : ''}${uploading ? ' uploading' : ''}`}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
-      onDrop={onDrop}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file) void handleFile(file);
+      }}
       onClick={() => !uploading && inputRef.current?.click()}
       role="button"
       tabIndex={0}
-      aria-label="Upload identity document"
+      aria-label={`Upload ${label.toLowerCase()}`}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click(); }}
     >
       <input
@@ -155,86 +218,290 @@ function DocumentUploader({
         type="file"
         accept=".pdf,image/*"
         style={{ display: 'none' }}
-        onChange={onInputChange}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f); }}
         disabled={uploading}
       />
-      <span className="vc-uploader-icon">
-        {uploading
-          ? <span className="vc-spinner" aria-label="Uploading…" />
-          : <IconUpload size={22} />
-        }
+      <span className="vfy-uploader-icon">
+        {uploading ? <span className="vfy-spinner" aria-label="Uploading…" /> : <IconUpload size={20} />}
       </span>
-      <span className="vc-uploader-label">
-        {uploading ? 'Uploading…' : 'Upload identity document'}
+      <span className="vfy-uploader-label">
+        {uploading ? 'Uploading…' : `Upload ${label.toLowerCase()}`}
       </span>
-      <span className="vc-uploader-hint">PDF or image · max 10 MB · drag or click</span>
+      <span className="vfy-uploader-hint">PDF or image · max 10 MB · drag or click</span>
     </div>
   );
 }
 
 /* ── Uploaded documents list ─────────────────────────────────────────────── */
 
-function UploadedDocsList({ docs }: { docs: TenantDocument[] }) {
-  const idDocs = docs.filter((d) => d.document_type === 'identity_document');
-  if (idDocs.length === 0) return null;
+function UploadedDocsList({
+  docs,
+  documentType,
+  canDelete,
+  onDeleted,
+}: {
+  docs: TenantDocument[];
+  documentType: DocumentType;
+  canDelete: boolean;
+  onDeleted: () => void;
+}) {
+  const { toast } = useToast();
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const matching = docs.filter((d) => d.document_type === documentType);
+  if (matching.length === 0) return null;
+
+  async function handleDelete(id: number) {
+    setDeletingId(id);
+    try {
+      await tenantApi.deleteDocument(id);
+      toast('Document removed.', 'success');
+      onDeleted();
+    } catch {
+      toast('Could not remove document. Please try again.', 'error');
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
-    <div className="vc-docs-list">
-      <p className="vc-docs-label">Uploaded identity documents</p>
-      {idDocs.map((doc) => (
-        <div key={doc.id} className="vc-doc-row">
-          <span className="vc-doc-icon"><IconDoc size={16} /></span>
-          <div className="vc-doc-info">
-            <span className="vc-doc-name">{doc.original_filename}</span>
-            <span className="vc-doc-meta">{formatDate(doc.created_at)}</span>
+    <div className="vfy-docs-list">
+      {matching.map((doc) => (
+        <div key={doc.id} className="vfy-doc-row">
+          <span className="vfy-doc-icon"><IconDoc size={16} /></span>
+          <div className="vfy-doc-info">
+            <span className="vfy-doc-name">{doc.original_filename}</span>
+            <span className="vfy-doc-meta">{formatDate(doc.created_at)}</span>
           </div>
           <SemanticBadge role={doc.is_verified ? 'success' : 'neutral'} size="sm">
             {doc.is_verified ? 'Verified' : 'Uploaded'}
           </SemanticBadge>
+          {canDelete && (
+            <button
+              type="button"
+              className="vfy-doc-del"
+              aria-label={`Remove ${doc.original_filename}`}
+              disabled={deletingId === doc.id}
+              onClick={() => void handleDelete(doc.id)}
+            >
+              <IconTrash size={14} />
+            </button>
+          )}
         </div>
       ))}
     </div>
   );
 }
 
-/* ── Status hero ─────────────────────────────────────────────────────────── */
+/* ── Hero ─────────────────────────────────────────────────────────────────── */
 
-function StatusHero({ status }: { status: VerificationStatusResponse }) {
+function StatusHero({
+  status,
+  hasIdDoc,
+  firstName,
+}: {
+  status: VerificationStatusResponse;
+  hasIdDoc: boolean;
+  firstName: string;
+}) {
   const vs = (status.verification_status ?? 'unverified') as VerificationStatus;
-  const copy = STATUS_COPY[vs];
-  const role = statusRole(vs);
+  const latest: VerificationRequest | null = status.latest_request;
+  const c = heroContent(vs, hasIdDoc, firstName);
 
-  const IconMap: Record<string, React.ReactNode> = {
-    verified:              <IconCheckCircle size={28} />,
-    pending:               <IconClock size={28} />,
-    under_review:          <IconClock size={28} />,
-    rejected:              <IconXCircle size={28} />,
-    needs_more_information:<IconShield size={28} />,
-    unverified:            <IconShield size={28} />,
-  };
+  const showReason = latest?.decision_reason && (vs === 'rejected' || vs === 'needs_more_information');
+
+  let cta: { label: string; onClick: () => void } | null = null;
+  if (vs === 'unverified' && !hasIdDoc) cta = { label: 'Add your documents', onClick: () => scrollToId('vfy-documents') };
+  else if (vs === 'unverified' && hasIdDoc) cta = { label: 'Continue to submit', onClick: () => scrollToId('vfy-submit') };
+  else if (vs === 'needs_more_information') cta = { label: 'Update your documents', onClick: () => scrollToId('vfy-documents') };
+  else if (vs === 'rejected') cta = { label: 'Try again', onClick: () => scrollToId('vfy-documents') };
+  else if (isPending(vs)) cta = { label: 'See what happens next', onClick: () => scrollToId('vfy-timeline') };
 
   return (
-    <div className={`vc-hero vc-hero--${role}`}>
-      <div className="vc-hero-icon">{IconMap[vs]}</div>
-      <div className="vc-hero-body">
-        <div className="vc-hero-top">
-          <h2 className="vc-hero-title">{copy.headline}</h2>
-          <SemanticBadge role={role}>{copy.label}</SemanticBadge>
+    <div className={`vfy-hero vfy-glass role-${c.role}`}>
+      <div className="vfy-hero-ic">
+        {c.icon}
+        {c.tick && <span className="vfy-hero-tick"><IconCheckCircle size={13} /></span>}
+      </div>
+      <div className="vfy-hero-body">
+        <div className="vfy-hero-top">
+          <span className="vfy-hero-eyebrow">{c.eyebrow}</span>
         </div>
-        <p className="vc-hero-sub">{copy.sub}</p>
-        {status.latest_request?.decision_reason && (vs === 'rejected' || vs === 'needs_more_information') && (
-          <div className="vc-reason">
-            <span className="vc-reason-label">Reviewer note:</span>
-            <span className="vc-reason-text">{status.latest_request.decision_reason}</span>
+        <h2 className="vfy-hero-h">{c.headline}</h2>
+        <p className="vfy-hero-s">{c.sub}</p>
+
+        {showReason && (
+          <div className="vfy-reason" style={{ color: c.role === 'danger' ? 'var(--color-danger-500)' : 'var(--color-warning-500)' }}>
+            <span className="vfy-reason-label">Reviewer note</span>
+            <span className="vfy-reason-text">{latest?.decision_reason}</span>
           </div>
         )}
-        {status.latest_request?.submitted_at && (
-          <p className="vc-hero-meta">
-            Submitted {formatDate(status.latest_request.submitted_at)}
-            {status.latest_request.reviewed_at && ` · Reviewed ${formatDate(status.latest_request.reviewed_at)}`}
+
+        {latest?.submitted_at && (
+          <p className="vfy-hero-meta">
+            Submitted {formatDate(latest.submitted_at)}
+            {latest.reviewed_at && ` · Reviewed ${formatDate(latest.reviewed_at)}`}
           </p>
         )}
+
+        {cta && (
+          <div className="vfy-hero-cta">
+            <button type="button" className="vfy-btn vfy-btn-primary" onClick={cta.onClick}>
+              {cta.label}
+            </button>
+          </div>
+        )}
+        {vs === 'verified' && (
+          <div className="vfy-hero-cta">
+            <Link to="/app/browse" className="vfy-btn vfy-btn-primary">
+              Browse listings <IconArrowUpRight size={15} />
+            </Link>
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+/* ── Why we ask ──────────────────────────────────────────────────────────── */
+
+function WhySection() {
+  return (
+    <div className="vfy-section vfy-glass">
+      <h3 className="vfy-section-title">Why we ask</h3>
+      <div className="vfy-why-grid">
+        <div className="vfy-why-card">
+          <div className="vfy-why-ic"><IconShield size={18} /></div>
+          <div className="vfy-why-t">Builds trust</div>
+          <div className="vfy-why-s">Verified renters help landlords feel confident reviewing your application.</div>
+        </div>
+        <div className="vfy-why-card">
+          <div className="vfy-why-ic"><IconLock size={18} /></div>
+          <div className="vfy-why-t">Unlocks applying</div>
+          <div className="vfy-why-s">You need a verified identity before you can apply to any listing on Wyncrest.</div>
+        </div>
+        <div className="vfy-why-card">
+          <div className="vfy-why-ic"><IconEye size={18} /></div>
+          <div className="vfy-why-t">Protects everyone</div>
+          <div className="vfy-why-s">Identity checks help stop impersonation and keep the platform safe for renters and owners.</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── What happens next (pending / under review) ─────────────────────────── */
+
+function TimelineSection({ latest }: { latest: VerificationRequest | null }) {
+  return (
+    <div id="vfy-timeline" className="vfy-section vfy-glass">
+      <h3 className="vfy-section-title">What happens next</h3>
+      <div className="vfy-tl">
+        <div className="vfy-tl-item is-done">
+          <div className="vfy-tl-e">Documents submitted</div>
+          <div className="vfy-tl-m">{latest?.submitted_at ? formatDate(latest.submitted_at) : '—'}</div>
+        </div>
+        <div className="vfy-tl-item is-current">
+          <div className="vfy-tl-e">Admin review</div>
+          <div className="vfy-tl-m">In progress</div>
+        </div>
+        <div className="vfy-tl-item is-pending">
+          <div className="vfy-tl-e">Decision</div>
+          <div className="vfy-tl-m">You'll be notified</div>
+        </div>
+      </div>
+      <p className="vfy-tl-note">
+        You don't need to do anything while we review. We'll send you an in-app notification as soon as there's an update.
+      </p>
+    </div>
+  );
+}
+
+/* ── Verified unlocks ────────────────────────────────────────────────────── */
+
+function VerifiedSection({ latest }: { latest: VerificationRequest | null }) {
+  return (
+    <div className="vfy-section vfy-glass">
+      <h3 className="vfy-section-title">What your verification unlocks</h3>
+      <div className="vfy-badgebar">
+        <div className="vfy-badgebar-ic"><IconCheckCircle size={18} /></div>
+        <div>
+          <div className="vfy-badgebar-t">Identity verified</div>
+          <div className="vfy-badgebar-s">{latest?.reviewed_at ? `Verified ${formatDate(latest.reviewed_at)}` : 'Verified'}</div>
+        </div>
+      </div>
+      <div className="vfy-unlock-row"><span className="vfy-unlock-check"><IconCheckCircle size={15} /></span>Apply to any listing on Wyncrest</div>
+      <div className="vfy-unlock-row"><span className="vfy-unlock-check"><IconCheckCircle size={15} /></span>A confirmed identity on file for landlords and admins</div>
+    </div>
+  );
+}
+
+/* ── Documents section ───────────────────────────────────────────────────── */
+
+function DocumentsSection({
+  docs,
+  docsLoading,
+  docsError,
+  reloadDocs,
+  canManage,
+}: {
+  docs: TenantDocument[] | null;
+  docsLoading: boolean;
+  docsError: ApiError | null;
+  reloadDocs: () => void;
+  canManage: boolean;
+}) {
+  const identityDocs = (docs ?? []).filter((d) => d.document_type === 'identity_document');
+  const addressDocs = (docs ?? []).filter((d) => d.document_type === 'proof_of_address');
+
+  return (
+    <div id="vfy-documents" className="vfy-section vfy-glass">
+      <div>
+        <h3 className="vfy-section-title">
+          Identity document <span className="vfy-section-tag">required</span>
+        </h3>
+        <p className="vfy-section-desc">
+          A government-issued ID — Ghana Card, passport, or driver's licence. If your ID has two sides,
+          upload both as separate files.
+        </p>
+      </div>
+
+      {canManage && (
+        <DocumentUploader documentType="identity_document" label="identity document" onUploaded={reloadDocs} />
+      )}
+
+      {docsLoading && <LoadingState label="Loading documents…" />}
+      {docsError && <ErrorState message={docsError.message} onRetry={reloadDocs} />}
+      {docs && !docsLoading && (
+        identityDocs.length === 0
+          ? (
+            <EmptyState
+              icon={<IconFolder size={20} />}
+              title="No identity documents yet"
+              description="Upload a government ID to get started."
+            />
+          )
+          : <UploadedDocsList docs={docs} documentType="identity_document" canDelete={canManage} onDeleted={reloadDocs} />
+      )}
+
+      <div style={{ height: 4 }} />
+
+      <div>
+        <h3 className="vfy-section-title">
+          Proof of address <span className="vfy-section-tag">recommended</span>
+        </h3>
+        <p className="vfy-section-desc">
+          A recent utility bill or bank statement showing your name and address. Not required to submit,
+          but it helps reviewers confirm your identity faster.
+        </p>
+      </div>
+
+      {canManage && (
+        <DocumentUploader documentType="proof_of_address" label="proof of address" onUploaded={reloadDocs} />
+      )}
+
+      {docs && !docsLoading && addressDocs.length > 0 && (
+        <UploadedDocsList docs={docs} documentType="proof_of_address" canDelete={canManage} onDeleted={reloadDocs} />
+      )}
     </div>
   );
 }
@@ -242,20 +509,15 @@ function StatusHero({ status }: { status: VerificationStatusResponse }) {
 /* ── Submit section ──────────────────────────────────────────────────────── */
 
 function SubmitSection({
-  status,
   hasIdDoc,
   onSubmitted,
 }: {
-  status: VerificationStatusResponse;
   hasIdDoc: boolean;
   onSubmitted: () => void;
 }) {
   const { toast } = useToast();
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const vs = (status.verification_status ?? 'unverified') as VerificationStatus;
-
-  if (!canResubmit(vs)) return null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -263,7 +525,7 @@ function SubmitSection({
     setSubmitting(true);
     try {
       await tenantApi.submitVerification(note || undefined);
-      toast('Verification request submitted. We\'ll notify you once the review is complete.', 'success');
+      toast("Verification request submitted. We'll notify you once the review is complete.", 'success');
       onSubmitted();
     } catch (err: unknown) {
       const msg = (err as { message?: string })?.message ?? 'Could not submit. Please try again.';
@@ -274,19 +536,15 @@ function SubmitSection({
   }
 
   return (
-    <form className="vc-submit-section" onSubmit={handleSubmit}>
-      <h3 className="vc-section-title">Submit for review</h3>
+    <form id="vfy-submit" className="vfy-section vfy-glass" onSubmit={handleSubmit}>
+      <h3 className="vfy-section-title">Submit for review</h3>
       {!hasIdDoc && (
-        <div className="vc-requirement-alert">
-          You must upload at least one identity document above before submitting.
-        </div>
+        <div className="vfy-alert">You must upload at least one identity document above before submitting.</div>
       )}
-      <label className="vc-field-label" htmlFor="vc-note">
-        Optional note to reviewer
-      </label>
+      <label className="vfy-field-label" htmlFor="vfy-note">Optional note to reviewer</label>
       <textarea
-        id="vc-note"
-        className="vc-textarea"
+        id="vfy-note"
+        className="vfy-textarea"
         value={note}
         onChange={(e) => setNote(e.target.value)}
         placeholder="Anything the reviewer should know…"
@@ -294,21 +552,49 @@ function SubmitSection({
         rows={3}
         disabled={submitting}
       />
-      <button
-        type="submit"
-        className="vc-submit-btn"
-        disabled={!hasIdDoc || submitting}
-        aria-disabled={!hasIdDoc || submitting}
-      >
-        {submitting ? 'Submitting…' : 'Submit for verification'}
-      </button>
+      <div>
+        <button type="submit" className="vfy-btn vfy-btn-primary" disabled={!hasIdDoc || submitting} aria-disabled={!hasIdDoc || submitting}>
+          {submitting ? 'Submitting…' : 'Submit for verification'}
+        </button>
+      </div>
     </form>
+  );
+}
+
+/* ── Privacy ─────────────────────────────────────────────────────────────── */
+
+function PrivacySection() {
+  return (
+    <div className="vfy-section vfy-glass">
+      <h3 className="vfy-section-title">How we handle your documents</h3>
+      <div className="vfy-privacy-grid">
+        <div className="vfy-privacy-card">
+          <div className="vfy-privacy-h"><IconDoc size={16} />What we collect</div>
+          <p className="vfy-privacy-p">Your government ID and, optionally, a proof of address. Nothing more than what you upload here.</p>
+        </div>
+        <div className="vfy-privacy-card">
+          <div className="vfy-privacy-h"><IconEye size={16} />Who can see it</div>
+          <p className="vfy-privacy-p">Only you and Wyncrest's verification admins, while reviewing your request. Landlords and other tenants never see your documents.</p>
+        </div>
+        <div className="vfy-privacy-card">
+          <div className="vfy-privacy-h"><IconLock size={16} />How it's stored</div>
+          <p className="vfy-privacy-p">Files are kept on private storage — never a public link — and every access is recorded in our audit log.</p>
+        </div>
+        <div className="vfy-privacy-card">
+          <div className="vfy-privacy-h"><IconTrash size={16} />Your control</div>
+          <p className="vfy-privacy-p">You can remove a document any time before your request is submitted for review.</p>
+        </div>
+      </div>
+    </div>
   );
 }
 
 /* ── Page ─────────────────────────────────────────────────────────────────── */
 
 export function VerificationCenter() {
+  const { user } = useAuth();
+  const firstName = user && 'first_name' in user ? user.first_name : '';
+
   const { data: status, loading: statusLoading, error: statusError, reload: reloadStatus } = useApi(
     () => tenantApi.verificationStatus(),
     [],
@@ -322,30 +608,28 @@ export function VerificationCenter() {
     [docsNonce],
   );
 
-  function handleUploaded() {
-    reloadDocs();
-  }
-
   function handleSubmitted() {
     reloadStatus();
     reloadDocs();
   }
 
+  const vs = (status?.verification_status ?? 'unverified') as VerificationStatus;
   const hasIdDoc = (docs ?? []).some((d) => d.document_type === 'identity_document');
-  const vs = status?.verification_status ?? 'unverified';
-  const showUploader = canResubmit(vs as VerificationStatus);
-  const showPendingNote = isPending(vs as VerificationStatus);
+  const canManage = canResubmit(vs);
 
   return (
-    <div className="vc-page">
-      <style>{VC_CSS}</style>
-
-      {/* Page header */}
-      <div className="vc-page-header">
-        <h1 className="vc-page-title">Identity Verification</h1>
-        <p className="vc-page-desc">
-          Verified tenants get priority access to listings and faster application decisions.
-        </p>
+    <div className="vfy">
+      <div className="vfy-intro vfy-glass">
+        <div>
+          <span className="vfy-eyebrow">Account · Security</span>
+          <h1 className="vfy-title">Identity <em>verification.</em></h1>
+          <p className="vfy-sub">A quick, secure check that confirms you are who you say you are.</p>
+        </div>
+        {status && !statusLoading && (
+          <SemanticBadge role={statusBadgeRole(vs)}>
+            {statusBadgeLabel(vs)}
+          </SemanticBadge>
+        )}
       </div>
 
       {statusLoading && <LoadingState label="Loading verification status…" />}
@@ -353,287 +637,27 @@ export function VerificationCenter() {
 
       {status && !statusLoading && (
         <>
-          <StatusHero status={status} />
+          <StatusHero status={status} hasIdDoc={hasIdDoc} firstName={firstName} />
 
-          {/* Documents section */}
-          <div className="vc-section">
-            <h3 className="vc-section-title">Identity documents</h3>
-            <p className="vc-section-desc">
-              Upload a government-issued ID (passport, national ID, or driver's licence).
-              Supported formats: PDF, JPG, PNG.
-            </p>
+          {(vs === 'unverified' || vs === 'rejected' || vs === 'needs_more_information') && <WhySection />}
 
-            {showUploader && <DocumentUploader onUploaded={handleUploaded} />}
+          {isPending(vs) && <TimelineSection latest={status.latest_request} />}
 
-            {docsLoading && <LoadingState label="Loading documents…" className="vc-docs-loading" />}
-            {docsError && <ErrorState message={docsError.message} onRetry={reloadDocs} />}
-            {docs && !docsLoading && (
-              docs.filter((d) => d.document_type === 'identity_document').length === 0
-                ? (
-                  <EmptyState
-                    icon={<IconFolder size={22} />}
-                    title="No identity documents yet"
-                    description="Upload a government ID to get started."
-                    className="vc-empty"
-                  />
-                )
-                : <UploadedDocsList docs={docs} />
-            )}
-          </div>
+          {vs === 'verified' && <VerifiedSection latest={status.latest_request} />}
 
-          {showPendingNote && (
-            <div className="vc-pending-notice">
-              Your request is in the queue. No action needed right now.
-              We'll notify you when the review is complete.
-            </div>
-          )}
-
-          <SubmitSection
-            status={status}
-            hasIdDoc={hasIdDoc}
-            onSubmitted={handleSubmitted}
+          <DocumentsSection
+            docs={docs}
+            docsLoading={docsLoading}
+            docsError={docsError}
+            reloadDocs={reloadDocs}
+            canManage={canManage}
           />
 
-          {vs === 'verified' && (
-            <div className="vc-verified-cta">
-              <IconCheckCircle size={20} />
-              <span>Ready to find a home?</span>
-              <Link to="/app/browse" className="vc-link">Browse listings</Link>
-            </div>
-          )}
+          {canManage && <SubmitSection hasIdDoc={hasIdDoc} onSubmitted={handleSubmitted} />}
+
+          <PrivacySection />
         </>
       )}
     </div>
   );
 }
-
-/* ── Scoped styles ───────────────────────────────────────────────────────── */
-
-const VC_CSS = `
-.vc-page {
-  max-width: 680px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.vc-page-header { display: flex; flex-direction: column; gap: 6px; }
-.vc-page-title {
-  font-family: 'Fraunces', Georgia, serif;
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--color-ink-950, #0C0A09);
-  line-height: 1.15;
-}
-.vc-page-desc { font-size: 0.9375rem; color: var(--color-ink-500, #6B7280); }
-
-/* Hero */
-.vc-hero {
-  border-radius: 16px;
-  border: 1.5px solid var(--color-ink-200, #E5E7EB);
-  background: var(--color-surface, #FFFFFF);
-  padding: 24px;
-  display: flex;
-  gap: 18px;
-  align-items: flex-start;
-}
-.vc-hero--success { border-color: var(--color-success-200, #BBF7D0); background: var(--color-success-50, #F0FFF4); }
-.vc-hero--danger  { border-color: var(--color-danger-200, #FCA5A5); background: var(--color-danger-50, #FFF5F5); }
-.vc-hero--warning { border-color: var(--color-warning-200, #FDE68A); background: var(--color-warning-50, #FFFBEB); }
-.vc-hero--info    { border-color: var(--color-brand-200, #A7D8D4); background: var(--color-brand-50, #F0F9FF); }
-
-.vc-hero-icon {
-  flex: 0 0 auto;
-  width: 52px; height: 52px;
-  border-radius: 50%;
-  background: var(--color-ink-100, #F3F4F6);
-  display: flex; align-items: center; justify-content: center;
-  color: var(--color-ink-600, #4B5563);
-}
-.vc-hero--success .vc-hero-icon { background: var(--color-success-100, #D1FAE5); color: var(--color-success-600, #059669); }
-.vc-hero--danger  .vc-hero-icon { background: var(--color-danger-100, #FEE2E2); color: var(--color-danger-600, #DC2626); }
-.vc-hero--warning .vc-hero-icon { background: var(--color-warning-100, #FEF3C7); color: var(--color-warning-600, #D97706); }
-.vc-hero--info    .vc-hero-icon { background: var(--color-brand-100, #CFFAFE); color: var(--color-brand-600, #0E7490); }
-
-.vc-hero-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
-.vc-hero-top  { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.vc-hero-title {
-  font-family: 'Fraunces', Georgia, serif;
-  font-size: 1.1875rem;
-  font-weight: 600;
-  color: var(--color-ink-900, #111827);
-  flex: 1;
-}
-.vc-hero-sub  { font-size: 0.9rem; color: var(--color-ink-600, #4B5563); line-height: 1.55; }
-.vc-hero-meta { font-size: 0.8125rem; color: var(--color-ink-400, #9CA3AF); }
-.vc-reason {
-  background: var(--color-ink-50, #F9FAFB);
-  border-left: 3px solid var(--color-danger-400, #F87171);
-  border-radius: 4px 8px 8px 4px;
-  padding: 10px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.vc-reason-label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-ink-500, #6B7280); }
-.vc-reason-text  { font-size: 0.9rem; color: var(--color-ink-800, #1F2937); }
-
-/* Section */
-.vc-section {
-  border-radius: 16px;
-  border: 1px solid var(--color-ink-200, #E5E7EB);
-  background: var(--color-surface, #FFFFFF);
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.vc-section-title {
-  font-family: 'Fraunces', Georgia, serif;
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--color-ink-900, #111827);
-}
-.vc-section-desc { font-size: 0.875rem; color: var(--color-ink-500, #6B7280); line-height: 1.5; margin-top: -8px; }
-
-/* Uploader */
-.vc-uploader {
-  border: 2px dashed var(--color-ink-300, #D1D5DB);
-  border-radius: 12px;
-  background: var(--color-ink-50, #F9FAFB);
-  padding: 28px 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-  user-select: none;
-  outline: none;
-}
-.vc-uploader:focus-visible { outline: 2px solid var(--color-brand-500, #0EA5E9); outline-offset: 2px; }
-.vc-uploader:hover, .vc-uploader.drag-over {
-  border-color: var(--color-brand-500, #0EA5E9);
-  background: var(--color-brand-50, #F0F9FF);
-}
-.vc-uploader.uploading { opacity: 0.6; cursor: not-allowed; }
-.vc-uploader-icon { color: var(--color-brand-600, #0284C7); }
-.vc-uploader-label { font-size: 0.9375rem; font-weight: 600; color: var(--color-ink-800, #1F2937); }
-.vc-uploader-hint { font-size: 0.8125rem; color: var(--color-ink-400, #9CA3AF); }
-
-.vc-spinner {
-  display: inline-block;
-  width: 22px; height: 22px;
-  border: 2.5px solid var(--color-brand-200, #BAE6FD);
-  border-top-color: var(--color-brand-600, #0284C7);
-  border-radius: 50%;
-  animation: vc-spin 0.75s linear infinite;
-}
-@keyframes vc-spin { to { transform: rotate(360deg); } }
-
-/* Docs list */
-.vc-docs-label { font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-ink-400, #9CA3AF); }
-.vc-doc-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: var(--color-ink-50, #F9FAFB);
-  border: 1px solid var(--color-ink-200, #E5E7EB);
-}
-.vc-doc-icon { color: var(--color-ink-400, #9CA3AF); flex: 0 0 auto; }
-.vc-doc-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
-.vc-doc-name { font-size: 0.875rem; font-weight: 500; color: var(--color-ink-800, #1F2937); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vc-doc-meta { font-size: 0.75rem; color: var(--color-ink-400, #9CA3AF); }
-.vc-docs-list { display: flex; flex-direction: column; gap: 8px; }
-.vc-docs-loading { padding: 12px 0; }
-.vc-empty { margin-top: 4px; }
-
-/* Requirement alert */
-.vc-requirement-alert {
-  background: var(--color-warning-50, #FFFBEB);
-  border: 1px solid var(--color-warning-200, #FDE68A);
-  border-radius: 10px;
-  padding: 12px 16px;
-  font-size: 0.875rem;
-  color: var(--color-warning-800, #92400E);
-}
-
-/* Pending notice */
-.vc-pending-notice {
-  background: var(--color-brand-50, #F0F9FF);
-  border: 1px solid var(--color-brand-200, #BAE6FD);
-  border-radius: 12px;
-  padding: 16px 20px;
-  font-size: 0.9rem;
-  color: var(--color-brand-800, #075985);
-  line-height: 1.55;
-}
-
-/* Submit section */
-.vc-submit-section {
-  border-radius: 16px;
-  border: 1px solid var(--color-ink-200, #E5E7EB);
-  background: var(--color-surface, #FFFFFF);
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.vc-field-label { font-size: 0.875rem; font-weight: 500; color: var(--color-ink-700, #374151); }
-.vc-textarea {
-  width: 100%;
-  border-radius: 10px;
-  border: 1.5px solid var(--color-ink-200, #E5E7EB);
-  background: var(--color-ink-50, #F9FAFB);
-  padding: 10px 14px;
-  font-size: 0.9375rem;
-  color: var(--color-ink-800, #1F2937);
-  resize: vertical;
-  font-family: inherit;
-  transition: border-color 0.15s;
-  box-sizing: border-box;
-}
-.vc-textarea:focus { outline: none; border-color: var(--color-brand-500, #0EA5E9); }
-.vc-submit-btn {
-  align-self: flex-start;
-  padding: 11px 24px;
-  border-radius: 10px;
-  background: var(--color-brand-600, #0284C7);
-  color: #fff;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
-}
-.vc-submit-btn:hover:not(:disabled) { background: var(--color-brand-700, #0369A1); }
-.vc-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.vc-submit-btn:focus-visible { outline: 2px solid var(--color-brand-500, #0EA5E9); outline-offset: 2px; }
-
-/* Verified CTA */
-.vc-verified-cta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 16px 20px;
-  border-radius: 12px;
-  background: var(--color-success-50, #F0FFF4);
-  border: 1px solid var(--color-success-200, #BBF7D0);
-  font-size: 0.9rem;
-  color: var(--color-success-800, #065F46);
-}
-.vc-link {
-  margin-left: auto;
-  font-weight: 600;
-  color: var(--color-brand-600, #0284C7);
-  text-decoration: none;
-}
-.vc-link:hover { text-decoration: underline; }
-
-@media (prefers-reduced-motion: reduce) {
-  .vc-spinner { animation: none; }
-}
-`;
