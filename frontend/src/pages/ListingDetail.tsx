@@ -1,5 +1,11 @@
-import { useRef, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router';
+import {
+  ArrowUpDown, Banknote, Bath, BedDouble, Building2, Calendar, Camera, Car,
+  Check, ChevronLeft, ChevronRight, Clock, Droplet, Dumbbell, FileText, Heart,
+  Lock, MapPin, PawPrint, ShieldCheck, Snowflake, Sofa, Star, Trash2, Trees,
+  Users, WashingMachine, Waves, Wifi, Zap,
+} from 'lucide-react';
 import { useAuth } from '@/context/auth';
 import { useApi } from '@/hooks/useApi';
 import { publicApi, tenantApi } from '@/lib/endpoints';
@@ -8,28 +14,276 @@ import { normalizeError } from '@/lib/api';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { ErrorState, LoadingState } from '@/components/ui/states';
+import { Avatar } from '@/components/ui/Avatar';
+import { EmptyState, Skeleton } from '@/components/ui/states';
 import { StarRating } from '@/components/ui/StarRating';
 import { useToast } from '@/components/ui/toast';
-import {
-  IconBath,
-  IconBed,
-  IconChevronRight,
-  IconHeart,
-  IconHome,
-  IconMapPin,
-  IconStar,
-} from '@/components/ui/icons';
-import type { ReviewEligibility } from '@/lib/types';
+import { SectionHeader } from '@/components/cards';
+import type { Application, Contract, Listing, PropertyAmenity, ReviewEligibility, User } from '@/lib/types';
+import './listing-detail.css';
 
-/* ── Review section (tenant-only, eligibility-gated) ─────────────────────── */
+/* ── static lookups ──────────────────────────────────────────────────────── */
 
-function ListingReviewSection({ listingId }: { listingId: number }) {
+const PROPERTY_TYPE_LABEL: Record<string, string> = {
+  single_family: 'House', multi_family: 'Multi-family home', apartment: 'Apartment',
+  condo: 'Condo', townhouse: 'Townhouse', commercial: 'Commercial', duplex: 'Duplex',
+  studio_block: 'Studio block', compound_house: 'Compound house', mixed_use: 'Mixed-use', other: 'Property',
+};
+const propertyTypeLabel = (t?: string) =>
+  t ? PROPERTY_TYPE_LABEL[t] ?? humanize(t) : null;
+
+const AMENITY_ICON: Partial<Record<PropertyAmenity | string, typeof Wifi>> = {
+  gated: Lock,
+  security_guard: ShieldCheck,
+  cctv: Camera,
+  water: Droplet,
+  electricity: Zap,
+  backup_generator: Zap,
+  internet_ready: Wifi,
+  waste_collection: Trash2,
+  air_conditioning: Snowflake,
+  furnished: Sofa,
+  laundry: WashingMachine,
+  elevator: ArrowUpDown,
+  street_parking: Car,
+  private_parking: Car,
+  covered_parking: Car,
+  garden: Trees,
+  pool: Waves,
+  gym: Dumbbell,
+  shared_courtyard: Users,
+};
+
+/**
+ * Every status blocks a fresh "Apply" except `withdrawn` — matches the backend's
+ * `hasOpenApplication()` scope (ApplicationController). A withdrawn application
+ * was the tenant's own choice to retract, so starting over is allowed; every
+ * other status (including a past decision) routes the tenant to that record
+ * instead of letting them stack a second one.
+ */
+function findBlockingApplication(applications: Application[], listingId: number): Application | undefined {
+  return applications.find((a) => a.listing_id === listingId && a.status !== 'withdrawn');
+}
+
+/* ── gallery ──────────────────────────────────────────────────────────────── */
+
+interface GalleryImage {
+  url: string;
+  alt: string;
+}
+
+/** Real gallery only — the listing's own media_assets first, then legacy photos. Never a stock photo standing in for the unit. */
+function resolveGalleryImages(listing: Listing): GalleryImage[] {
+  const assets = (listing.media_assets ?? []).filter((a) => !!a.url);
+  if (assets.length > 0) {
+    return assets.map((a) => ({ url: a.url as string, alt: a.alt_text || listing.title }));
+  }
+  const photos = listing.photos ?? [];
+  if (photos.length > 0) {
+    return [...photos]
+      .sort((a, b) => Number(b.is_primary) - Number(a.is_primary) || a.sort_order - b.sort_order)
+      .map((p) => ({
+        url: `${import.meta.env.VITE_API_URL ?? ''}/storage/${p.path}`,
+        alt: p.alt_text || listing.title,
+      }));
+  }
+  return [];
+}
+
+/** Stable abstract hue seeded from the listing — matches the "no fake photos" placeholder convention used on Browse/Saved. */
+function listingHue(seed: string): number {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) & 0xffff;
+  return 190 + (hash % 50);
+}
+
+function ListingGallery({ images, seed }: { images: GalleryImage[]; seed: string }) {
+  const [index, setIndex] = useState(0);
+
+  if (images.length === 0) {
+    const hue = listingHue(seed);
+    return (
+      <div
+        className="ld-gallery"
+        style={{
+          background: `linear-gradient(135deg, hsl(${hue} 28% 92%), hsl(${hue} 22% 84%))`,
+          color: `hsl(${hue} 30% 45%)`,
+        }}
+      >
+        <div className="ld-gallery-placeholder">
+          <Building2 size={48} strokeWidth={1.25} />
+          <span className="ld-gallery-placeholder-note">No photos yet</span>
+        </div>
+      </div>
+    );
+  }
+
+  const go = (delta: number) => setIndex((i) => (i + delta + images.length) % images.length);
+
+  return (
+    <div
+      className="ld-gallery"
+      tabIndex={0}
+      role="group"
+      aria-label="Listing photos"
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowLeft') go(-1);
+        if (e.key === 'ArrowRight') go(1);
+      }}
+    >
+      <img src={images[index].url} alt={images[index].alt} />
+      {images.length > 1 && (
+        <>
+          <button type="button" className="ld-gallery-nav prev" onClick={() => go(-1)} aria-label="Previous photo">
+            <ChevronLeft size={18} />
+          </button>
+          <button type="button" className="ld-gallery-nav next" onClick={() => go(1)} aria-label="Next photo">
+            <ChevronRight size={18} />
+          </button>
+          <span className="ld-gallery-counter">{index + 1} / {images.length}</span>
+          <span className="ld-gallery-dots" aria-hidden="true">
+            {images.map((img, i) => (
+              <span key={img.url} className={`ld-gallery-dot${i === index ? ' on' : ''}`} />
+            ))}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ── small building blocks ───────────────────────────────────────────────── */
+
+function FactRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
+  return (
+    <div className="ld-fact-row">
+      <span className="ld-fact-ico">{icon}</span>
+      <div>
+        <div className="ld-fact-label">{label}</div>
+        <div className="ld-fact-value">{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function DetailTile({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
+  return (
+    <div className="ld-tile">
+      <span className="ld-tile-ico">{icon}</span>
+      <div>
+        <div className="ld-tile-label">{label}</div>
+        <div className="ld-tile-value">{value}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ── apply eligibility ───────────────────────────────────────────────────
+ *
+ * `signed-out` is kept for defensiveness but is UNREACHABLE today: /app/* is
+ * wrapped in <RequireAuth> (see App.tsx), so an anonymous visitor is bounced
+ * to /login before this component ever mounts — confirmed by hand in the
+ * browser.
+ *
+ * Precedence: an existing application always wins over the verification
+ * gate. Verification only matters for STARTING a new application — once one
+ * exists (in any non-withdrawn status), the tenant's next step is to look at
+ * that record, not to be told they need to verify again.
+ */
+type ApplyCta =
+  | { kind: 'signed-out' }
+  | { kind: 'not-verified' }
+  | { kind: 'can-apply' }
+  | { kind: 'has-application'; label: string; to: string };
+
+/** Real backend status → the button copy + route the tenant should land on next. */
+function applicationCtaMeta(application: Application, leaseContractId: string | null): { label: string; to: string } {
+  switch (application.status) {
+    case 'draft':
+      return { label: 'Continue application', to: `/app/applications/${application.id}/apply` };
+    case 'needs_action':
+      return { label: 'Fix application', to: `/app/applications/${application.id}` };
+    case 'approved':
+      return leaseContractId
+        ? { label: 'Review lease', to: `/app/contracts/${leaseContractId}` }
+        : { label: 'View approval', to: `/app/applications/${application.id}` };
+    case 'rejected':
+      return { label: 'View decision', to: `/app/applications/${application.id}` };
+    default: // submitted | in_review | landlord_review
+      return { label: 'View application', to: `/app/applications/${application.id}` };
+  }
+}
+
+function getApplyCtaState(input: {
+  signedIn: boolean;
+  /** Only meaningful when signedIn — the tenant's verification_status ('verified' is the only status that clears ApplicationController's server-side gate). */
+  verificationStatus: string | null | undefined;
+  /** The tenant's existing application for this listing, if any (every status but 'withdrawn' blocks a fresh apply). */
+  blockingApplication: Application | undefined;
+  /** The tenant's own accepted contract for this listing, if one already exists (only relevant once approved). */
+  leaseContractId: string | null;
+}): ApplyCta {
+  if (!input.signedIn) return { kind: 'signed-out' };
+  if (input.blockingApplication) {
+    return { kind: 'has-application', ...applicationCtaMeta(input.blockingApplication, input.leaseContractId) };
+  }
+  if (input.verificationStatus !== 'verified') return { kind: 'not-verified' };
+  return { kind: 'can-apply' };
+}
+
+const STATIC_CTA_LABEL: Record<'signed-out' | 'not-verified' | 'can-apply', string> = {
+  'signed-out': 'Sign in to apply',
+  'not-verified': 'Verify your identity to apply',
+  'can-apply': 'Apply for this home',
+};
+
+/* ── landlord / trust card ───────────────────────────────────────────────── */
+
+function LandlordTrustCard({ landlord }: { landlord?: User }) {
+  if (!landlord) return null;
+  const verified = landlord.identity_verified === true;
+  const name = [landlord.first_name, landlord.last_name].filter(Boolean).join(' ') || 'Landlord';
+
+  return (
+    <Card>
+      <CardBody className="space-y-4">
+        <div className="ld-trust-row">
+          <span className={`ld-trust-ico ${verified ? 'on' : 'off'}`}>
+            <ShieldCheck size={20} />
+          </span>
+          <div>
+            <p className="ld-trust-title">{verified ? 'Verified landlord' : 'Verification pending'}</p>
+            <p className="ld-trust-desc">
+              {verified
+                ? 'This landlord has completed identity verification on Wyncrest.'
+                : "This landlord hasn't completed identity verification yet."}
+            </p>
+          </div>
+        </div>
+        <div className="ld-landlord-row">
+          <Avatar name={name} src={landlord.avatar_url} className="ld-landlord-avatar" />
+          <div>
+            <p className="ld-landlord-name">{name}</p>
+            <p className="ld-landlord-role">Landlord</p>
+          </div>
+        </div>
+      </CardBody>
+    </Card>
+  );
+}
+
+/* ── reviews card (real summary + snippets, then the eligibility-gated write form) ── */
+
+function ReviewsCard({ listing, listingId, isTenant }: { listing: Listing; listingId: number; isTenant: boolean }) {
   const { toast } = useToast();
+  const property = listing.unit?.property;
+  const avgRating = property?.average_rating ?? null;
+  const reviewCount = property?.review_count ?? 0;
+  const reviews = property?.approved_reviews ?? [];
 
   const { data: eligibility, loading: eligLoading } = useApi<ReviewEligibility>(
-    () => tenantApi.reviewEligibility(listingId),
-    [listingId],
+    () => (isTenant ? tenantApi.reviewEligibility(listingId) : Promise.resolve({ eligible: false, contract_id: null })),
+    [listingId, isTenant],
   );
 
   const [submitted, setSubmitted] = useState(false);
@@ -37,21 +291,6 @@ function ListingReviewSection({ listingId }: { listingId: number }) {
   const [rating, setRating] = useState(0);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-
-  if (eligLoading) return null; // silent — don't flash a spinner in listing body
-  if (!eligibility?.eligible) {
-    // Not eligible — show a truthful, brief explanation rather than nothing
-    return (
-      <Card>
-        <CardBody>
-          <div className="flex items-center gap-2 text-sm text-ink-500">
-            <IconStar size={16} />
-            <span>Review available after your lease on this property is active or completed.</span>
-          </div>
-        </CardBody>
-      </Card>
-    );
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -82,106 +321,166 @@ function ListingReviewSection({ listingId }: { listingId: number }) {
     }
   }
 
-  if (submitted) {
-    return (
-      <Card>
-        <CardBody className="flex items-center gap-3 text-sm text-success-700">
-          <IconStar size={18} className="text-warning-500" />
-          <span className="font-medium">Your review has been submitted and is pending moderation.</span>
-        </CardBody>
-      </Card>
-    );
-  }
-
   return (
     <Card>
       <CardBody className="space-y-4">
-        <h2 className="text-base font-semibold text-ink-900">Write a review</h2>
-        <p className="text-sm text-ink-500">
-          Share your experience living here. Reviews are public once approved.
-        </p>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-ink-700 mb-1">Rating</label>
-            <StarRating value={rating} onChange={setRating} size={28} />
-          </div>
-          <div>
-            <label htmlFor="ld-rev-title" className="block text-sm font-medium text-ink-700 mb-1">
-              Title (optional)
-            </label>
-            <input
-              id="ld-rev-title"
-              className="glass-input w-full px-3 py-2.5 text-sm text-ink-900"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={120}
-              placeholder="Summarise your experience"
-              disabled={submitting}
-            />
-          </div>
-          <div>
-            <label htmlFor="ld-rev-body" className="block text-sm font-medium text-ink-700 mb-1">
-              Review <span className="text-danger-500">*</span>
-            </label>
-            <textarea
-              id="ld-rev-body"
-              className="glass-input w-full px-3 py-2.5 text-sm text-ink-900 placeholder:text-ink-400"
-              rows={4}
-              maxLength={2000}
-              placeholder="Describe your rental experience…"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              required
-              disabled={submitting}
-            />
-            <p className="mt-1 text-right text-xs text-ink-400">{body.length}/2000</p>
-          </div>
-          <Button type="submit" variant="primary" loading={submitting} disabled={submitting || rating === 0}>
-            Submit review
-          </Button>
-        </form>
+        <h2 className="text-base font-semibold text-ink-900">Reviews</h2>
+
+        {reviewCount > 0 ? (
+          <>
+            <div className="ld-rating-row">
+              <span className="ld-rating-num">{avgRating?.toFixed(1)}</span>
+              <StarRating value={Math.round(avgRating ?? 0)} readOnly size={16} />
+              <span className="ld-rating-count">{reviewCount} review{reviewCount === 1 ? '' : 's'}</span>
+            </div>
+            <div>
+              {reviews.slice(0, 3).map((r) => (
+                <div key={r.id} className="ld-review-item">
+                  <div className="ld-review-head">
+                    <span className="ld-review-name">
+                      {[r.reviewer?.first_name, r.reviewer?.last_name].filter(Boolean).join(' ') || 'Tenant'}
+                    </span>
+                    <span className="ld-review-date">{formatDate(r.created_at)}</span>
+                  </div>
+                  <StarRating value={r.rating} readOnly size={13} />
+                  {r.body && <p className="ld-review-body">{r.body}</p>}
+                </div>
+              ))}
+            </div>
+            {reviewCount > reviews.length && (
+              <p className="ld-review-more">+{reviewCount - reviews.length} more review{reviewCount - reviews.length === 1 ? '' : 's'}</p>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-ink-500">No reviews yet.</p>
+        )}
+
+        {isTenant && !eligLoading && (
+          eligibility?.eligible ? (
+            submitted ? (
+              <p className="flex items-center gap-2 border-t border-ink-200 pt-4 text-sm font-medium text-success-700">
+                <Star size={16} className="text-warning-500" />
+                Your review has been submitted and is pending moderation.
+              </p>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-3 border-t border-ink-200 pt-4">
+                <p className="text-sm font-semibold text-ink-900">Write a review</p>
+                <StarRating value={rating} onChange={setRating} size={24} />
+                <input
+                  className="glass-input w-full px-3 py-2.5 text-sm text-ink-900"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  maxLength={120}
+                  placeholder="Title (optional)"
+                  disabled={submitting}
+                />
+                <textarea
+                  className="glass-input w-full px-3 py-2.5 text-sm text-ink-900 placeholder:text-ink-400"
+                  rows={3}
+                  maxLength={2000}
+                  placeholder="Describe your rental experience…"
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  required
+                  disabled={submitting}
+                />
+                <Button type="submit" variant="primary" size="sm" loading={submitting} disabled={submitting || rating === 0}>
+                  Submit review
+                </Button>
+              </form>
+            )
+          ) : (
+            <p className="flex items-center gap-2 border-t border-ink-200 pt-4 text-xs text-ink-500">
+              <Star size={14} />
+              Review available after your lease on this property is active or completed.
+            </p>
+          )
+        )}
       </CardBody>
     </Card>
   );
 }
 
-function Fact({ label, value }: { label: string; value: React.ReactNode }) {
+/* ── loading skeleton ─────────────────────────────────────────────────────── */
+
+function ListingDetailSkeleton() {
   return (
-    <div className="rounded-xl border border-ink-200/80 bg-ink-50/40 px-4 py-3">
-      <dt className="text-xs font-medium uppercase tracking-wide text-ink-500">{label}</dt>
-      <dd className="mt-0.5 text-sm font-semibold text-ink-900">{value}</dd>
+    <div className="ld-page">
+      <Skeleton className="h-4 w-32 rounded-md" />
+      <div>
+        <Skeleton className="mb-2 h-8 w-2/3 rounded-md" />
+        <Skeleton className="h-4 w-40 rounded-md" />
+      </div>
+      <div className="ld-hero">
+        <Skeleton className="aspect-[4/3] w-full rounded-2xl" />
+        <Skeleton className="h-full min-h-[220px] w-full rounded-2xl" />
+      </div>
+      <div className="ld-body">
+        <div className="space-y-4">
+          <Skeleton className="h-5 w-40 rounded-md" />
+          <Skeleton className="h-4 w-full rounded-md" />
+          <Skeleton className="h-4 w-5/6 rounded-md" />
+          <Skeleton className="h-24 w-full rounded-xl" />
+        </div>
+        <Skeleton className="h-72 w-full rounded-2xl" />
+      </div>
     </div>
   );
 }
+
+/* ========================================================================== */
 
 export function ListingDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { toast } = useToast();
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  // Apply state
-  const [applying, setApplying] = useState(false);
-  const [applied, setApplied] = useState(false);
-  const [showApplyPanel, setShowApplyPanel] = useState(false);
-  const [coverNote, setCoverNote] = useState('');
-  const applyInFlight = useRef(false);
-
+  const navigate = useNavigate();
   const listingId = Number(id);
-  const { data: listing, loading, error, reload } = useApi(
+
+  const [applying, setApplying] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedOverride, setSavedOverride] = useState(false);
+
+  const { data: listing, loading, error } = useApi(
     () => publicApi.show(listingId),
     [listingId],
   );
 
   const isTenant = user?.role === 'tenant';
 
+  const { data: savedListings } = useApi<Listing[]>(
+    () => (isTenant ? tenantApi.savedListings() : Promise.resolve([])),
+    [isTenant],
+  );
+  const { data: applications, reload: reloadApplications } = useApi<Application[]>(
+    () => (isTenant ? tenantApi.applications() : Promise.resolve([])),
+    [isTenant],
+  );
+  const { data: contracts } = useApi<Contract[]>(
+    () => (isTenant ? tenantApi.contracts() : Promise.resolve([])),
+    [isTenant],
+  );
+
+  const alreadySaved = savedOverride || (savedListings ?? []).some((l) => l.id === listingId);
+  const blockingApplication = findBlockingApplication(applications ?? [], listingId);
+  const leaseContractId =
+    blockingApplication?.status === 'approved'
+      ? (contracts ?? []).find((c) => c.listing_id === listingId)?.id ?? null
+      : null;
+
+  const ctaState = getApplyCtaState({
+    signedIn: !!user,
+    verificationStatus: user && 'verification_status' in user ? user.verification_status : undefined,
+    blockingApplication,
+    leaseContractId,
+  });
+
   async function handleSave() {
     if (!listing) return;
     setSaving(true);
     try {
       await tenantApi.saveListing(listing.id);
-      setSaved(true);
+      setSavedOverride(true);
       toast('Listing saved to favorites', 'success');
     } catch {
       toast('Could not save listing', 'error');
@@ -191,253 +490,296 @@ export function ListingDetail() {
   }
 
   async function handleApply() {
-    if (!listing || applyInFlight.current) return;
-    applyInFlight.current = true;
+    if (!listing) return;
     setApplying(true);
     try {
-      await tenantApi.apply(listing.id, coverNote.trim() || undefined);
-      setApplied(true);
-      setShowApplyPanel(false);
-      setCoverNote('');
-      toast('Application submitted', 'success');
+      const created = await tenantApi.startApplicationDraft(listing.id);
+      navigate(`/app/applications/${created.id}/apply`);
     } catch (err) {
       const apiErr = normalizeError(err);
-      // 422 "already have an active application" — friendly message, not a crash
       if (apiErr.status === 422) {
-        toast(apiErr.message || 'You already have an active application for this listing.', 'info');
-        setApplied(true); // treat as already applied
-        setShowApplyPanel(false);
+        // Backend refuses a second open application for the same listing; if we
+        // already know which one it is, take the tenant there instead.
+        const existing = findBlockingApplication(applications ?? [], listingId);
+        if (existing) {
+          navigate(
+            existing.status === 'draft'
+              ? `/app/applications/${existing.id}/apply`
+              : `/app/applications/${existing.id}`,
+          );
+        } else {
+          toast(apiErr.message || 'You already have an application for this listing.', 'info');
+          reloadApplications();
+        }
       } else {
-        toast(apiErr.message || 'Could not submit application. Please try again.', 'error');
+        toast(apiErr.message || 'Could not start your application. Please try again.', 'error');
       }
     } finally {
       setApplying(false);
-      applyInFlight.current = false;
     }
   }
 
-  if (loading) return <LoadingState label="Loading listing…" />;
-  if (error) return <ErrorState message={error.message} onRetry={reload} />;
-  if (!listing) {
+  if (loading) return <ListingDetailSkeleton />;
+
+  if (error || !listing) {
     return (
-      <ErrorState title="Listing not found" message="This listing may no longer be available." />
+      <div className="ld-page">
+        <EmptyState
+          icon={<Building2 size={28} />}
+          title="Listing unavailable"
+          description="This rental may have been removed, archived, or is no longer public."
+          action={
+            <Link to="/app/browse">
+              <Button variant="secondary">Back to browse</Button>
+            </Link>
+          }
+        />
+      </div>
     );
   }
 
   const unit = listing.unit;
   const property = unit?.property;
-  const location = property
-    ? [property.city, property.state].filter(Boolean).join(', ')
-    : null;
-  const amenities = unit?.amenities ?? [];
+  const rules = property?.rules;
+  const location = property ? [property.city, property.state].filter(Boolean).join(', ') : null;
+  const images = resolveGalleryImages(listing);
+
+  const propertyAmenities = property?.amenities ?? [];
+  const unitAmenities = unit?.amenities ?? [];
+  const hasAnyAmenities = propertyAmenities.length > 0 || unitAmenities.length > 0;
+
+  const furnishedTile =
+    unit?.amenities != null
+      ? unit.amenities.includes('furnished')
+        ? 'Furnished'
+        : 'Unfurnished'
+      : null;
+
+  const showApplyBlock = !user || isTenant;
 
   return (
-    <div>
-      <Link
-        to="/app/browse"
-        className="mb-5 inline-flex items-center gap-1 text-sm font-medium text-ink-500 transition hover:text-brand-700"
-      >
-        <IconChevronRight className="h-4 w-4 rotate-180" />
+    <div className="ld-page">
+      <Link to="/app/browse" className="ld-back">
+        <ChevronLeft size={16} />
         Back to browse
       </Link>
 
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="ld-header">
         <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-ink-950">{listing.title}</h1>
+          <div className="ld-title-row">
+            <h1 className="ld-title">{listing.title}</h1>
             <Badge tone={listingStatusTone(listing.status)}>{humanize(listing.status)}</Badge>
             {listing.featured && <Badge tone="brand">Featured</Badge>}
           </div>
           {location && (
-            <p className="mt-1.5 flex items-center gap-1 text-sm text-ink-500">
-              <IconMapPin className="h-4 w-4" />
+            <p className="ld-location">
+              <MapPin size={15} />
               {location}
             </p>
           )}
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Main column */}
-        <div className="space-y-6 lg:col-span-2">
-          <Card>
-            <CardBody className="space-y-4">
-              <h2 className="text-base font-semibold text-ink-900">About this rental</h2>
-              <p className="whitespace-pre-line text-sm leading-relaxed text-ink-600">
-                {listing.description}
-              </p>
-            </CardBody>
-          </Card>
-
-          {unit && (
-            <Card>
-              <CardBody className="space-y-4">
-                <h2 className="text-base font-semibold text-ink-900">Unit details</h2>
-                <dl className="grid gap-3 sm:grid-cols-2">
-                  <Fact label="Bedrooms" value={`${unit.bedrooms} bd`} />
-                  <Fact label="Bathrooms" value={`${unit.bathrooms} ba`} />
-                  <Fact
-                    label="Square feet"
-                    value={unit.square_feet ? unit.square_feet.toLocaleString() : '—'}
-                  />
-                  <Fact label="Monthly rent" value={formatDollars(unit.rent_amount)} />
-                  <Fact label="Security deposit" value={formatDollars(unit.security_deposit)} />
-                  <Fact
-                    label="Available from"
-                    value={unit.available_from ? formatDate(unit.available_from) : '—'}
-                  />
-                </dl>
-              </CardBody>
-            </Card>
+      {/* ── hero: gallery + quick facts ──────────────────────────────────── */}
+      <div className="ld-hero">
+        <ListingGallery images={images} seed={`${listing.id}${listing.title}`} />
+        <div className="ld-facts">
+          {unit && <FactRow icon={<BedDouble size={16} />} label="Bedrooms" value={`${unit.bedrooms} bd`} />}
+          {unit && <FactRow icon={<Bath size={16} />} label="Bathrooms" value={`${unit.bathrooms} ba`} />}
+          {unit?.square_feet && (
+            <FactRow icon={<Building2 size={16} />} label="Square feet" value={unit.square_feet.toLocaleString()} />
           )}
-
-          <Card>
-            <CardBody className="space-y-4">
-              <h2 className="text-base font-semibold text-ink-900">Lease &amp; policies</h2>
-              <dl className="grid gap-3 sm:grid-cols-2">
-                <Fact
-                  label="Lease duration"
-                  value={
-                    listing.lease_duration_months
-                      ? `${listing.lease_duration_months} months`
-                      : '—'
-                  }
-                />
-                <Fact
-                  label="Move-in date"
-                  value={listing.move_in_date ? formatDate(listing.move_in_date) : '—'}
-                />
-                <Fact
-                  label="Pets"
-                  value={listing.pets_allowed ? 'Allowed' : 'Not allowed'}
-                />
-                <Fact label="Pet policy" value={listing.pet_policy ?? '—'} />
-              </dl>
-            </CardBody>
-          </Card>
-
-          {amenities.length > 0 && (
-            <Card>
-              <CardBody className="space-y-3">
-                <h2 className="text-base font-semibold text-ink-900">Amenities</h2>
-                <div className="flex flex-wrap gap-2">
-                  {amenities.map((amenity) => (
-                    <Badge key={amenity} tone="neutral">
-                      {humanize(amenity)}
-                    </Badge>
-                  ))}
-                </div>
-              </CardBody>
-            </Card>
+          <FactRow
+            icon={<Calendar size={16} />}
+            label="Available from"
+            value={unit?.available_from ? formatDate(unit.available_from) : '—'}
+          />
+          {property?.property_type && (
+            <FactRow icon={<Building2 size={16} />} label="Property type" value={propertyTypeLabel(property.property_type)} />
           )}
-        </div>
-
-          {/* Reviews — tenant only, eligibility-gated */}
-          {isTenant && <ListingReviewSection listingId={listingId} />}
-
-        {/* Sidebar */}
-        <div className="lg:col-span-1">
-          <Card className="lg:sticky lg:top-6">
-            <CardBody className="space-y-4">
-              <div>
-                <p className="text-3xl font-bold text-ink-950">
-                  {formatDollars(unit?.rent_amount)}
-                  <span className="text-base font-normal text-ink-500">/mo</span>
-                </p>
-                {unit?.security_deposit && (
-                  <p className="mt-1 text-sm text-ink-500">
-                    {formatDollars(unit.security_deposit)} deposit
-                  </p>
-                )}
-              </div>
-
-              {unit && (
-                <div className="flex items-center gap-4 border-t border-ink-200 pt-4 text-sm text-ink-600">
-                  <span className="flex items-center gap-1.5">
-                    <IconBed className="h-4 w-4 text-ink-400" />
-                    {unit.bedrooms} bd
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <IconBath className="h-4 w-4 text-ink-400" />
-                    {unit.bathrooms} ba
-                  </span>
-                  {unit.square_feet && (
-                    <span className="flex items-center gap-1.5">
-                      <IconHome className="h-4 w-4 text-ink-400" />
-                      {unit.square_feet.toLocaleString()} sqft
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {isTenant && (
-                <>
-                  {!showApplyPanel ? (
-                    <Button
-                      className="w-full"
-                      variant={applied ? 'secondary' : 'primary'}
-                      loading={applying}
-                      disabled={applied}
-                      onClick={() => setShowApplyPanel(true)}
-                    >
-                      {applied ? 'Application submitted' : 'Apply for this home'}
-                    </Button>
-                  ) : (
-                    <div className="space-y-3 rounded-xl border border-ink-200 bg-ink-50/40 p-4">
-                      <div>
-                        <label htmlFor="ld-cover-note" className="block text-sm font-medium text-ink-700 mb-1">
-                          Cover note <span className="text-ink-400 font-normal">(optional)</span>
-                        </label>
-                        <textarea
-                          id="ld-cover-note"
-                          className="glass-input w-full px-3 py-2.5 text-sm text-ink-900 placeholder:text-ink-400"
-                          rows={4}
-                          placeholder="Hi, I'm a working professional looking for a quiet home…"
-                          value={coverNote}
-                          onChange={(e) => setCoverNote(e.target.value)}
-                          maxLength={1000}
-                          disabled={applying}
-                          autoFocus
-                        />
-                        <p className="mt-1 text-right text-xs text-ink-400">{coverNote.length}/1000</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          className="flex-1"
-                          onClick={() => { setShowApplyPanel(false); setCoverNote(''); }}
-                          disabled={applying}
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          variant="primary"
-                          className="flex-1"
-                          loading={applying}
-                          onClick={handleApply}
-                        >
-                          Submit
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                  <Button
-                    className="w-full"
-                    variant={saved ? 'secondary' : 'ghost'}
-                    loading={saving}
-                    disabled={saved}
-                    onClick={handleSave}
-                    leftIcon={<IconHeart className="h-4 w-4" />}
-                  >
-                    {saved ? 'Saved to favorites' : 'Save to favorites'}
-                  </Button>
-                </>
-              )}
-            </CardBody>
-          </Card>
         </div>
       </div>
 
+      {/* ── main body: content + sidebar ─────────────────────────────────── */}
+      <div className="ld-body">
+        <div className="ld-content">
+          <section className="ld-section">
+            <SectionHeader eyebrow="Overview" title="About this rental" />
+            {listing.description.trim() ? (
+              <p className="ld-prose">{listing.description}</p>
+            ) : (
+              <p className="ld-empty-note">Description not provided yet.</p>
+            )}
+          </section>
+
+          {unit && (
+            <section className="ld-section">
+              <SectionHeader eyebrow="Details" title="Key details" />
+              <div className="ld-tiles">
+                <DetailTile icon={<Banknote size={16} />} label="Monthly rent" value={formatDollars(unit.rent_amount)} />
+                <DetailTile icon={<ShieldCheck size={16} />} label="Security deposit" value={formatDollars(unit.security_deposit)} />
+                {furnishedTile && <DetailTile icon={<Sofa size={16} />} label="Furnishing" value={furnishedTile} />}
+              </div>
+            </section>
+          )}
+
+          <section className="ld-section">
+            <SectionHeader eyebrow="Terms" title="Lease & policies" />
+            <div className="ld-tiles">
+              <DetailTile
+                icon={<Clock size={16} />}
+                label="Lease duration"
+                value={listing.lease_duration_months ? `${listing.lease_duration_months} months` : '—'}
+              />
+              <DetailTile
+                icon={<Calendar size={16} />}
+                label="Move-in date"
+                value={listing.move_in_date ? formatDate(listing.move_in_date) : '—'}
+              />
+              <DetailTile icon={<PawPrint size={16} />} label="Pets" value={listing.pets_allowed ? 'Allowed' : 'Not allowed'} />
+              <DetailTile icon={<FileText size={16} />} label="Pet policy" value={listing.pet_policy ?? '—'} />
+              {rules?.smoking_allowed != null && (
+                <DetailTile icon={<FileText size={16} />} label="Smoking" value={rules.smoking_allowed ? 'Allowed' : 'Not allowed'} />
+              )}
+              {rules?.guests_allowed != null && (
+                <DetailTile icon={<Users size={16} />} label="Guests" value={rules.guests_allowed ? 'Allowed' : 'Not allowed'} />
+              )}
+              {rules?.max_occupants != null && (
+                <DetailTile icon={<Users size={16} />} label="Max occupants" value={rules.max_occupants} />
+              )}
+              {rules?.quiet_hours && (
+                <DetailTile icon={<Clock size={16} />} label="Quiet hours" value={rules.quiet_hours} />
+              )}
+            </div>
+          </section>
+
+          <section className="ld-section">
+            <SectionHeader eyebrow="Features" title="Amenities" />
+            {hasAnyAmenities ? (
+              <div className="ld-amenities">
+                {propertyAmenities.map((a) => {
+                  const Icon = AMENITY_ICON[a] ?? Check;
+                  return (
+                    <span key={`p-${a}`} className="ld-chip">
+                      <Icon size={14} />
+                      {humanize(a)}
+                    </span>
+                  );
+                })}
+                {unitAmenities.map((a) => (
+                  <span key={`u-${a}`} className="ld-chip">
+                    <Check size={14} />
+                    {humanize(a)}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="ld-empty-note">No amenities listed yet.</p>
+            )}
+          </section>
+        </div>
+
+        {/* ── sidebar (desktop) ─────────────────────────────────────────── */}
+        <div className="ld-sidebar">
+          <div className="space-y-4">
+            <Card>
+              <CardBody className="space-y-1">
+                <p className="ld-price">
+                  {formatDollars(unit?.rent_amount)}
+                  <small>/mo</small>
+                </p>
+                {unit?.security_deposit && <p className="ld-deposit">{formatDollars(unit.security_deposit)} deposit</p>}
+
+                {unit && (
+                  <div className="ld-spec-row">
+                    <span><BedDouble size={15} /> {unit.bedrooms} bd</span>
+                    <span><Bath size={15} /> {unit.bathrooms} ba</span>
+                    {unit.square_feet && <span><Building2 size={15} /> {unit.square_feet.toLocaleString()} sqft</span>}
+                  </div>
+                )}
+
+                {showApplyBlock && (
+                  <div className="mt-4 space-y-3">
+                    {ctaState.kind === 'signed-out' ? (
+                      <Button className="w-full" variant="primary" onClick={() => navigate('/login')}>
+                        {STATIC_CTA_LABEL['signed-out']}
+                      </Button>
+                    ) : ctaState.kind === 'has-application' ? (
+                      <Button className="w-full" variant="secondary" onClick={() => navigate(ctaState.to)}>
+                        {ctaState.label}
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          className="w-full"
+                          variant="primary"
+                          loading={applying}
+                          disabled={ctaState.kind !== 'can-apply'}
+                          onClick={handleApply}
+                        >
+                          {STATIC_CTA_LABEL[ctaState.kind]}
+                        </Button>
+                        {ctaState.kind === 'not-verified' && (
+                          <p className="ld-cta-reason">
+                            You need to <Link to="/app/verification">complete identity verification</Link> before applying.
+                          </p>
+                        )}
+                      </>
+                    )}
+
+                    {isTenant && (
+                      <Button
+                        className="w-full"
+                        variant={alreadySaved ? 'secondary' : 'ghost'}
+                        loading={saving}
+                        disabled={alreadySaved}
+                        onClick={handleSave}
+                        leftIcon={<Heart size={16} fill={alreadySaved ? 'currentColor' : 'none'} />}
+                      >
+                        {alreadySaved ? 'Saved to favorites' : 'Save to favorites'}
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+
+            <LandlordTrustCard landlord={listing.landlord} />
+            <ReviewsCard listing={listing} listingId={listingId} isTenant={isTenant} />
+          </div>
+        </div>
+      </div>
+
+      {/* ── mobile condensed action bar ──────────────────────────────────── */}
+      {showApplyBlock && (
+        <div className="ld-mobile-bar">
+          <div className="ld-mobile-bar-top">
+            <p className="ld-price" style={{ fontSize: 22 }}>
+              {formatDollars(unit?.rent_amount)}
+              <small>/mo</small>
+            </p>
+          </div>
+          {ctaState.kind === 'signed-out' ? (
+            <Button className="w-full" variant="primary" onClick={() => navigate('/login')}>
+              {STATIC_CTA_LABEL['signed-out']}
+            </Button>
+          ) : ctaState.kind === 'has-application' ? (
+            <Button className="w-full" variant="secondary" onClick={() => navigate(ctaState.to)}>
+              {ctaState.label}
+            </Button>
+          ) : (
+            <Button
+              className="w-full"
+              variant="primary"
+              loading={applying}
+              disabled={ctaState.kind !== 'can-apply'}
+              onClick={handleApply}
+            >
+              {STATIC_CTA_LABEL[ctaState.kind]}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

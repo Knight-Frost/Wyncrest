@@ -72,8 +72,55 @@ class ListingPolicy
             return false;
         }
 
-        // Can only submit drafts
-        return $listing->status === ListingStatus::DRAFT;
+        // Drafts submit for the first time; rejected listings resubmit after the
+        // landlord has addressed the admin's feedback.
+        return in_array($listing->status, [ListingStatus::DRAFT, ListingStatus::REJECTED], true);
+    }
+
+    /**
+     * Determine if user can withdraw a pending submission back to draft.
+     */
+    public function withdraw(User $user, Listing $listing): bool
+    {
+        return (int) $user->id === (int) $listing->landlord_id
+            && $listing->status === ListingStatus::PENDING_REVIEW;
+    }
+
+    /**
+     * Determine if user can deactivate an active listing.
+     */
+    public function deactivate(User $user, Listing $listing): bool
+    {
+        return (int) $user->id === (int) $listing->landlord_id
+            && $listing->status === ListingStatus::ACTIVE;
+    }
+
+    /**
+     * Determine if user can reactivate an inactive listing.
+     */
+    public function reactivate(User $user, Listing $listing): bool
+    {
+        return (int) $user->id === (int) $listing->landlord_id
+            && $listing->status === ListingStatus::INACTIVE;
+    }
+
+    /**
+     * Determine if user can archive the listing. Not allowed while pending
+     * review (withdraw first) or already active (deactivate first) or already archived.
+     */
+    public function archive(User $user, Listing $listing): bool
+    {
+        return (int) $user->id === (int) $listing->landlord_id
+            && in_array($listing->status, [ListingStatus::DRAFT, ListingStatus::REJECTED, ListingStatus::INACTIVE], true);
+    }
+
+    /**
+     * Determine if user can restore an archived listing back to draft.
+     */
+    public function restoreArchived(User $user, Listing $listing): bool
+    {
+        return (int) $user->id === (int) $listing->landlord_id
+            && $listing->status === ListingStatus::ARCHIVED;
     }
 
     /**

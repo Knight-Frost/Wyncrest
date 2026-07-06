@@ -26,6 +26,8 @@ class Listing extends Model
         'reviewed_by',
         'reviewed_at',
         'rejection_reason',
+        'changes_requested_reason',
+        'changes_requested_at',
         'published_at',
         'expires_at',
         'featured',
@@ -39,6 +41,7 @@ class Listing extends Model
     protected $casts = [
         'status' => ListingStatus::class,
         'reviewed_at' => 'datetime',
+        'changes_requested_at' => 'datetime',
         'published_at' => 'datetime',
         'expires_at' => 'datetime',
         'featured' => 'boolean',
@@ -82,7 +85,11 @@ class Listing extends Model
             ->where(function ($q) {
                 $q->whereNull('expires_at')
                     ->orWhere('expires_at', '>', now());
-            });
+            })
+            // Exclude listings whose landlord or unit has been soft-deleted
+            // (archived) — they must not remain publicly browsable.
+            ->whereHas('landlord')
+            ->whereHas('unit');
     }
 
     /**
@@ -226,6 +233,14 @@ class Listing extends Model
     public function applications()
     {
         return $this->hasMany(Application::class);
+    }
+
+    /**
+     * Internal, admin-only moderation notes (newest first).
+     */
+    public function notes()
+    {
+        return $this->hasMany(ListingNote::class)->latest();
     }
 
     /**

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import {
   Search, MapPin, ChevronDown, Bell, Mail, Sun, Cloud, CloudRain,
-  Check, Bookmark, SlidersHorizontal, LayoutGrid, List as ListIcon, Map as MapIcon,
+  Check, SlidersHorizontal, LayoutGrid, List as ListIcon, Map as MapIcon,
   Heart, BedDouble, Bath, Maximize2, Building2, ShieldCheck, ArrowRight,
   ChevronLeft, ChevronRight,
 } from 'lucide-react';
@@ -12,7 +12,6 @@ import { useAuth } from '@/context/auth';
 import { formatCedisDecimal } from '@/lib/format';
 import {
   SemanticBadge,
-  SectionHeader,
 } from '@/components/cards';
 import { ErrorState, EmptyState, Skeleton } from '@/components/ui/states';
 import { Avatar } from '@/components/ui/Avatar';
@@ -294,12 +293,12 @@ export function BrowseListings() {
         </Link>
       </div>
 
-      {/* header — editorial SectionHeader */}
-      <SectionHeader
-        eyebrow="Find a Home"
-        title="Find verified homes in Ghana"
-        description="Browse trusted rentals across Accra, Tema, Kumasi, Takoradi, Cape Coast and beyond."
-      />
+      {/* header */}
+      <div className="bz-head">
+        <p className="bz-eyebrow">Find a Home</p>
+        <h1 className="bz-title">Find verified homes in Ghana</h1>
+        <p className="bz-sub">Browse trusted rentals across Accra, Tema, Kumasi, Takoradi, Cape Coast and beyond.</p>
+      </div>
 
       {/* hero search */}
       <div className="bz-search">
@@ -349,7 +348,6 @@ export function BrowseListings() {
 
         <div className="bz-filter-actions">
           <button className="bz-btn-ghost" onClick={clear}>Clear filters</button>
-          <button className="bz-btn-ghost accent"><Bookmark size={15} /> Save search</button>
           <span className="bz-spacer" />
           <div className="bz-sort">
             <span className="bz-sort-label">Sort by</span>

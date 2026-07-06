@@ -28,6 +28,8 @@ class RejectListingRequest extends FormRequest
     {
         return [
             'reason' => ['required', 'string', 'min:20', 'max:1000'],
+            // Optional admin-only note captured alongside the decision.
+            'internal_note' => ['nullable', 'string', 'max:2000'],
         ];
     }
 

@@ -1,0 +1,87 @@
+/* ============================================================================
+   Landlord Listings — additive classes on top of `properties.css`'s shared
+   `.wprop` White Liquid Glass vocabulary (dhead/dcover/sec/tbl/badge/tl-item/
+   scard/warnrow/etc. are reused as-is). Only the pieces that are genuinely
+   new to the Listings mockup live here, ported from wyncrest-listings-landlord.html.
+   ========================================================================== */
+
+/* filter toggle state on the shared .chip */
+.wprop .chip.on { background: var(--wp-ink-solid); color: var(--color-on-action); }
+.wprop .filt2 { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+
+/* listing cards (list view) */
+.wprop .lgrid { display: flex; flex-direction: column; gap: 14px; }
+.wprop .lcard { display: flex; gap: 0; overflow: hidden; cursor: pointer; transition: transform 0.18s, box-shadow 0.18s; }
+.wprop .lcard:hover { transform: translateY(-2px); box-shadow: var(--wp-gshadow), var(--shadow-lg); }
+.wprop .lc-photo { width: 180px; flex: none; position: relative; display: flex; align-items: flex-end; padding: 0.7rem; overflow: hidden; }
+.wprop .lc-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+@media (max-width: 640px) { .wprop .lcard { flex-direction: column; } .wprop .lc-photo { width: 100%; height: 140px; } }
+.wprop .lc-photo .cvicon { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0.4; }
+.wprop .lc-photo .cvicon svg { width: 40px; height: 40px; stroke: rgba(255, 255, 255, 0.85); fill: none; stroke-width: 1.2; }
+.wprop .lc-photo.missing { background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--wp-ink) 3%, transparent), color-mix(in srgb, var(--wp-ink) 3%, transparent) 12px, color-mix(in srgb, var(--wp-ink) 5%, transparent) 12px, color-mix(in srgb, var(--wp-ink) 5%, transparent) 24px); }
+.wprop .lc-photo.missing .cvicon svg { stroke: var(--wp-ink-3); }
+.wprop .lc-body { flex: 1; padding: 1.1rem 1.3rem; display: flex; flex-direction: column; min-width: 0; }
+.wprop .lc-top { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+.wprop .lc-title { font-family: var(--wp-serif); font-size: 1.25rem; line-height: 1.15; }
+.wprop .lc-sub { font-size: 0.82rem; color: var(--wp-ink-3); margin-top: 0.2rem; }
+.wprop .lc-stats { display: flex; gap: 1.4rem; margin: 0.85rem 0; flex-wrap: wrap; }
+.wprop .lc-stat .n { font-family: var(--wp-disp); font-weight: 800; font-size: 1.05rem; }
+.wprop .lc-stat .l { font-family: var(--wp-mono); font-size: 0.5rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--wp-ink-3); }
+.wprop .lc-stat .n.rent { color: var(--wp-petrol); }
+.wprop .rejnote, .wprop .missnote { font-size: 0.82rem; color: var(--wp-ink-2); border-radius: 9px; padding: 0.55rem 0.75rem; margin: 0.2rem 0 0.7rem; }
+.wprop .rejnote { background: color-mix(in srgb, var(--wp-oxblood) 5%, transparent); border: 1px solid color-mix(in srgb, var(--wp-oxblood) 20%, transparent); }
+.wprop .rejnote b { color: var(--wp-oxblood); }
+.wprop .missnote { background: color-mix(in srgb, var(--wp-amber) 6%, transparent); border: 1px solid color-mix(in srgb, var(--wp-amber) 22%, transparent); }
+.wprop .missnote b { color: var(--wp-amber); }
+.wprop .lc-foot { display: flex; gap: 0.45rem; flex-wrap: wrap; margin-top: auto; align-items: center; }
+.wprop .lc-foot .upd { font-family: var(--wp-mono); font-size: 0.62rem; color: var(--wp-ink-3); margin-right: auto; }
+
+/* card / row action menu */
+.wprop .menu { position: relative; }
+.wprop .menu-btn { width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--wp-gborder); background: var(--color-surface); display: grid; place-items: center; }
+.wprop .menu-btn svg { width: 16px; height: 16px; stroke: var(--wp-ink-2); fill: none; stroke-width: 2; }
+.wprop .menu-list { display: none; position: absolute; right: 0; bottom: calc(100% + 6px); background: var(--color-surface); border: 1px solid var(--wp-gborder); border-radius: 11px; box-shadow: var(--shadow-lg); padding: 0.35rem; min-width: 190px; z-index: 20; }
+.wprop .menu.open .menu-list { display: block; }
+.wprop .menu-list button { display: flex; align-items: center; gap: 0.55rem; width: 100%; text-align: left; border: none; background: none; padding: 0.5rem 0.6rem; border-radius: 8px; font-size: 0.83rem; color: var(--wp-ink-2); }
+.wprop .menu-list button:hover { background: color-mix(in srgb, var(--wp-ink) 5%, transparent); color: var(--wp-ink); }
+.wprop .menu-list button.danger { color: var(--wp-oxblood); }
+.wprop .menu-list button svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+.wprop .menu-list .divider { height: 1px; background: var(--wp-line); margin: 0.25rem 0; }
+
+/* detail: hero status panel */
+.wprop .statuspanel { padding: 1.3rem 1.5rem; display: flex; gap: 1.1rem; align-items: flex-start; }
+.wprop .statuspanel .spi { width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; flex: none; }
+.wprop .statuspanel .spi svg { width: 23px; height: 23px; fill: none; stroke-width: 1.9; }
+.wprop .statuspanel .spt { font-family: var(--wp-disp); font-weight: 700; text-transform: uppercase; font-size: 1.1rem; }
+.wprop .statuspanel .sps { color: var(--wp-ink-2); margin-top: 0.25rem; font-size: 0.94rem; }
+.wprop .statuspanel .spbtns { margin-top: 0.9rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.wprop .statuspanel.active { background: linear-gradient(150deg, color-mix(in srgb, var(--wp-green) 8%, transparent), color-mix(in srgb, var(--wp-green) 2%, transparent)); }
+.wprop .statuspanel.active .spi { background: color-mix(in srgb, var(--wp-green) 14%, transparent); } .wprop .statuspanel.active .spi svg { stroke: var(--wp-green); } .wprop .statuspanel.active .spt { color: var(--wp-green); }
+.wprop .statuspanel.pending { background: linear-gradient(150deg, color-mix(in srgb, var(--wp-amber) 9%, transparent), color-mix(in srgb, var(--wp-amber) 2%, transparent)); }
+.wprop .statuspanel.pending .spi { background: color-mix(in srgb, var(--wp-amber) 14%, transparent); } .wprop .statuspanel.pending .spi svg { stroke: var(--wp-amber); } .wprop .statuspanel.pending .spt { color: var(--wp-amber); }
+.wprop .statuspanel.rejected { background: linear-gradient(150deg, color-mix(in srgb, var(--wp-oxblood) 8%, transparent), color-mix(in srgb, var(--wp-oxblood) 2%, transparent)); }
+.wprop .statuspanel.rejected .spi { background: color-mix(in srgb, var(--wp-oxblood) 13%, transparent); } .wprop .statuspanel.rejected .spi svg { stroke: var(--wp-oxblood); } .wprop .statuspanel.rejected .spt { color: var(--wp-oxblood); }
+.wprop .statuspanel.draft { background: color-mix(in srgb, var(--wp-ink) 2%, transparent); }
+.wprop .statuspanel.draft .spi { background: color-mix(in srgb, var(--wp-slate) 14%, transparent); } .wprop .statuspanel.draft .spi svg { stroke: var(--wp-slate); } .wprop .statuspanel.draft .spt { color: var(--wp-slate); }
+
+/* review/activity timeline colour modifiers on the shared .tl-item dot */
+.wprop .tl-item.green::before { box-shadow: 0 0 0 2px var(--wp-green); }
+.wprop .tl-item.red::before { box-shadow: 0 0 0 2px var(--wp-oxblood); }
+
+/* public preview (read-only render, not the live page) */
+.wprop .preview-frame { border: 1px solid var(--wp-gborder); border-radius: 16px; overflow: hidden; background: var(--color-surface); }
+.wprop .pv-banner { background: color-mix(in srgb, var(--wp-petrol) 6%, transparent); border-bottom: 1px solid var(--wp-gborder); padding: 0.5rem 1rem; font-family: var(--wp-mono); font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--wp-petrol-2); text-align: center; }
+.wprop .pv-cover { height: 190px; position: relative; display: flex; align-items: flex-end; padding: 1rem; overflow: hidden; }
+.wprop .pv-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.wprop .pv-cover .cvicon { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0.4; }
+.wprop .pv-cover .cvicon svg { width: 54px; height: 54px; stroke: rgba(255, 255, 255, 0.85); fill: none; stroke-width: 1.1; }
+.wprop .pv-gallery { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 6px; }
+.wprop .pv-gallery .g { height: 60px; border-radius: 8px; position: relative; overflow: hidden; }
+.wprop .pv-gallery .g img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.wprop .pv-body { padding: 1.3rem; }
+.wprop .pv-title { font-family: var(--wp-serif); font-size: 1.5rem; }
+.wprop .pv-loc { color: var(--wp-ink-3); font-size: 0.86rem; margin-top: 0.2rem; }
+.wprop .pv-rent { font-family: var(--wp-disp); font-weight: 800; font-size: 1.5rem; margin: 0.8rem 0; }
+.wprop .pv-facts { display: flex; gap: 1.2rem; flex-wrap: wrap; padding: 0.8rem 0; border-top: 1px solid var(--wp-line); border-bottom: 1px solid var(--wp-line); margin-bottom: 1rem; }
+.wprop .pv-fact .n { font-weight: 700; } .wprop .pv-fact .l { font-size: 0.72rem; color: var(--wp-ink-3); }
+.wprop .pv-apply { margin-top: 1.2rem; }

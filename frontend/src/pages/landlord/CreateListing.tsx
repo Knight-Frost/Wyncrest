@@ -63,7 +63,15 @@ const ArrowRight = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="n
 const ArrowLeft = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" /></svg>;
 const HomeIcon = () => <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h14V9.5" /><path d="M9 21v-6h6v6" /></svg>;
 
-export function CreateListing() {
+interface CreateListingProps {
+  /** Pre-select a property/unit when arriving from a unit-scoped entry point
+   * (e.g. /app/properties/:propertyId/units/:unitId/listings/new). Ignored
+   * once the landlord has already picked a unit. */
+  initialPropertyId?: number;
+  initialUnitId?: number;
+}
+
+export function CreateListing({ initialPropertyId, initialUnitId }: CreateListingProps = {}) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -149,6 +157,25 @@ export function CreateListing() {
       buildingNotes: prop?.description ?? f.buildingNotes,
     }));
   }
+
+  // Pre-select property/unit for the unit-scoped entry point. Runs once the
+  // real unit/property lists are loaded; a no-op if the ids don't resolve to
+  // real, eligible records (never invents a selection).
+  useEffect(() => {
+    if (loading || form.unitId != null) return;
+    if (initialUnitId != null) {
+      const unit = eligibleUnits.find((u) => u.id === initialUnitId);
+      if (unit) {
+        onSelectProperty(unit.property_id);
+        onSelectUnit(unit.id);
+        return;
+      }
+    }
+    if (initialPropertyId != null && eligibleProperties.some((p) => p.id === initialPropertyId)) {
+      onSelectProperty(initialPropertyId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, initialPropertyId, initialUnitId, eligibleUnits, eligibleProperties]);
 
   // ── validation per step ─────────────────────────────────────────────────────
   function validate(s: number): FormErrors {

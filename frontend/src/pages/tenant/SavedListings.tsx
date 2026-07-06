@@ -8,7 +8,7 @@ import {
 import { useApi } from '@/hooks/useApi';
 import { tenantApi } from '@/lib/endpoints';
 import { formatCedisDecimal } from '@/lib/format';
-import { SemanticBadge, SectionHeader } from '@/components/cards';
+import { SemanticBadge } from '@/components/cards';
 import { ErrorState, EmptyState, Skeleton } from '@/components/ui/states';
 import type { Listing } from '@/lib/types';
 import './saved-homes.css';
@@ -255,16 +255,14 @@ export function SavedListings() {
 
   return (
     <div className="sv-page">
-      {/* header — editorial SectionHeader */}
+      {/* header */}
       <div className="sv-header">
-        <SectionHeader
-          eyebrow="Find a Home"
-          title="Saved Homes"
-          description="Homes you've bookmarked to compare, revisit, and apply when you're ready."
-          action={
-            <Link to="/app/browse" className="sv-btn-primary"><Search size={16} /> Browse homes</Link>
-          }
-        />
+        <div className="sv-header-text">
+          <p className="sv-eyebrow">Find a Home</p>
+          <h1 className="sv-title">Saved Homes</h1>
+          <p className="sv-sub">Homes you've bookmarked to compare, revisit, and apply when you're ready.</p>
+        </div>
+        <Link to="/app/browse" className="sv-btn-primary"><Search size={16} /> Browse homes</Link>
       </div>
 
       {loading ? (

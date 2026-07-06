@@ -10,7 +10,7 @@
  * "Lowest rent" / "Most space" winners are computed from the selected listings.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import {
   MapPin, Check, X, CircleDollarSign, BedDouble, Bath, Ruler,
   PawPrint, ShieldCheck, CalendarDays, Scale, Home,
@@ -21,7 +21,6 @@ import { EmptyState, ErrorState, ForbiddenState, Skeleton } from '@/components/u
 import { formatCedisDecimal, formatDate } from '@/lib/format';
 import {
   NexusCard,
-  SectionHeader,
   SemanticBadge,
   getListingModerationVariant,
 } from '@/components/cards';
@@ -293,8 +292,22 @@ function ListingPickerCard({
 export function ComparePage() {
   const savedQ = useApi(() => tenantApi.savedListings(), []);
 
-  /* Selected listing IDs — loaded from localStorage, max 3 */
-  const [selectedIds, setSelectedIds] = useState<number[]>(loadPersistedIds);
+  /* Selected listing IDs — seeded from ?ids= (e.g. Saved listings → Compare),
+     falling back to localStorage, max 3. The persist effect below writes the
+     seeded selection back to localStorage so a refresh keeps it. */
+  const [searchParams] = useSearchParams();
+  const [selectedIds, setSelectedIds] = useState<number[]>(() => {
+    const raw = searchParams.get('ids');
+    if (raw) {
+      const ids = raw
+        .split(',')
+        .map((s) => Number.parseInt(s.trim(), 10))
+        .filter((n) => Number.isInteger(n) && n > 0)
+        .slice(0, 3);
+      if (ids.length) return ids;
+    }
+    return loadPersistedIds();
+  });
 
   /* Persist whenever selection changes */
   useEffect(() => {
@@ -396,11 +409,11 @@ export function ComparePage() {
     return (
       <div className="cmp-page">
         <header className="cmp-head">
-          <SectionHeader
-            eyebrow="Compare"
-            title="Compare Rentals"
-            description="Pick two or three saved homes to compare side by side."
-          />
+          <div className="cmp-head-title">
+            <p className="cmp-eyebrow">Compare</p>
+            <h1 className="cmp-title">Compare Rentals</h1>
+            <p className="cmp-sub">Pick two or three saved homes to compare side by side.</p>
+          </div>
         </header>
         <NexusCard role="neutral" className="cmp-panel">
           <EmptyState
@@ -422,15 +435,15 @@ export function ComparePage() {
     <div className="cmp-page">
       {/* header */}
       <header className="cmp-head">
-        <SectionHeader
-          eyebrow="Compare"
-          title="Compare Rentals"
-          description={
-            selectedListings.length < 2
+        <div className="cmp-head-title">
+          <p className="cmp-eyebrow">Compare</p>
+          <h1 className="cmp-title">Compare Rentals</h1>
+          <p className="cmp-sub">
+            {selectedListings.length < 2
               ? 'Select two or three saved homes below to compare them side by side.'
-              : `Comparing ${selectedListings.length} of your saved homes.`
-          }
-        />
+              : `Comparing ${selectedListings.length} of your saved homes.`}
+          </p>
+        </div>
       </header>
 
       <NexusCard role="neutral" className="cmp-panel">

@@ -84,26 +84,63 @@ class ListingService
                 break;
         }
 
-        return $query->paginate($perPage);
+        $paginated = $query->paginate($perPage);
+        $paginated->getCollection()->each(fn (Listing $listing) => $this->maskPropertyAddress($listing));
+
+        return $paginated;
     }
 
     /**
      * Get single public listing with view tracking.
-     * Includes approved reviews and rating aggregates from the property.
+     * Includes the listing's own gallery, approved reviews (reviewer limited to
+     * safe public columns — never leak email/phone/etc. to anonymous visitors),
+     * and rating aggregates from the property.
      */
     public function getPublicListing(int $listingId): ?Listing
     {
         $listing = Listing::query()
             ->public()
             ->with([
-                'unit.property.approvedReviews.reviewer',
+                'unit.property.approvedReviews' => fn ($q) => $q->latest()->limit(5),
+                // Reviewer columns are select-constrained to safe public fields; avatar_url
+                // is an appended accessor (App\Models\User::$appends), not a raw column, so
+                // it can't be listed here — its backing avatarAsset relation is eager-loaded
+                // instead to avoid an N+1 when the accessor runs (App\Services\ListingService).
+                'unit.property.approvedReviews.reviewer:id,first_name,last_name',
+                'unit.property.approvedReviews.reviewer.avatarAsset',
+                'mediaAssets',
                 'photos',
-                'landlord',
+                // Same column constraint as the reviewer above — the pre-existing
+                // unconstrained load leaked the landlord's raw email/phone/etc. to
+                // every anonymous visitor of a public listing.
+                'landlord:id,first_name,last_name,identity_verified',
+                'landlord.avatarAsset',
             ])
             ->find($listingId);
 
         if ($listing) {
             $listing->incrementViews();
+            $this->maskPropertyAddress($listing);
+            $listing->unit?->property?->append(['average_rating', 'review_count']);
+        }
+
+        return $listing;
+    }
+
+    /**
+     * Strip the street address from a listing's property (in-memory only,
+     * never persisted) unless the landlord has opted the property into
+     * 'public' address_visibility. Anonymous/public listing responses must
+     * never leak the raw street address for area_only/full_after_approval
+     * properties.
+     */
+    private function maskPropertyAddress(Listing $listing): Listing
+    {
+        $property = $listing->unit?->property;
+
+        if ($property && $property->address_visibility !== 'public') {
+            $property->street_address = null;
+            $property->street_address_2 = null;
         }
 
         return $listing;
@@ -167,11 +204,15 @@ class ListingService
      */
     public function getFeaturedListings(int $limit = 6): Collection
     {
-        return Listing::query()
+        $listings = Listing::query()
             ->public()
             ->featured()
             ->with(['unit.property', 'primaryPhoto'])
             ->limit($limit)
             ->get();
+
+        $listings->each(fn (Listing $listing) => $this->maskPropertyAddress($listing));
+
+        return $listings;
     }
 }

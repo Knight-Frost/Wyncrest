@@ -9,13 +9,9 @@
  * draft.
  */
 import { Link } from 'react-router';
+import { formatCedisDecimal } from '@/lib/format';
 import type { MediaAsset, Property } from '@/lib/types';
 import type { ListingDraftForm } from '../types';
-
-function money(v: string): string {
-  const n = Number(v);
-  return Number.isFinite(n) && v !== '' ? `GH₵${n.toLocaleString()}` : '—';
-}
 
 const BED_LABEL = (v: string) => (v === '0' ? 'Studio' : v === '6' ? '6+' : v || '—');
 
@@ -69,8 +65,8 @@ export function ReviewPublishStep({ form, property, media, isVerified, warnings 
         <div className="cl-review-card">
           <h4>Pricing</h4>
           <dl style={{ margin: 0 }}>
-            <div className="cl-review-row"><dt>Monthly rent</dt><dd>{money(form.rentAmount)}</dd></div>
-            <div className="cl-review-row"><dt>Deposit</dt><dd>{form.securityDeposit ? money(form.securityDeposit) : '—'}</dd></div>
+            <div className="cl-review-row"><dt>Monthly rent</dt><dd>{formatCedisDecimal(form.rentAmount)}</dd></div>
+            <div className="cl-review-row"><dt>Deposit</dt><dd>{formatCedisDecimal(form.securityDeposit)}</dd></div>
             <div className="cl-review-row"><dt>Lease</dt><dd>{form.leaseDurationMonths ? `${form.leaseDurationMonths} months` : '—'}</dd></div>
             <div className="cl-review-row"><dt>Available</dt><dd>{form.availableFrom || '—'}</dd></div>
             <div className="cl-review-row"><dt>Pets</dt><dd>{form.petsAllowed ? 'Allowed' : 'Not allowed'}</dd></div>
