@@ -85,6 +85,18 @@ class ContractPolicy
     }
 
     /**
+     * Determine whether the landlord can renew the contract in-place (new
+     * end date / rent amount on the same ACTIVE contract).
+     */
+    public function renew(User $user, Contract $contract): bool
+    {
+        $userId = (int) $user->id;
+        $landlordId = (int) $contract->landlord_id;
+
+        return $contract->status === ContractStatus::ACTIVE && $userId === $landlordId;
+    }
+
+    /**
      * Determine whether the user can update the contract.
      */
     public function update(User $user, Contract $contract): bool

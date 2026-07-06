@@ -18,7 +18,9 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '@/context/auth';
 import { useApi } from '@/hooks/useApi';
-import { adminApi, landlordApi, tenantApi } from '@/lib/endpoints';
+import { AdminContractsPage } from '@/pages/admin/AdminContractsPage';
+import { LeaseAndRentPage } from '@/pages/tenant/LeaseAndRentPage';
+import { landlordApi } from '@/lib/endpoints';
 import { formatCents, formatDate, humanize } from '@/lib/format';
 import {
   StatusCard,
@@ -35,7 +37,6 @@ import {
   IconPlus,
   IconBell,
   IconSearch,
-  IconFilter,
   IconShield,
   IconArrowRight,
 } from '@/components/ui/icons';
@@ -118,10 +119,11 @@ export function ContractsPage() {
   const [query, setQuery] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
 
+  // Tenants and admins render their own dedicated pages below (each with its
+  // own fetch) — this hook is a no-op for them so every render still calls
+  // the same hooks in the same order.
   const { data, loading, error, reload } = useApi<Contract[]>(async () => {
-    if (role === 'tenant') return tenantApi.contracts();
     if (role === 'landlord') return landlordApi.contracts();
-    if (role === 'admin') return (await adminApi.contracts()).data;
     return [];
   }, [role]);
 
@@ -169,6 +171,14 @@ export function ContractsPage() {
       : role === 'landlord'
         ? { title: 'No contracts yet.', text: 'Create a contract when a tenant is ready to rent one of your units.' }
         : { title: 'No active contract yet.', text: 'Your lease will appear here once a landlord creates and activates it.' };
+
+  // Tenants get the dedicated "Lease & Rent" experience (lease + payment
+  // posture merged into one view) — its own fetch of contracts/ledger.
+  // Admins get the dedicated case-file command centre (rich rows, truthful
+  // segment counts, search/filter/sort) — everyone else keeps this page.
+  // Checked after every hook above runs unconditionally on every render.
+  if (role === 'tenant') return <LeaseAndRentPage />;
+  if (role === 'admin') return <AdminContractsPage />;
 
   return (
     <div className="ct-page">
@@ -240,7 +250,6 @@ export function ContractsPage() {
               <IconSearch size={16} />
               <input type="text" placeholder="Search contracts…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search contracts" />
             </div>
-            <button className="ct-filter" aria-label="Filter contracts"><IconFilter size={16} /> Filter</button>
           </div>
         </div>
 
@@ -275,9 +284,9 @@ export function ContractsPage() {
           <div className="ct-list">
             {visible.map((c) => {
               const place = c.listing?.unit?.property?.name;
-              const landlordName = c.landlord ? `${c.landlord.first_name} ${c.landlord.last_name}` : `Landlord #${c.landlord_id}`;
-              const tenantName = c.tenant ? `${c.tenant.first_name} ${c.tenant.last_name}` : `Tenant #${c.tenant_id}`;
-              const counterparty = role === 'tenant' ? landlordName : tenantName;
+              // Only landlords reach this list render (tenants/admins render their own
+              // dedicated pages above), so the counterparty is always the tenant.
+              const counterparty = c.tenant ? `${c.tenant.first_name} ${c.tenant.last_name}` : `Tenant #${c.tenant_id}`;
               return (
                 <button type="button" className="ct-card" key={c.id} onClick={() => navigate(`/app/contracts/${c.id}`)}>
                   <div className="ct-card-top">

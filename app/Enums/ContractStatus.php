@@ -11,11 +11,13 @@ enum ContractStatus: string
     case EXPIRED = 'expired';
 
     /**
-     * Check if contract can be terminated
+     * Check if contract can be terminated. Covers both ending an active
+     * lease early and a tenant declining a lease before ever signing it —
+     * both are "this contract stops here" and share the same audit trail.
      */
     public function canBeTerminated(): bool
     {
-        return $this === self::ACTIVE;
+        return in_array($this, [self::ACTIVE, self::PENDING_TENANT], true);
     }
 
     /**

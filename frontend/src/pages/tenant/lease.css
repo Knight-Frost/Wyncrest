@@ -1,0 +1,109 @@
+/* ==========================================================================
+   LEASE & RENT (tenant) — list + detail. Prefix `.lr-`.
+   Structural/layout rules only — color always comes from NexusCard's `role`
+   prop (the semantic card system), never hardcoded here.
+   ========================================================================== */
+
+.lr-page { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; color: var(--color-ink-700); }
+
+/* ── list: intro banner ───────────────────────────────────────────────────── */
+.lr-intro { padding: clamp(24px, 4vw, 40px); }
+.lr-intro-title { font-family: var(--font-display); font-weight: 500; font-size: clamp(26px, 3.4vw, 38px); line-height: 1.05; letter-spacing: -0.02em; color: var(--color-ink-950); margin: 10px 0 8px; }
+.lr-intro-title em { font-style: italic; color: var(--color-brand-700); }
+.lr-intro-sub { font-size: 15px; color: var(--color-ink-500); max-width: 62ch; }
+
+/* ── detail: back link ────────────────────────────────────────────────────── */
+.lr-back { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; color: var(--color-brand-700); }
+.lr-back:hover { color: var(--color-brand-800); }
+
+/* ── detail: header ───────────────────────────────────────────────────────── */
+.lr-header { padding: clamp(20px, 3vw, 32px); }
+.lr-eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--color-brand-700); }
+.lr-title { font-family: var(--font-display); font-weight: 500; font-size: clamp(24px, 3.2vw, 34px); line-height: 1.08; color: var(--color-ink-950); margin: 8px 0 4px; }
+.lr-address { font-size: 15px; color: var(--color-ink-500); }
+.lr-header-meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 14px; font-size: 14px; color: var(--color-ink-500); }
+.lr-header-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+
+/* ── detail: action box ───────────────────────────────────────────────────── */
+.lr-action { display: flex; gap: 16px; align-items: flex-start; padding: 22px 24px; }
+.lr-action-icon { flex: 0 0 auto; display: flex; }
+.lr-action-body { flex: 1 1 auto; min-width: 0; }
+.lr-action-title { font-family: var(--font-display); font-weight: 600; font-size: 18px; color: var(--color-ink-950); }
+.lr-action-sub { font-size: 14px; color: var(--color-ink-600); margin-top: 4px; }
+.lr-action-btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.lr-signbox { margin-top: 14px; padding: 14px 16px; border-radius: var(--radius-xl); border: 1px solid var(--color-ink-200); background: var(--color-canvas); }
+.lr-agree { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--color-ink-700); cursor: pointer; }
+.lr-agree input { margin-top: 3px; accent-color: var(--color-brand-600); }
+
+/* ── detail: generic section ──────────────────────────────────────────────── */
+.lr-section { padding: clamp(18px, 2.6vw, 26px); }
+.lr-section-h { font-family: var(--font-display); font-weight: 600; font-size: 18px; color: var(--color-ink-950); margin-bottom: 14px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.lr-section-hint { font-family: var(--font-sans); font-size: 13px; font-weight: 400; color: var(--color-ink-500); }
+.lr-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 32px; }
+@media (max-width: 620px) { .lr-grid2 { grid-template-columns: 1fr; } }
+.lr-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 9px 0; border-top: 1px solid var(--color-ink-100); font-size: 14px; }
+.lr-row:first-child, .lr-grid2 > .lr-row:nth-child(2) { border-top: none; }
+.lr-row-k { color: var(--color-ink-500); }
+.lr-row-v { font-weight: 500; color: var(--color-ink-900); text-align: right; }
+.lr-code { font-family: var(--font-mono); font-size: 12px; background: var(--color-ink-100); padding: 2px 6px; border-radius: 6px; }
+.lr-muted { font-size: 14px; color: var(--color-ink-500); margin-top: 14px; }
+
+/* ── detail: next-due band ────────────────────────────────────────────────── */
+.lr-next { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; margin-top: 16px; flex-wrap: wrap; }
+.lr-next-label { font-family: var(--font-display); font-weight: 600; font-size: 16px; margin-top: 4px; }
+.lr-next-meta { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-top: 4px; opacity: .85; }
+.lr-next-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.lr-next-amount { font-family: var(--font-display); font-weight: 700; font-size: 22px; }
+.lr-next-initiated { font-size: 13px; max-width: 26ch; text-align: right; }
+
+/* ── detail: Stripe honesty notice ────────────────────────────────────────── */
+.lr-notice { display: flex; gap: 10px; align-items: flex-start; padding: 14px 16px; margin-top: 14px; font-size: 13.5px; }
+
+/* ── detail: recent payments list ─────────────────────────────────────────── */
+.lr-paylist { display: flex; flex-direction: column; margin-top: 16px; }
+.lr-payrow { display: flex; align-items: center; gap: 14px; padding: 10px 2px; border-top: 1px solid var(--color-ink-100); font-size: 13.5px; }
+.lr-payrow:first-child { border-top: none; }
+.lr-payrow-desc { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; color: var(--color-ink-800); }
+.lr-payrow-date { font-family: var(--font-mono); font-size: 11px; color: var(--color-ink-400); }
+.lr-payrow-amt { font-family: var(--font-mono); font-weight: 600; color: var(--color-ink-900); }
+.lr-overdue-note { display: flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 13px; color: var(--color-danger-600); }
+
+/* ── detail: people ────────────────────────────────────────────────────────── */
+.lr-people { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 620px) { .lr-people { grid-template-columns: 1fr; } }
+.lr-person { display: flex; align-items: center; gap: 12px; border: 1px solid var(--color-ink-200); border-radius: var(--radius-xl); padding: 14px; }
+.lr-person-avatar { width: 42px; height: 42px; border-radius: 50%; background: var(--color-brand-600); color: var(--color-on-brand); display: grid; place-items: center; font-family: var(--font-display); font-weight: 700; flex: 0 0 auto; }
+.lr-person-avatar-alt { background: var(--color-ink-700); }
+.lr-person-name { font-weight: 600; font-size: 14.5px; color: var(--color-ink-950); }
+.lr-person-you { font-weight: 400; color: var(--color-ink-400); font-size: 12.5px; }
+.lr-person-role { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--color-ink-400); margin-top: 2px; }
+.lr-person-email { font-size: 12.5px; color: var(--color-ink-500); margin-top: 2px; }
+
+/* ── detail: amenities chips ───────────────────────────────────────────────── */
+.lr-amenities { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.lr-chip { font-size: 12.5px; padding: 5px 12px; border-radius: 999px; background: var(--color-ink-100); color: var(--color-ink-700); }
+
+/* ── detail: timeline ──────────────────────────────────────────────────────── */
+.lr-timeline { position: relative; padding-left: 22px; display: flex; flex-direction: column; gap: 16px; }
+.lr-timeline::before { content: ''; position: absolute; left: 5px; top: 6px; bottom: 6px; width: 2px; background: var(--color-ink-200); }
+.lr-tl-item { position: relative; }
+.lr-tl-item::before { content: ''; position: absolute; left: -22px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--color-surface); box-shadow: 0 0 0 2px var(--color-ink-300); }
+.lr-tl-done::before { box-shadow: 0 0 0 2px var(--color-success-600); }
+.lr-tl-current::before { box-shadow: 0 0 0 2px var(--color-warning-600); background: var(--color-warning-600); }
+.lr-tl-final::before { box-shadow: 0 0 0 2px var(--color-danger-600); }
+.lr-tl-e { font-weight: 600; font-size: 14px; color: var(--color-ink-900); }
+.lr-tl-t { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--color-ink-500); margin-top: 2px; }
+
+/* ── detail: documents ─────────────────────────────────────────────────────── */
+.lr-docrow { display: flex; align-items: center; gap: 14px; padding: 12px; border: 1px solid var(--color-ink-200); border-radius: var(--radius-xl); margin-bottom: 10px; }
+.lr-docrow:last-child { margin-bottom: 0; }
+.lr-doc-ico { width: 38px; height: 38px; border-radius: 10px; background: var(--color-brand-50); color: var(--color-brand-700); display: grid; place-items: center; flex: 0 0 auto; }
+.lr-doc-body { flex: 1 1 auto; min-width: 0; }
+.lr-doc-t { font-weight: 600; font-size: 14px; color: var(--color-ink-900); }
+.lr-doc-s { font-size: 12.5px; color: var(--color-ink-500); margin-top: 2px; }
+
+/* ── detail: support footer ───────────────────────────────────────────────── */
+.lr-support { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; padding: 20px 24px; }
+.lr-support-t { font-family: var(--font-display); font-weight: 600; font-size: 16px; color: var(--color-ink-950); }
+.lr-support-s { font-size: 13.5px; color: var(--color-ink-500); margin-top: 4px; max-width: 60ch; }
+.lr-support-btns { display: flex; gap: 8px; flex-wrap: wrap; }

@@ -1,0 +1,304 @@
+/* ============================================================================
+   Landlord Tenant Management — White Liquid Glass, faithfully ported from
+   wyncrest-landlord-tenants.html. Everything is scoped under `.wtenant` so
+   these petrol/oxblood glass tokens never leak into the rest of the app.
+
+   All --wt-* aliases below resolve to the SHARED design tokens (index.css),
+   never a literal hex/rgba. That's what makes this page re-theme correctly:
+   dark mode isn't a separate stylesheet, it's the same rules reading
+   different variable values. Tinted badge/notice backgrounds use
+   color-mix(in srgb, <token> X%, transparent) instead of a hand-picked rgba,
+   so the tint always tracks its paired text color in both themes.
+   ========================================================================== */
+
+.wtenant {
+  --wt-petrol: var(--color-action-600);
+  --wt-petrol-2: var(--color-action-500);
+  --wt-oxblood: var(--color-danger-600);
+  --wt-oxblood-solid: var(--color-danger-solid);
+  --wt-green: var(--color-success-600);
+  --wt-amber: var(--color-warning-600);
+  --wt-purple: light-dark(#5b3f87, #c9aef0);
+  --wt-slate: var(--color-ink-500);
+  --wt-ink: var(--color-ink-900);
+  --wt-ink-2: var(--color-ink-700);
+  --wt-mute: var(--color-ink-400);
+  --wt-line: var(--color-ink-200);
+  --wt-line-2: var(--color-ink-100);
+  --wt-white: var(--color-surface);
+  --wt-shadow: var(--shadow-sm);
+  --wt-shadow-lg: var(--shadow-lg);
+  --wt-glass: var(--glass-bg-strong);
+  --wt-glass-2: var(--glass-bg);
+  --wt-glass-border: var(--glass-border);
+  --wt-r: 16px;
+  --wt-r-sm: 11px;
+  --wt-r-lg: 22px;
+  --wt-serif: 'Fraunces', Georgia, serif;
+  --wt-disp: 'Big Shoulders Display', var(--wt-serif);
+  --wt-sans: 'Hanken Grotesque', system-ui, -apple-system, sans-serif;
+
+  font-family: var(--wt-sans);
+  color: var(--wt-ink);
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wtenant *,
+.wtenant *::before,
+.wtenant *::after {
+  box-sizing: border-box;
+}
+.wtenant button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+.wtenant input, .wtenant select, .wtenant textarea { font-family: inherit; font-size: 14px; color: inherit; }
+.wtenant a { color: inherit; text-decoration: none; }
+.wtenant svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- glass ---------- */
+.wtenant .glass {
+  background: var(--wt-glass);
+  border: 1px solid var(--wt-glass-border);
+  box-shadow: var(--wt-shadow), var(--glass-highlight);
+  border-radius: var(--wt-r);
+}
+.wtenant .glass-2 {
+  background: var(--wt-glass-2);
+  border: 1px solid var(--wt-glass-border);
+  box-shadow: var(--wt-shadow), var(--glass-highlight);
+  border-radius: var(--wt-r);
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .wtenant .glass { -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%); }
+  .wtenant .glass-2 { -webkit-backdrop-filter: blur(18px) saturate(150%); backdrop-filter: blur(18px) saturate(150%); }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .wtenant .glass { background: var(--color-surface); }
+  .wtenant .glass-2 { background: var(--color-surface); }
+}
+
+/* ---------- type ---------- */
+.wtenant .pagehead { padding: clamp(1.4rem, 3vw, 2.1rem); }
+.wtenant .eyebrow { font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: .2em; text-transform: uppercase; color: var(--wt-petrol); display: inline-flex; align-items: center; gap: 0.6em; }
+.wtenant .eyebrow::before { content: ''; width: 24px; height: 1px; background: var(--wt-petrol); }
+.wtenant h1.page { font-family: var(--wt-serif); font-weight: 400; font-size: clamp(2.1rem, 4.4vw, 3rem); line-height: 1.02; color: var(--wt-petrol); margin: 0.6rem 0 0.4rem; }
+.wtenant .lede { color: var(--wt-ink-2); font-size: 15px; max-width: 64ch; }
+.wtenant .data { font-family: var(--wt-disp); font-weight: 700; letter-spacing: .01em; font-variant-numeric: tabular-nums; }
+
+/* ---------- summary strip ---------- */
+.wtenant .strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin: 4px 0 4px; }
+.wtenant .stat { padding: 15px 16px 14px; }
+.wtenant .stat .k { font-size: 11.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--wt-mute); }
+.wtenant .stat .v { font-family: var(--wt-disp); font-weight: 800; font-size: 29px; line-height: 1; margin-top: 9px; color: var(--wt-petrol); font-variant-numeric: tabular-nums; }
+.wtenant .stat .n { font-size: 12px; color: var(--wt-slate); margin-top: 6px; }
+.wtenant .stat.warn .v { color: var(--wt-amber); }
+.wtenant .stat.bad .v { color: var(--wt-oxblood); }
+.wtenant .stat.good .v { color: var(--wt-green); }
+
+/* ---------- controls ---------- */
+.wtenant .controls { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; flex-wrap: wrap; }
+.wtenant .search { flex: 1; min-width: 230px; display: flex; align-items: center; gap: 9px; padding: 10px 14px; }
+.wtenant .search input { border: none; background: none; outline: none; width: 100%; font-size: 14px; }
+.wtenant .search svg { flex: none; width: 16px; height: 16px; color: var(--wt-mute); }
+.wtenant .chips { display: flex; gap: 7px; flex-wrap: wrap; }
+.wtenant .chip { font-size: 12.5px; font-weight: 500; color: var(--wt-slate); padding: 8px 13px; border-radius: 20px; border: 1px solid var(--wt-line); background: var(--glass-bg); transition: .15s; white-space: nowrap; }
+.wtenant .chip:hover { border-color: var(--color-ink-300); }
+.wtenant .chip.on { background: var(--wt-petrol); color: var(--color-on-action); border-color: transparent; }
+.wtenant .chip .ct { opacity: .66; margin-left: 5px; font-variant-numeric: tabular-nums; }
+.wtenant .chip.on .ct { opacity: .8; }
+
+/* ---------- tenant rows ---------- */
+.wtenant .roster { display: flex; flex-direction: column; gap: 11px; }
+.wtenant .trow { display: grid; grid-template-columns: minmax(210px, 1.5fr) 1.3fr 1fr auto; gap: 18px; align-items: center; padding: 15px 18px; transition: .16s; cursor: pointer; }
+.wtenant .trow:hover { transform: translateY(-1px); box-shadow: var(--wt-shadow-lg); }
+.wtenant .trow:focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+.wtenant .tid { display: flex; align-items: center; gap: 12px; min-width: 0; }
+/* .tav's background is set inline (avatarStyle() in tenantHelpers.ts) to one of
+   a handful of deterministic per-name decorative tints — a per-identity swatch,
+   not a themed surface, so the fixed white gloss highlight + white initials
+   below stay legible in both themes without tracking a design token. */
+.wtenant .tav { width: 44px; height: 44px; border-radius: 12px; flex: none; display: grid; place-items: center; font-weight: 600; font-size: 15px; color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3); }
+.wtenant .tid .nm { font-weight: 600; font-size: 15px; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wtenant .tid .meta { font-size: 12.5px; color: var(--wt-mute); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wtenant .tcell .lbl { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--wt-mute); }
+.wtenant .tcell .val { font-size: 14px; font-weight: 500; margin-top: 3px; }
+.wtenant .tcell .val.sm { font-size: 13px; }
+.wtenant .tcell .sub { font-size: 12px; color: var(--wt-slate); margin-top: 1px; }
+.wtenant .rowact { display: flex; gap: 7px; align-items: center; }
+
+/* ---------- badges ---------- */
+.wtenant .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 20px; letter-spacing: .01em; white-space: nowrap; }
+.wtenant .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.wtenant .badge svg { width: 12px; height: 12px; }
+.wtenant .b-green { color: var(--wt-green); background: color-mix(in srgb, currentColor 13%, transparent); }
+.wtenant .b-amber { color: var(--wt-amber); background: color-mix(in srgb, currentColor 15%, transparent); }
+.wtenant .b-red { color: var(--wt-oxblood); background: color-mix(in srgb, currentColor 13%, transparent); }
+.wtenant .b-blue { color: var(--color-info-600); background: color-mix(in srgb, currentColor 13%, transparent); }
+.wtenant .b-gray { color: var(--color-ink-600); background: color-mix(in srgb, currentColor 13%, transparent); }
+.wtenant .b-purple { color: var(--wt-purple); background: color-mix(in srgb, currentColor 14%, transparent); }
+
+/* ---------- buttons ---------- */
+.wtenant .btn { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; padding: 9px 15px; border-radius: 10px; transition: .15s; border: 1px solid transparent; white-space: nowrap; }
+.wtenant .btn svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; }
+.wtenant .btn-p { background: var(--wt-petrol); color: var(--color-on-action); box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--wt-petrol) 55%, transparent); }
+.wtenant .btn-p:hover:not(:disabled) { background: var(--color-action-700); }
+.wtenant .btn-g { background: var(--glass-bg-strong); border-color: var(--wt-line); color: var(--wt-ink-2); }
+.wtenant .btn-g:hover:not(:disabled) { border-color: var(--color-ink-300); background: var(--color-ink-50); }
+.wtenant .btn-d { background: var(--wt-oxblood-solid); color: #fff; }
+.wtenant .btn-d:hover:not(:disabled) { background: var(--color-danger-solid-hover); }
+.wtenant .btn-ghost { color: var(--wt-slate); padding: 9px 12px; }
+.wtenant .btn-ghost:hover { background: color-mix(in srgb, var(--wt-ink) 6%, transparent); color: var(--wt-ink); }
+.wtenant .btn.sm { font-size: 12px; padding: 7px 11px; border-radius: 9px; }
+.wtenant .btn.sm svg { width: 13px; height: 13px; }
+.wtenant .btn:disabled { opacity: .5; cursor: not-allowed; }
+.wtenant .iconbtn { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; color: var(--wt-slate); border: 1px solid var(--wt-line); background: var(--glass-bg); transition: .15s; }
+.wtenant .iconbtn:hover { color: var(--wt-ink); border-color: var(--color-ink-300); }
+.wtenant .iconbtn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+/* ---------- tenant file ---------- */
+.wtenant .back { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; color: var(--wt-slate); margin-bottom: 2px; transition: .15s; }
+.wtenant .back:hover { color: var(--wt-petrol); gap: 9px; }
+.wtenant .back svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; }
+.wtenant .fhead { display: flex; align-items: flex-start; gap: 18px; padding: 22px 24px; }
+.wtenant .fhead .tav { width: 64px; height: 64px; border-radius: 16px; font-size: 22px; }
+.wtenant .fhinfo { flex: 1; min-width: 0; }
+.wtenant .fhinfo h2 { font-family: var(--wt-serif); font-weight: 600; font-size: 27px; letter-spacing: -.02em; color: var(--wt-petrol); line-height: 1.1; }
+.wtenant .fhinfo .prop { font-size: 14px; color: var(--wt-ink-2); margin-top: 4px; }
+.wtenant .fhcontact { display: flex; gap: 16px; margin-top: 11px; flex-wrap: wrap; }
+.wtenant .fhcontact a { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; color: var(--wt-petrol-2); padding: 2px 0; }
+.wtenant .fhcontact a:hover { color: var(--wt-petrol); text-decoration: underline; }
+.wtenant .fhcontact svg { width: 15px; height: 15px; opacity: .8; stroke: currentColor; fill: none; stroke-width: 2; }
+.wtenant .fhactions { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+.wtenant .fhactions .row { display: flex; gap: 8px; }
+
+.wtenant .tabs { display: flex; gap: 3px; padding: 5px; overflow-x: auto; }
+.wtenant .tabs button { font-size: 13.5px; font-weight: 500; color: var(--wt-slate); padding: 9px 15px; border-radius: 9px; white-space: nowrap; transition: .15s; }
+.wtenant .tabs button:hover { background: color-mix(in srgb, var(--wt-petrol) 6%, transparent); color: var(--wt-ink); }
+.wtenant .tabs button.on { background: var(--wt-petrol); color: var(--color-on-action); font-weight: 600; }
+.wtenant .tabs button .n { margin-left: 6px; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 9px; background: color-mix(in srgb, var(--wt-oxblood) 14%, transparent); color: var(--wt-oxblood); }
+.wtenant .tabs button.on .n { background: color-mix(in srgb, var(--color-on-action) 22%, transparent); color: var(--color-on-action); }
+
+/* ---------- panels & layout ---------- */
+.wtenant .grid2 { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; align-items: start; }
+.wtenant .panel { padding: 20px 22px; }
+.wtenant .panel h3 { font-family: var(--wt-serif); font-weight: 600; font-size: 17px; color: var(--wt-petrol); letter-spacing: -.01em; margin-bottom: 2px; }
+.wtenant .panel .ph { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; }
+.wtenant .panel .ph p { font-size: 12.5px; color: var(--wt-slate); }
+.wtenant .col { display: flex; flex-direction: column; gap: 16px; }
+
+.wtenant .kv-row { display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--wt-line-2); }
+.wtenant .kv-row:last-child { border-bottom: none; }
+.wtenant .kv-row .k { color: var(--wt-slate); font-size: 13.5px; }
+.wtenant .kv-row .v { font-weight: 600; font-size: 13.5px; text-align: right; font-variant-numeric: tabular-nums; }
+
+.wtenant .health { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: var(--wt-r-sm); margin-bottom: 2px; }
+.wtenant .health .ring { width: 52px; height: 52px; flex: none; position: relative; }
+.wtenant .health .ring svg { transform: rotate(-90deg); }
+.wtenant .health .ring .pct { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--wt-disp); font-weight: 800; font-size: 15px; }
+.wtenant .health .txt .t { font-weight: 600; font-size: 15px; }
+.wtenant .health .txt .d { font-size: 12.5px; color: var(--wt-slate); margin-top: 2px; }
+.wtenant .health.ok { background: color-mix(in srgb, var(--wt-green) 9%, transparent); } .wtenant .health.ok .pct { color: var(--wt-green); }
+.wtenant .health.mid { background: color-mix(in srgb, var(--wt-amber) 10%, transparent); } .wtenant .health.mid .pct { color: var(--wt-amber); }
+.wtenant .health.low { background: color-mix(in srgb, var(--wt-oxblood) 9%, transparent); } .wtenant .health.low .pct { color: var(--wt-oxblood); }
+
+/* ledger */
+.wtenant .ledger { display: flex; flex-direction: column; }
+.wtenant .led { display: grid; grid-template-columns: auto 1fr auto auto; gap: 14px; align-items: center; padding: 13px 2px; border-bottom: 1px solid var(--wt-line-2); }
+.wtenant .led:last-child { border-bottom: none; }
+.wtenant .led .ic { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; flex: none; }
+.wtenant .led .ic svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }
+.wtenant .led .d1 { font-weight: 600; font-size: 13.5px; }
+.wtenant .led .d2 { font-size: 12px; color: var(--wt-slate); margin-top: 1px; }
+.wtenant .led .amt { font-family: var(--wt-disp); font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; text-align: right; }
+.wtenant .led .amt.cr { color: var(--wt-green); }
+.wtenant .led .amt.db { color: var(--wt-ink-2); }
+
+/* timeline */
+.wtenant .tl { position: relative; padding-left: 26px; }
+.wtenant .tl::before { content: ''; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px; background: var(--wt-line); }
+.wtenant .tl .ev { position: relative; padding: 0 0 18px; }
+.wtenant .tl .ev:last-child { padding-bottom: 0; }
+.wtenant .tl .ev::before { content: ''; position: absolute; left: -22px; top: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--wt-white); border: 2px solid var(--wt-petrol-2); }
+.wtenant .tl .ev.done::before { background: var(--wt-green); border-color: var(--wt-green); }
+.wtenant .tl .ev.warn::before { background: var(--wt-amber); border-color: var(--wt-amber); }
+.wtenant .tl .ev .et { font-weight: 600; font-size: 13.5px; }
+.wtenant .tl .ev .em { font-size: 12.5px; color: var(--wt-slate); margin-top: 2px; }
+.wtenant .tl .ev .ed { font-size: 11.5px; color: var(--wt-mute); margin-top: 3px; font-weight: 500; }
+
+/* maintenance cards */
+.wtenant .mcard { display: flex; gap: 13px; padding: 15px 16px; border-radius: var(--wt-r-sm); border: 1px solid var(--wt-line-2); background: var(--glass-bg); margin-bottom: 10px; }
+.wtenant .mcard:last-child { margin-bottom: 0; }
+.wtenant .mcard .mi { width: 38px; height: 38px; border-radius: 10px; flex: none; display: grid; place-items: center; }
+.wtenant .mcard .mi svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
+.wtenant .mcard .mt { font-weight: 600; font-size: 14px; }
+.wtenant .mcard .mm { font-size: 12.5px; color: var(--wt-slate); margin-top: 3px; line-height: 1.45; }
+.wtenant .mcard .mf { display: flex; gap: 12px; align-items: center; margin-top: 8px; font-size: 11.5px; color: var(--wt-mute); font-weight: 500; }
+
+/* messages */
+.wtenant .thread { display: flex; flex-direction: column; gap: 12px; max-height: 420px; overflow-y: auto; padding: 2px 2px 6px; }
+.wtenant .msg { max-width: 78%; padding: 11px 14px; border-radius: 14px; font-size: 13.5px; line-height: 1.5; }
+.wtenant .msg .mmeta { font-size: 11px; color: var(--wt-mute); margin-top: 5px; font-weight: 500; }
+.wtenant .msg.them { align-self: flex-start; background: var(--glass-bg-strong); border: 1px solid var(--wt-line-2); border-bottom-left-radius: 5px; }
+.wtenant .msg.you { align-self: flex-end; background: var(--wt-petrol); color: var(--color-on-action); border-bottom-right-radius: 5px; }
+.wtenant .msg.you .mmeta { color: color-mix(in srgb, var(--color-on-action) 70%, transparent); }
+.wtenant .composer { display: flex; gap: 9px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--wt-line-2); }
+.wtenant .composer input { flex: 1; padding: 11px 14px; border-radius: 11px; border: 1px solid var(--wt-line); background: var(--glass-bg-strong); outline: none; }
+.wtenant .composer input:focus { border-color: var(--wt-petrol-2); }
+
+/* notes */
+.wtenant .notice { display: flex; gap: 11px; padding: 13px 15px; border-radius: var(--wt-r-sm); background: color-mix(in srgb, var(--wt-petrol-2) 8%, transparent); border: 1px solid color-mix(in srgb, var(--wt-petrol-2) 16%, transparent); margin-bottom: 16px; }
+.wtenant .notice svg { flex: none; width: 18px; height: 18px; color: var(--wt-petrol-2); margin-top: 1px; stroke: currentColor; fill: none; stroke-width: 2; }
+.wtenant .notice .nt { font-size: 12.5px; color: var(--wt-ink-2); line-height: 1.5; }
+.wtenant .notice .nt b { color: var(--wt-petrol); }
+.wtenant .note { padding: 14px 16px; border-radius: var(--wt-r-sm); border: 1px solid var(--wt-line-2); background: var(--glass-bg); margin-bottom: 10px; }
+.wtenant .note .nb { font-size: 13.5px; line-height: 1.55; }
+.wtenant .note .nf { display: flex; gap: 10px; align-items: center; margin-top: 9px; font-size: 11.5px; color: var(--wt-mute); font-weight: 500; }
+.wtenant .note .nf .who2 { color: var(--wt-slate); font-weight: 600; }
+
+.wtenant .empty { text-align: center; padding: 46px 24px; color: var(--wt-slate); }
+.wtenant .empty .ei { width: 52px; height: 52px; border-radius: 14px; background: color-mix(in srgb, var(--wt-petrol-2) 7%, transparent); display: grid; place-items: center; margin: 0 auto 14px; color: var(--wt-petrol-2); }
+.wtenant .empty .ei svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; }
+.wtenant .empty .et { font-family: var(--wt-serif); font-size: 18px; font-weight: 600; color: var(--wt-petrol); }
+.wtenant .empty .em { font-size: 13.5px; margin-top: 5px; max-width: 40ch; margin-inline: auto; }
+
+/* ---------- modal (form bits inside the shared Modal component) ---------- */
+.wtenant .field { margin-bottom: 15px; }
+.wtenant .field label { display: block; font-size: 12.5px; font-weight: 600; color: var(--wt-ink-2); margin-bottom: 6px; }
+.wtenant .field input, .wtenant .field select, .wtenant .field textarea {
+  width: 100%; padding: 11px 13px; border-radius: 11px; border: 1px solid var(--wt-line);
+  background: var(--glass-bg-strong); outline: none; transition: .15s;
+}
+.wtenant .field input:focus, .wtenant .field select:focus, .wtenant .field textarea:focus { border-color: var(--wt-petrol-2); background: var(--color-surface); }
+.wtenant .field textarea { resize: vertical; min-height: 82px; line-height: 1.5; }
+.wtenant .field .hint { font-size: 11.5px; color: var(--wt-mute); margin-top: 5px; }
+.wtenant .frow { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.wtenant .pick { display: flex; gap: 8px; flex-wrap: wrap; }
+.wtenant .pick button { flex: 1; min-width: calc(50% - 4px); padding: 11px; border-radius: 11px; border: 1px solid var(--wt-line); background: var(--glass-bg-strong); font-size: 13px; font-weight: 500; color: var(--wt-ink-2); transition: .15s; text-align: left; }
+.wtenant .pick button:hover { border-color: var(--color-ink-300); }
+.wtenant .pick button.on { border-color: var(--wt-petrol); background: color-mix(in srgb, var(--wt-petrol) 6%, transparent); color: var(--wt-petrol); font-weight: 600; }
+.wtenant .pick button .pd { font-size: 11px; color: var(--wt-mute); margin-top: 2px; font-weight: 400; }
+.wtenant .pick button.on .pd { color: var(--wt-slate); }
+.wtenant .mnote { font-size: 12px; color: var(--wt-slate); background: color-mix(in srgb, var(--wt-amber) 10%, transparent); border: 1px solid color-mix(in srgb, var(--wt-amber) 20%, transparent); border-radius: 10px; padding: 11px 13px; line-height: 1.5; display: flex; gap: 9px; }
+.wtenant .mnote svg { flex: none; width: 16px; height: 16px; color: var(--wt-amber); margin-top: 1px; stroke: currentColor; fill: none; stroke-width: 2; }
+.wtenant .form-error { font-size: 12.5px; color: var(--wt-oxblood); margin-top: 4px; }
+
+.wtenant .foot { margin-top: 6px; padding: 16px 20px; font-size: 12px; color: var(--wt-slate); line-height: 1.6; display: flex; gap: 11px; align-items: flex-start; }
+.wtenant .foot svg { flex: none; width: 16px; height: 16px; color: var(--wt-mute); margin-top: 1px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 980px) {
+  .wtenant .strip { grid-template-columns: repeat(2, 1fr); }
+  .wtenant .grid2 { grid-template-columns: 1fr; }
+  .wtenant .trow { grid-template-columns: 1fr auto; gap: 12px; }
+  .wtenant .trow .tcell.hide-m { display: none; }
+  .wtenant .fhead { flex-wrap: wrap; }
+  .wtenant .fhactions { align-items: flex-start; width: 100%; }
+}
+@media (max-width: 560px) {
+  .wtenant .strip { grid-template-columns: 1fr 1fr; }
+  .wtenant .frow { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wtenant * { transition: none !important; animation: none !important; }
+}

@@ -95,6 +95,38 @@ class Contract extends Model
     }
 
     /**
+     * All ledger entries booked against this contract.
+     */
+    public function ledgerEntries(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(LedgerEntry::class, 'contract_id');
+    }
+
+    /**
+     * Internal, admin-only case-file notes.
+     */
+    public function notes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ContractNote::class)->latest();
+    }
+
+    /**
+     * In-place renewal history (new end date / rent amount over time).
+     */
+    public function renewals(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ContractRenewal::class)->latest();
+    }
+
+    /**
+     * Landlord-authored, landlord-visible notes on this tenancy.
+     */
+    public function landlordNotes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ContractLandlordNote::class)->latest();
+    }
+
+    /**
      * Scope for active contracts
      */
     public function scopeActive($query)

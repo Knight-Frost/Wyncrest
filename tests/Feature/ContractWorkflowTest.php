@@ -289,6 +289,27 @@ class ContractWorkflowTest extends TestCase
         $response->assertStatus(403);
     }
 
+    public function test_tenant_can_decline_pending_contract()
+    {
+        $contract = Contract::factory()->pendingTenant()->create([
+            'landlord_id' => $this->landlord->id,
+            'tenant_id' => $this->tenant->id,
+        ]);
+
+        $response = $this->actingAs($this->tenant, 'sanctum')
+            ->postJson("/api/tenant/contracts/{$contract->id}/terminate", [
+                'reason' => 'Found a different place closer to work',
+            ]);
+
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('contracts', [
+            'id' => $contract->id,
+            'status' => ContractStatus::TERMINATED->value,
+            'terminated_by' => TerminatedBy::TENANT->value,
+        ]);
+    }
+
     public function test_payment_day_validation()
     {
         $response = $this->actingAs($this->landlord, 'sanctum')

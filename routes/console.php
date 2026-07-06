@@ -15,6 +15,14 @@ Schedule::command('ledger:generate-rent')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/scheduler-rent.log'));
 
+// Contract expiry: close out ACTIVE contracts past their end_date so
+// statuses, analytics, and the renew gate stay truthful. Runs after rent
+// generation (which already refuses to bill past end_date).
+Schedule::command('contracts:mark-expired')
+    ->dailyAt('01:30')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/scheduler-contracts.log'));
+
 // Phase 3.4 - Overdue Detection
 // Runs daily at 2:00 AM (after rent generation)
 Schedule::command('ledger:mark-overdue')

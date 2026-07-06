@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useAuth } from '@/context/auth';
 import { useApi } from '@/hooks/useApi';
-import { adminApi, landlordApi, tenantApi } from '@/lib/endpoints';
+import { AdminContractCaseFile } from '@/pages/admin/AdminContractCaseFile';
+import { LeaseDetail } from '@/pages/tenant/LeaseDetail';
+import { landlordApi } from '@/lib/endpoints';
 import { formatCents, formatDate, humanize } from '@/lib/format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { NexusCard } from '@/components/cards/NexusCard';
@@ -13,7 +15,6 @@ import { DestructiveConfirmDialog } from '@/components/ui/DestructiveConfirmDial
 import { ErrorState, LoadingState } from '@/components/ui/states';
 import {
   IconCalendar,
-  IconCheck,
   IconCheckCircle,
   IconDoc,
   IconUsers,
@@ -61,13 +62,12 @@ export function ContractDetail() {
   const { user } = useAuth();
   const role = user?.role;
 
+  // Tenants and admins render their own dedicated pages below (each with its
+  // own independent fetch) — this hook is a no-op for them so every render
+  // still calls the same hooks in the same order.
   const { data, loading, error, reload } = useApi<Contract | null>(async () => {
-    if (role === 'tenant') return tenantApi.contract(id);
     if (role === 'landlord') {
       return (await landlordApi.contracts()).find((c) => c.id === id) ?? null;
-    }
-    if (role === 'admin') {
-      return (await adminApi.contracts()).data.find((c) => c.id === id) ?? null;
     }
     return null;
   }, [id, role]);
@@ -76,20 +76,6 @@ export function ContractDetail() {
   const [terminateOpen, setTerminateOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [actionResult, setActionResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-
-  async function handleAccept() {
-    setSubmitting(true);
-    setActionResult(null);
-    try {
-      await tenantApi.acceptContract(id);
-      setActionResult({ type: 'success', message: 'Contract accepted.' });
-      reload();
-    } catch (err) {
-      setActionResult({ type: 'error', message: err instanceof Error ? err.message : 'Failed to accept contract.' });
-    } finally {
-      setSubmitting(false);
-    }
-  }
 
   async function handleSend() {
     setSubmitting(true);
@@ -112,11 +98,7 @@ export function ContractDetail() {
     setSubmitting(true);
     setActionResult(null);
     try {
-      if (role === 'tenant') {
-        await tenantApi.terminateContract(id, trimmed);
-      } else {
-        await landlordApi.terminateContract(id, trimmed);
-      }
+      await landlordApi.terminateContract(id, trimmed);
       setActionResult({ type: 'success', message: 'Contract terminated.' });
       setTerminateOpen(false);
       reload();
@@ -126,6 +108,14 @@ export function ContractDetail() {
       setSubmitting(false);
     }
   }
+
+  // Tenants get the dedicated Lease & Rent detail (lease terms + payment
+  // history/next-due + documents merged into one view).
+  // Admins get the dedicated case-file page (ledger, payments, billing
+  // schedule, timeline, notes, reconciliation warnings — none of which this
+  // shared component has) — checked after every hook above has run.
+  if (role === 'tenant') return <LeaseDetail />;
+  if (role === 'admin') return <AdminContractCaseFile />;
 
   const backLink = (
     <Link
@@ -178,23 +168,6 @@ export function ContractDetail() {
     : `Tenant #${contract.tenant_id}`;
 
   const actions: React.ReactNode[] = [];
-  if (role === 'tenant' && contract.status === 'pending_tenant') {
-    actions.push(
-      <Button key="accept" onClick={handleAccept} loading={submitting} leftIcon={<IconCheck size={15} />}>
-        Accept Contract
-      </Button>,
-      <Button key="decline" variant="danger" onClick={() => setTerminateOpen(true)} disabled={submitting}>
-        Decline
-      </Button>,
-    );
-  }
-  if (role === 'tenant' && contract.status === 'active') {
-    actions.push(
-      <Button key="terminate" variant="danger" onClick={() => setTerminateOpen(true)} disabled={submitting}>
-        Terminate
-      </Button>,
-    );
-  }
   if (role === 'landlord' && contract.status === 'draft') {
     if (confirmSend) {
       actions.push(
@@ -217,13 +190,6 @@ export function ContractDetail() {
     }
   }
   if (role === 'landlord' && contract.status === 'active') {
-    actions.push(
-      <Button key="terminate" variant="danger" onClick={() => setTerminateOpen(true)} disabled={submitting}>
-        Terminate
-      </Button>,
-    );
-  }
-  if (role === 'admin' && contract.status === 'active') {
     actions.push(
       <Button key="terminate" variant="danger" onClick={() => setTerminateOpen(true)} disabled={submitting}>
         Terminate
@@ -408,16 +374,12 @@ export function ContractDetail() {
         </div>
       </NexusCard>
 
-      {/* Terminate / Decline — destructive confirm with required reason */}
+      {/* Terminate — destructive confirm with required reason */}
       <DestructiveConfirmDialog
         open={terminateOpen}
         onClose={() => !submitting && setTerminateOpen(false)}
         onConfirm={handleTerminate}
-        title={
-          role === 'tenant' && contract.status === 'pending_tenant'
-            ? 'Decline contract'
-            : 'Terminate contract'
-        }
+        title="Terminate contract"
         description="This action cannot be undone."
         confirmLabel="Confirm"
         loading={submitting}

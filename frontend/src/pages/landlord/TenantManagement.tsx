@@ -1,905 +1,384 @@
 /**
- * TenantManagement — Tenant Roster Operations Console
+ * TenantManagement — Tenant Roster
  *
- * A landlord-facing command console showing all active tenancies, derived
- * entirely from live contracts and ledger data. No occupant counts, auto-pay
- * status, or trend deltas are shown (no backing data). Messaging is omitted
- * because landlords cannot initiate conversations.
- *
- * Data sources:
- *   - landlordApi.contracts()  — all contracts (active + pending_tenant etc.)
- *   - landlordApi.ledger()     — full ledger for payment posture derivation
+ * Faithful port of wyncrest-landlord-tenants.html's roster view (`#/`),
+ * rebuilt on 100% real data: `landlordApi.contracts()`, `landlordApi.ledger()`
+ * and `landlordApi.maintenance()`. No partial-payment status, no scheduled
+ * future move-out date, no simulated deposit-hold tracking — those aren't
+ * real backend concepts (see project plan). The real "awaiting signature"
+ * (pending_tenant contracts) state from the previous build is kept as an
+ * additional chip alongside the mockup's own filter set.
  */
 import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
-import { PageHeader } from '@/components/layout/PageHeader';
-import { Card, CardBody } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Avatar } from '@/components/ui/Avatar';
-import { DetailDrawer } from '@/components/ui/Drawer';
-import { RecordList, RecordCard, RecordRelated } from '@/components/ui/RecordCard';
-import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-} from '@/components/ui/states';
-import {
-  IconUsers,
-  IconWallet,
-  IconClock,
-  IconAlertTriangle,
-  IconCheckCircle,
-  IconLedger,
-  IconDoc,
-} from '@/components/ui/icons';
-import {
-  CommandBar,
-  SearchInput,
-  FilterTabs,
-  SortSelect,
-  Pagination,
-  ActionMenu,
-  StatusChip,
-  Thumbnail,
-  type FilterTab as Tab,
-  type SelectOption,
-} from '@/components/landlord/primitives';
-import { paginate, rangeLabel } from '@/lib/paginate';
+import { useNavigate } from 'react-router';
 import { useApi } from '@/hooks/useApi';
 import { landlordApi } from '@/lib/endpoints';
+import { ErrorState, LoadingState } from '@/components/ui/states';
+import { formatCents, formatDate, daysUntil } from '@/lib/format';
 import {
-  formatCents,
-  formatDate,
-  daysUntil,
-  humanize,
-  contractStatusTone,
-  storageUrl,
-} from '@/lib/format';
-import type { Contract, LedgerEntry } from '@/lib/types';
+  IconSearch,
+  IconBell,
+  IconCash,
+  IconBack,
+  IconUsers,
+  IconWrench,
+  IconShield,
+} from './tenant-management-ui';
 import {
-  StatusCard,
-  SemanticBadge,
-  CommandCard,
-  DashboardSection,
-  DataCardGrid,
-  getContractVariant,
-} from '@/components/cards';
+  buildRosterRow,
+  computeRosterKpis,
+  groupLedgerByContract,
+  relativeDays,
+  avatarStyle,
+  initials,
+  RENT_LABEL,
+  RENT_BADGE,
+  RENEWAL_LABEL,
+  RENEWAL_BADGE,
+  type TenantRosterRow,
+} from './tenantHelpers';
+import type { Contract } from '@/lib/types';
+import './tenant-management.css';
 
-/* ── Constants ─────────────────────────────────────────────────────────────── */
+type FilterKey = 'all' | 'awaiting' | 'attention' | 'due_soon' | 'renewal';
 
-const PER_PAGE = 8;
-
-/** Days before end_date at which a lease is considered "Ending soon". */
-const ENDING_SOON_DAYS = 60;
-
-type FilterKey = 'all' | 'active' | 'awaiting_signature' | 'overdue' | 'ending_soon';
-type SortKey = 'newest' | 'name_az' | 'rent_high';
-
-const SORT_OPTIONS: SelectOption<SortKey>[] = [
-  { value: 'newest', label: 'Newest first' },
-  { value: 'name_az', label: 'Name A to Z' },
-  { value: 'rent_high', label: 'Rent high→low' },
-];
-
-/* ── Derived view-model types ───────────────────────────────────────────────── */
-
-type PaymentStatusKey = 'paid' | 'upcoming' | 'overdue';
-
-interface NextPayment {
-  amount_cents: number;
-  due_date: string | null;
-  status: PaymentStatusKey;
-  label: string;
+function rentLine(row: TenantRosterRow): string {
+  const { rent } = row;
+  if (rent.status === 'paid') return 'All settled';
+  const due = rent.nextPayment?.dueDate ?? null;
+  const dayLabel = due ? relativeDays(daysUntil(due)) : '—';
+  return `${formatCents(rent.outstandingCents)} · ${dayLabel}`;
 }
-
-interface ActiveTenancy {
-  contract: Contract;
-  tenantName: string;
-  tenantAvatar: string | null;
-  tenantEmail: string | null;
-  isVerified: boolean;
-  property: string;
-  propertyCity: string | null;
-  unit: string | null;
-  listingPhotoPath: string | null;
-  listingTitle: string | null;
-  nextPayment: NextPayment | null;
-  paymentStatus: PaymentStatusKey;
-  isOverdue: boolean;
-  outstandingCents: number;
-  monthsLeft: number | null;
-  isEndingSoon: boolean;
-}
-
-/* ── Pure derivation helpers ────────────────────────────────────────────────── */
-
-function contractLocation(contract: Contract): {
-  property: string;
-  city: string | null;
-  unit: string | null;
-  photoPath: string | null;
-  listingTitle: string | null;
-} {
-  const unit = contract.listing?.unit;
-  const property = unit?.property;
-  const photo = contract.listing?.primary_photo ?? null;
-  return {
-    property: property?.name ?? 'Property unavailable',
-    city: property?.city ?? null,
-    unit: unit?.unit_number ?? null,
-    photoPath: photo?.path ?? null,
-    listingTitle: contract.listing?.title ?? null,
-  };
-}
-
-/**
- * From the open ledger entries for a contract, derives:
- *  - The earliest pending/overdue rent or late-fee entry (the "next payment")
- *  - Overdue flag
- *  - Sum of all outstanding (pending+overdue) amount_cents
- */
-function derivePaymentPosture(entries: LedgerEntry[]): {
-  nextPayment: NextPayment | null;
-  isOverdue: boolean;
-  outstandingCents: number;
-} {
-  const open = entries.filter(
-    (e) =>
-      (e.type === 'rent' || e.type === 'late_fee') &&
-      (e.status === 'pending' || e.status === 'overdue'),
-  );
-
-  const outstandingCents = open.reduce((sum, e) => sum + e.amount_cents, 0);
-  const isOverdue = open.some((e) => e.status === 'overdue');
-
-  const sorted = [...open].sort((a, b) => {
-    const at = a.due_date ? new Date(a.due_date).getTime() : Number.MAX_SAFE_INTEGER;
-    const bt = b.due_date ? new Date(b.due_date).getTime() : Number.MAX_SAFE_INTEGER;
-    return at - bt;
-  });
-
-  if (sorted.length === 0) {
-    return { nextPayment: null, isOverdue: false, outstandingCents: 0 };
-  }
-
-  // Prefer earliest overdue entry so overdue posture surfaces first.
-  const overdue = sorted.find((e) => e.status === 'overdue');
-  const target = overdue ?? sorted[0];
-
-  const nextPayment: NextPayment = {
-    amount_cents: target.amount_cents,
-    due_date: target.due_date,
-    status: target.status === 'overdue' ? 'overdue' : 'upcoming',
-    label: target.status === 'overdue' ? 'Overdue' : 'Upcoming',
-  };
-
-  return { nextPayment, isOverdue, outstandingCents };
-}
-
-function deriveMonthsLeft(endDate: string | null | undefined): number | null {
-  const days = daysUntil(endDate);
-  if (days === null) return null;
-  return Math.round(days / 30);
-}
-
-/* ── Avatar (photo when available, else initials) ───────────────────────────── */
-
-function Initials({ name, src }: { name: string; src?: string | null }) {
-  return (
-    <Avatar
-      name={name}
-      src={src}
-      className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-100 font-mono text-xs font-semibold text-brand-700"
-    />
-  );
-}
-
-/* ── Payment status chip ────────────────────────────────────────────────────── */
-
-function PaymentChip({ status }: { status: PaymentStatusKey }) {
-  if (status === 'overdue') return <StatusChip tone="danger">Overdue</StatusChip>;
-  if (status === 'upcoming') return <StatusChip tone="warning">Upcoming</StatusChip>;
-  return <StatusChip tone="success">Paid</StatusChip>;
-}
-
-/* ── Balance cell ───────────────────────────────────────────────────────────── */
-
-function BalanceCell({ cents }: { cents: number }) {
-  if (cents === 0) {
-    return <span className="text-sm text-success-600 font-medium">Up to date</span>;
-  }
-  return (
-    <span className="text-sm font-semibold" style={{ color: 'var(--color-danger-600)' }}>
-      {formatCents(cents)}
-    </span>
-  );
-}
-
-/* ── Next-payment cell ───────────────────────────────────────────────────────── */
-
-function NextPaymentCell({ nextPayment }: { nextPayment: NextPayment | null }) {
-  if (!nextPayment) {
-    return <span className="text-sm text-ink-500">All settled</span>;
-  }
-  const days = daysUntil(nextPayment.due_date);
-  let daysLabel = '';
-  if (days !== null) {
-    if (days < 0) daysLabel = `Overdue ${Math.abs(days)} day${Math.abs(days) !== 1 ? 's' : ''}`;
-    else if (days === 0) daysLabel = 'Due today';
-    else daysLabel = `in ${days} day${days !== 1 ? 's' : ''}`;
-  }
-  return (
-    <div>
-      <p
-        className="text-sm font-medium"
-        style={{
-          color:
-            nextPayment.status === 'overdue'
-              ? 'var(--color-danger-600)'
-              : 'var(--color-ink-900)',
-        }}
-      >
-        {nextPayment.due_date ? formatDate(nextPayment.due_date) : '—'}
-      </p>
-      {daysLabel && (
-        <p
-          className="text-xs"
-          style={{
-            color:
-              nextPayment.status === 'overdue'
-                ? 'var(--color-danger-500)'
-                : 'var(--color-ink-500)',
-          }}
-        >
-          {daysLabel}
-        </p>
-      )}
-    </div>
-  );
-}
-
-/* ── Lease-detail modal row ─────────────────────────────────────────────────── */
-
-function Row({ label, value, money }: { label: string; value: string; money?: boolean }) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <dt className="shrink-0 text-ink-500">{label}</dt>
-      <dd
-        className="text-right font-medium text-ink-900"
-        style={money ? { color: 'var(--color-money)' } : undefined}
-      >
-        {value}
-      </dd>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/* Page                                                                        */
-/* ═══════════════════════════════════════════════════════════════════════════ */
 
 export function TenantManagement() {
   const navigate = useNavigate();
   const contractsQ = useApi(() => landlordApi.contracts(), []);
   const ledgerQ = useApi(() => landlordApi.ledger(), []);
+  const maintenanceQ = useApi(() => landlordApi.maintenance(), []);
 
-  /* ── Filter / sort / pagination state ─────────────────────────────────── */
-  const [tab, setTab] = useState<FilterKey>('all');
-  const [search, setSearch] = useState('');
-  const [propertyFilter, setPropertyFilter] = useState<string>('all');
-  const [sort, setSort] = useState<SortKey>('newest');
-  const [page, setPage] = useState(1);
-
-  /* ── Lease-detail modal ────────────────────────────────────────────────── */
-  const [leaseTarget, setLeaseTarget] = useState<ActiveTenancy | null>(null);
-
-  function reload() {
-    contractsQ.reload();
-    ledgerQ.reload();
-  }
-
-  function resetPage() {
-    setPage(1);
-  }
+  const [filter, setFilter] = useState<FilterKey>('all');
+  const [query, setQuery] = useState('');
 
   const contracts = useMemo(() => contractsQ.data ?? [], [contractsQ.data]);
-  const ledger = useMemo(() => ledgerQ.data ?? [], [ledgerQ.data]);
+  const ledger = useMemo(() => ledgerQ.data?.entries ?? [], [ledgerQ.data]);
+  const maintenance = useMemo(() => maintenanceQ.data ?? [], [maintenanceQ.data]);
 
-  /* ── Group ledger by contract ─────────────────────────────────────────── */
-  const ledgerByContract = useMemo(() => {
-    const map = new Map<string, LedgerEntry[]>();
-    for (const entry of ledger) {
-      const list = map.get(entry.contract_id);
-      if (list) list.push(entry);
-      else map.set(entry.contract_id, [entry]);
-    }
-    return map;
-  }, [ledger]);
+  const ledgerByContract = useMemo(() => groupLedgerByContract(ledger), [ledger]);
 
-  /* ── Derive active tenancies ──────────────────────────────────────────── */
-  const activeTenancies = useMemo<ActiveTenancy[]>(() => {
-    return contracts
-      .filter((c) => c.status === 'active')
-      .map((contract) => {
-        const { property, city, unit, photoPath, listingTitle } = contractLocation(contract);
-        const entries = ledgerByContract.get(contract.id) ?? [];
-        const { nextPayment, isOverdue, outstandingCents } = derivePaymentPosture(entries);
-
-        let paymentStatus: PaymentStatusKey = 'paid';
-        if (isOverdue) paymentStatus = 'overdue';
-        else if (nextPayment) paymentStatus = 'upcoming';
-
-        const monthsLeft = deriveMonthsLeft(contract.end_date);
-        const daysLeft = daysUntil(contract.end_date);
-        const isEndingSoon = daysLeft !== null && daysLeft >= 0 && daysLeft <= ENDING_SOON_DAYS;
-
-        return {
-          contract,
-          tenantName: contract.tenant?.full_name ?? 'Tenant unavailable',
-          tenantAvatar: contract.tenant?.avatar_url ?? null,
-          tenantEmail: contract.tenant?.email ?? null,
-          isVerified: contract.tenant?.identity_verified ?? false,
-          property,
-          propertyCity: city,
-          unit,
-          listingPhotoPath: photoPath,
-          listingTitle,
-          nextPayment,
-          paymentStatus,
-          isOverdue,
-          outstandingCents,
-          monthsLeft,
-          isEndingSoon,
-        };
-      });
-  }, [contracts, ledgerByContract]);
-
-  /* ── Awaiting-signature contracts ─────────────────────────────────────── */
+  const activeContracts = useMemo(() => contracts.filter((c) => c.status === 'active'), [contracts]);
   const awaitingSignature = useMemo(
     () => contracts.filter((c) => c.status === 'pending_tenant'),
     [contracts],
   );
 
-  /* ── Distinct properties (for property filter dropdown) ────────────────── */
-  const propertyOptions = useMemo<SelectOption<string>[]>(() => {
-    const seen = new Map<string, string>();
-    for (const t of activeTenancies) {
-      if (!seen.has(t.property)) seen.set(t.property, t.property);
-    }
-    const opts: SelectOption<string>[] = [{ value: 'all', label: 'All properties' }];
-    for (const [key, label] of seen) opts.push({ value: key, label });
-    return opts;
-  }, [activeTenancies]);
-
-  /* ── KPI aggregates ───────────────────────────────────────────────────── */
-  const rentRollCents = activeTenancies.reduce((sum, t) => sum + (t.contract.rent_amount ?? 0), 0);
-  const overdueCount = activeTenancies.filter((t) => t.isOverdue).length;
-  const overdueTotalCents = activeTenancies
-    .filter((t) => t.isOverdue)
-    .reduce((sum, t) => sum + t.outstandingCents, 0);
-  const distinctPropertyCount = useMemo(
-    () => new Set(activeTenancies.map((t) => t.property)).size,
-    [activeTenancies],
+  const rows = useMemo<TenantRosterRow[]>(
+    () => activeContracts.map((c) => buildRosterRow(c, ledgerByContract, maintenance)),
+    [activeContracts, ledgerByContract, maintenance],
   );
 
-  /* ── Filter / sort pipeline ───────────────────────────────────────────── */
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    let rows = [...activeTenancies];
+  const kpis = useMemo(() => computeRosterKpis(rows), [rows]);
+  const propertyCount = useMemo(() => new Set(rows.map((r) => r.location.property)).size, [rows]);
 
-    if (tab === 'active') {
-      rows = rows.filter((t) => !t.isOverdue && !t.isEndingSoon);
-    } else if (tab === 'awaiting_signature') {
-      rows = [];
-    } else if (tab === 'overdue') {
-      rows = rows.filter((t) => t.isOverdue);
-    } else if (tab === 'ending_soon') {
-      rows = rows.filter((t) => t.isEndingSoon);
+  const counts = {
+    all: rows.length,
+    awaiting: awaitingSignature.length,
+    attention: rows.filter((r) => r.rent.status === 'overdue').length,
+    due_soon: rows.filter((r) => r.rent.status === 'due_soon').length,
+    renewal: rows.filter((r) => r.renewalStatus === 'up_for_renewal' || r.renewalStatus === 'holdover').length,
+  };
+
+  const filteredRows = useMemo(() => {
+    let list = rows;
+    if (filter === 'attention') list = list.filter((r) => r.rent.status === 'overdue');
+    else if (filter === 'due_soon') list = list.filter((r) => r.rent.status === 'due_soon');
+    else if (filter === 'renewal') {
+      list = list.filter((r) => r.renewalStatus === 'up_for_renewal' || r.renewalStatus === 'holdover');
     }
 
-    if (propertyFilter !== 'all') {
-      rows = rows.filter((t) => t.property === propertyFilter);
-    }
-
+    const q = query.trim().toLowerCase();
     if (q) {
-      rows = rows.filter((t) => {
-        const hay = [t.tenantName, t.property, t.unit ? `Unit ${t.unit}` : '', t.propertyCity]
+      list = list.filter((r) => {
+        const tenantName = r.contract.tenant?.full_name ?? '';
+        const hay = [tenantName, r.location.property, r.location.unit, r.location.city]
           .filter(Boolean)
           .join(' ')
           .toLowerCase();
         return hay.includes(q);
       });
     }
+    return list;
+  }, [rows, filter, query]);
 
-    switch (sort) {
-      case 'name_az':
-        rows.sort((a, b) => a.tenantName.localeCompare(b.tenantName));
-        break;
-      case 'rent_high':
-        rows.sort((a, b) => (b.contract.rent_amount ?? 0) - (a.contract.rent_amount ?? 0));
-        break;
-      case 'newest':
-      default:
-        rows.sort(
-          (a, b) =>
-            new Date(b.contract.created_at).getTime() - new Date(a.contract.created_at).getTime(),
-        );
-        break;
-    }
+  const isLoading = contractsQ.loading || ledgerQ.loading || maintenanceQ.loading;
+  const primaryError = contractsQ.error ?? ledgerQ.error ?? maintenanceQ.error;
 
-    return rows;
-  }, [activeTenancies, tab, propertyFilter, search, sort]);
+  function reload() {
+    contractsQ.reload();
+    ledgerQ.reload();
+    maintenanceQ.reload();
+  }
 
-  const slice = paginate(filtered, page, PER_PAGE);
-
-  /* ── Filter tabs ──────────────────────────────────────────────────────── */
-  const tabs: Tab<FilterKey>[] = [
-    { key: 'all', label: 'All tenants', count: activeTenancies.length },
-    {
-      key: 'active',
-      label: 'Active',
-      count: activeTenancies.filter((t) => !t.isOverdue && !t.isEndingSoon).length,
-      tone: 'success',
-    },
-    {
-      key: 'awaiting_signature',
-      label: 'Awaiting signature',
-      count: awaitingSignature.length,
-      tone: 'warning',
-    },
-    {
-      key: 'overdue',
-      label: 'Overdue',
-      count: overdueCount,
-      tone: 'danger',
-    },
-    {
-      key: 'ending_soon',
-      label: 'Ending soon',
-      count: activeTenancies.filter((t) => t.isEndingSoon).length,
-      tone: 'warning',
-    },
-  ];
-
-  /* ── Gate states ──────────────────────────────────────────────────────── */
-  const isLoading = contractsQ.loading || ledgerQ.loading;
-  const primaryError = contractsQ.error ?? ledgerQ.error;
-
-  /* ── Page header ──────────────────────────────────────────────────────── */
-  const header = (
-    <PageHeader
-      eyebrow="Operations"
-      title="Tenants"
-      description="Manage active tenancies, contracts, and payment posture across your portfolio."
-      action={
-        <>
-          <Link to="/app/ledger">
-            <Button variant="secondary" size="sm" leftIcon={<IconLedger size={15} />}>
-              View ledger
-            </Button>
-          </Link>
-          <Link to="/app/contracts">
-            <Button size="sm" leftIcon={<IconDoc size={15} />}>
-              Create contract
-            </Button>
-          </Link>
-        </>
-      }
-    />
-  );
-
-  if (!isLoading && primaryError?.status === 403) {
+  if (isLoading) {
     return (
-      <div className="animate-rise space-y-6">
-        {header}
-        <EmptyState
-          icon={<IconUsers />}
-          title="Access denied"
-          description="You don't have permission to manage tenants."
-        />
+      <div className="wtenant">
+        <LoadingState label="Loading tenants…" />
       </div>
     );
   }
-
-  if (!isLoading && primaryError) {
+  if (primaryError) {
     return (
-      <div className="animate-rise space-y-6">
-        {header}
+      <div className="wtenant">
         <ErrorState message={primaryError.message} onRetry={reload} />
       </div>
     );
   }
 
-  /* ── Main render ──────────────────────────────────────────────────────── */
+  const chip = (key: FilterKey, label: string, count: number) => (
+    <button key={key} className={`chip ${filter === key ? 'on' : ''}`} onClick={() => setFilter(key)}>
+      {label}
+      <span className="ct">{count}</span>
+    </button>
+  );
+
   return (
-    <div className="animate-rise space-y-10">
-      {header}
+    <div className="wtenant animate-rise">
+      <header className="glass pagehead">
+        <div className="eyebrow">Active tenancies</div>
+        <h1 className="page">Tenants</h1>
+        <p className="lede">
+          The people currently living in your properties. Track rent standing, lease health,
+          maintenance and renewals, and keep every conversation in one place.
+        </p>
+      </header>
 
-      {/* ── KPI row + featured overdue card ──────────────────────────────── */}
-      <DashboardSection eyebrow="TENANCY OVERVIEW">
-        <DataCardGrid cols={4}>
-          <StatusCard
-            label="Active tenants"
-            value={activeTenancies.length}
-            sub={`Across ${distinctPropertyCount} propert${distinctPropertyCount !== 1 ? 'ies' : 'y'}`}
-            icon={<IconUsers size={18} />}
-            role="neutral"
-            loading={isLoading}
-          />
-          <StatusCard
-            label="Monthly rent roll"
-            value={formatCents(rentRollCents)}
-            sub="Across active leases"
-            role="info"
-            icon={<IconWallet size={18} />}
-            loading={isLoading}
-          />
-          <StatusCard
-            label="Awaiting signature"
-            value={awaitingSignature.length}
-            sub={awaitingSignature.length > 0 ? 'Contracts sent to tenants' : 'None pending'}
-            role={awaitingSignature.length > 0 ? 'warning' : 'neutral'}
-            icon={<IconClock size={18} />}
-            loading={isLoading}
-          />
-          <CommandCard
-            label="Overdue accounts"
-            value={overdueCount > 0 ? formatCents(overdueTotalCents) : 'All clear'}
-            sub={
-              overdueCount > 0
-                ? `${overdueCount} account${overdueCount !== 1 ? 's' : ''} overdue`
-                : 'All accounts current'
-            }
-            icon={overdueCount > 0 ? <IconAlertTriangle size={20} /> : <IconCheckCircle size={20} />}
-            role={overdueCount > 0 ? 'danger' : 'success'}
-            loading={isLoading}
-          />
-        </DataCardGrid>
-      </DashboardSection>
-
-      {/* ── Awaiting-signature banner ────────────────────────────────────── */}
-      {!isLoading && awaitingSignature.length > 0 && (
-        <div className="flex items-center justify-between gap-4 rounded-2xl border border-warning-200 bg-warning-50 px-5 py-4">
-          <div className="flex items-start gap-3">
-            <IconClock size={18} className="mt-0.5 shrink-0 text-warning-600" />
-            <p className="text-sm text-warning-800">
-              <span className="font-semibold">
-                {awaitingSignature.length} contract
-                {awaitingSignature.length !== 1 ? 's' : ''}
-              </span>{' '}
-              awaiting signature. Send reminders to move contracts forward.
-            </p>
+      <section className="strip">
+        <div className="stat glass-2">
+          <div className="k">Active tenants</div>
+          <div className="v">{kpis.activeCount}</div>
+          <div className="n">
+            across {propertyCount} {propertyCount === 1 ? 'property' : 'properties'}
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              setTab('awaiting_signature');
-              resetPage();
-            }}
-          >
-            View awaiting signature
-          </Button>
+        </div>
+        <div className={`stat glass-2 ${kpis.avgOnTimeRate >= 90 ? 'good' : kpis.avgOnTimeRate >= 75 ? '' : 'warn'}`}>
+          <div className="k">On-time rate</div>
+          <div className="v">{kpis.avgOnTimeRate}%</div>
+          <div className="n">rolling, all tenants</div>
+        </div>
+        <div className={`stat glass-2 ${kpis.outstandingCents > 0 ? 'bad' : 'good'}`}>
+          <div className="k">Outstanding</div>
+          <div className="v" style={{ fontSize: 23 }}>
+            {formatCents(kpis.outstandingCents)}
+          </div>
+          <div className="n">
+            {kpis.outstandingCents > 0 ? `across ${kpis.outstandingTenantCount} tenants` : 'nothing owed'}
+          </div>
+        </div>
+        <div className={`stat glass-2 ${kpis.endingSoonCount > 0 ? 'warn' : ''}`}>
+          <div className="k">Leases ending</div>
+          <div className="v">{kpis.endingSoonCount}</div>
+          <div className="n">need a renewal call</div>
+        </div>
+        <div className={`stat glass-2 ${kpis.openMaintenanceTotal > 0 ? 'warn' : 'good'}`}>
+          <div className="k">Open maintenance</div>
+          <div className="v">{kpis.openMaintenanceTotal}</div>
+          <div className="n">{kpis.openMaintenanceTotal === 1 ? '1 request' : `${kpis.openMaintenanceTotal} requests`}</div>
+        </div>
+      </section>
+
+      <div className="controls">
+        <div className="search glass-2">
+          <IconSearch />
+          <input
+            placeholder="Search by name, property or unit"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+        <div className="chips">
+          {chip('all', 'Everyone', counts.all)}
+          {chip('awaiting', 'Awaiting signature', counts.awaiting)}
+          {chip('attention', 'Needs attention', counts.attention)}
+          {chip('due_soon', 'Due soon', counts.due_soon)}
+          {chip('renewal', 'Renewals', counts.renewal)}
+        </div>
+      </div>
+
+      {filter === 'awaiting' ? (
+        awaitingSignature.length === 0 ? (
+          <EmptyRoster />
+        ) : (
+          <div className="roster">
+            {awaitingSignature.map((c) => (
+              <AwaitingRow key={c.id} contract={c} onOpen={() => navigate(`/app/contracts/${c.id}`)} />
+            ))}
+          </div>
+        )
+      ) : filteredRows.length === 0 ? (
+        <EmptyRoster />
+      ) : (
+        <div className="roster">
+          {filteredRows.map((row) => (
+            <TenantRow key={row.contract.id} row={row} navigate={navigate} />
+          ))}
         </div>
       )}
 
-      {/* ── Command bar ─────────────────────────────────────────────────── */}
-      <CommandBar>
-        <SearchInput
-          value={search}
-          onChange={(v) => {
-            setSearch(v);
-            resetPage();
+      <div className="foot glass-2">
+        <IconShield />
+        <div>
+          Rent standing, lease health and on-time rates are computed from your real contracts and
+          ledger — never fabricated. Partial payments aren't tracked as a separate state, and a
+          future-dated move-out or deposit escrow isn't modeled yet.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyRoster() {
+  return (
+    <div className="empty glass">
+      <div className="ei">
+        <IconUsers />
+      </div>
+      <div className="et">No tenants match that view</div>
+      <div className="em">Try a different filter or clear your search to see everyone currently in your properties.</div>
+    </div>
+  );
+}
+
+/**
+ * Spread onto a clickable card <div> so keyboard users can reach and activate
+ * it: button semantics, Tab focus, Enter/Space fire the action. The keydown
+ * only reacts on the card itself so nested buttons keep their own behaviour.
+ */
+function pressable(action: () => void) {
+  return {
+    role: 'button' as const,
+    tabIndex: 0,
+    onClick: action,
+    onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.target !== e.currentTarget) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        action();
+      }
+    },
+  };
+}
+
+function AwaitingRow({ contract, onOpen }: { contract: Contract; onOpen: () => void }) {
+  const tenantName = contract.tenant?.full_name ?? 'Tenant unavailable';
+  const unit = contract.listing?.unit;
+  const property = unit?.property;
+  return (
+    <div className="trow glass" {...pressable(onOpen)}>
+      <div className="tid">
+        <div className="tav" style={avatarStyle(tenantName)}>
+          {initials(tenantName)}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div className="nm">{tenantName}</div>
+          <div className="meta">
+            {property?.name ?? 'Property unavailable'}
+            {unit?.unit_number ? ` · Unit ${unit.unit_number}` : ''}
+          </div>
+        </div>
+      </div>
+      <div className="tcell hide-m">
+        <div className="lbl">Rent</div>
+        <div className="val sm">{formatCents(contract.rent_amount)}/mo</div>
+        <div className="sub">
+          <span className="badge b-amber">Awaiting signature</span>
+        </div>
+      </div>
+      <div className="tcell hide-m">
+        <div className="lbl">Term</div>
+        <div className="val sm">
+          {formatDate(contract.start_date)} to {formatDate(contract.end_date)}
+        </div>
+      </div>
+      <div className="rowact">
+        <span className="iconbtn" title="View contract" style={{ transform: 'rotate(180deg)' }}>
+          <IconBack />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function TenantRow({
+  row,
+  navigate,
+}: {
+  row: TenantRosterRow;
+  navigate: ReturnType<typeof useNavigate>;
+}) {
+  const { contract, rent, renewalStatus, openMaintenance, location } = row;
+  const tenantName = contract.tenant?.full_name ?? 'Tenant unavailable';
+
+  return (
+    <div className="trow glass" {...pressable(() => navigate(`/app/tenants/${contract.id}`))}>
+      <div className="tid">
+        <div className="tav" style={avatarStyle(tenantName)}>
+          {initials(tenantName)}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div className="nm">{tenantName}</div>
+          <div className="meta">
+            {location.property}
+            {location.unit ? ` · Unit ${location.unit}` : ''}
+          </div>
+        </div>
+      </div>
+      <div className="tcell hide-m">
+        <div className="lbl">Rent</div>
+        <div className="val sm">{rentLine(row)}</div>
+        <div className="sub">
+          <span className={`badge ${RENT_BADGE[rent.status]}`}>
+            <span className="dot" />
+            {RENT_LABEL[rent.status]}
+          </span>
+        </div>
+      </div>
+      <div className="tcell hide-m">
+        <div className="lbl">Lease</div>
+        <div className="val sm">Ends {formatDate(contract.end_date)}</div>
+        <div className="sub">
+          <span className={`badge ${RENEWAL_BADGE[renewalStatus]}`}>{RENEWAL_LABEL[renewalStatus]}</span>
+          {openMaintenance > 0 && (
+            <span className="badge b-amber" style={{ marginLeft: 4 }}>
+              <IconWrench />
+              {openMaintenance} open
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="rowact">
+        <button
+          className="iconbtn"
+          title="Send reminder"
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/app/tenants/${contract.id}?tab=messages&reminder=1`);
           }}
-          placeholder="Search by tenant name, property or unit…"
-          label="Search tenants"
-        />
-        <FilterTabs
-          tabs={tabs}
-          value={tab}
-          onChange={(k) => {
-            setTab(k);
-            resetPage();
+        >
+          <IconBell />
+        </button>
+        <button
+          className="iconbtn"
+          title="Record payment"
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/app/tenants/${contract.id}?tab=rent`);
           }}
-        />
-        <SortSelect
-          value={propertyFilter}
-          onChange={(v) => {
-            setPropertyFilter(v);
-            resetPage();
-          }}
-          options={propertyOptions}
-          label="Filter by property"
-          prefix=""
-        />
-        <SortSelect
-          value={sort}
-          onChange={(v) => {
-            setSort(v);
-            resetPage();
-          }}
-          options={SORT_OPTIONS}
-          label="Sort tenants"
-          prefix="Sort: "
-        />
-      </CommandBar>
-
-      {/* ── Main table ──────────────────────────────────────────────────── */}
-      {isLoading ? (
-        <LoadingState label="Loading tenancies…" />
-      ) : activeTenancies.length === 0 ? (
-        <EmptyState
-          icon={<IconUsers />}
-          title="No active tenants yet"
-          description="Tenants appear here after a contract becomes active. Start by reviewing applicants."
-          action={
-            <Link to="/app/applicants">
-              <Button>Review applicants</Button>
-            </Link>
-          }
-        />
-      ) : (
-        <Card>
-          <CardBody className="p-0">
-            {tab === 'awaiting_signature' ? (
-              /* ── Awaiting-signature sub-table ─────────────────────────── */
-              awaitingSignature.length === 0 ? (
-                <div className="px-5 py-12 text-center">
-                  <p className="text-sm text-ink-500">No contracts awaiting signature.</p>
-                </div>
-              ) : (
-                <div className="p-4">
-                  <RecordList>
-                    {awaitingSignature.map((c) => {
-                      const { property, city, unit, photoPath, listingTitle } =
-                        contractLocation(c);
-                      const tenantName = c.tenant?.full_name ?? 'Tenant unavailable';
-                      return (
-                        <RecordCard
-                          key={c.id}
-                          leading={<Initials name={c.tenant?.full_name ?? 'Tenant'} src={c.tenant?.avatar_url} />}
-                          title={tenantName}
-                          subtitle={c.tenant?.email ? <span>{c.tenant.email}</span> : undefined}
-                          related={
-                            <RecordRelated
-                              thumbnail={
-                                <Thumbnail
-                                  src={storageUrl(photoPath)}
-                                  alt={listingTitle ?? property}
-                                  seed={property}
-                                  size={36}
-                                />
-                              }
-                              title={property}
-                              lines={[
-                                [unit ? `Unit ${unit}` : null, city].filter(Boolean).join(' · ') ||
-                                  undefined,
-                                <span
-                                  key="rent"
-                                  style={{ color: 'var(--color-money)' }}
-                                  className="font-semibold text-xs"
-                                >
-                                  {formatCents(c.rent_amount)}/mo
-                                </span>,
-                              ]}
-                            />
-                          }
-                          indicator={
-                            <div>
-                              <p className="text-xs text-ink-400 mb-0.5">Monthly rent</p>
-                              <span
-                                className="text-sm font-semibold tabular-nums"
-                                style={{ color: 'var(--color-money)' }}
-                              >
-                                {formatCents(c.rent_amount)}
-                              </span>
-                            </div>
-                          }
-                          status={<SemanticBadge role="warning">Awaiting signature</SemanticBadge>}
-                          timestamp={
-                            <span>
-                              {formatDate(c.start_date)} to {formatDate(c.end_date)}
-                            </span>
-                          }
-                          primaryAction={
-                            <Link to={`/app/contracts/${c.id}`}>
-                              <Button variant="secondary" size="sm">
-                                View contract
-                              </Button>
-                            </Link>
-                          }
-                        />
-                      );
-                    })}
-                  </RecordList>
-                </div>
-              )
-            ) : filtered.length === 0 ? (
-              <div className="px-5 py-12 text-center">
-                <IconUsers size={32} className="mx-auto mb-3 text-ink-300" />
-                <p className="text-sm font-medium text-ink-700">No tenants match</p>
-                <p className="mt-1 text-xs text-ink-500">
-                  Try a different filter, property, or search term.
-                </p>
-              </div>
-            ) : (
-              <div className="p-4 space-y-3">
-                <RecordList>
-                  {slice.items.map((t) => {
-                    const daysLeft = daysUntil(t.contract.end_date);
-                    const monthsLeftLabel =
-                      daysLeft !== null && daysLeft >= 0
-                        ? `${t.monthsLeft ?? 0} month${t.monthsLeft !== 1 ? 's' : ''} left`
-                        : 'Expired';
-
-                    const menuItems = [
-                      {
-                        label: 'View contract',
-                        onClick: () => navigate(`/app/contracts/${t.contract.id}`),
-                      },
-                      {
-                        label: 'Open ledger',
-                        onClick: () => navigate('/app/ledger'),
-                      },
-                      {
-                        label: 'Lease summary',
-                        onClick: () => setLeaseTarget(t),
-                      },
-                    ];
-
-                    return (
-                      <RecordCard
-                        key={t.contract.id}
-                        leading={<Initials name={t.tenantName} src={t.tenantAvatar} />}
-                        title={t.tenantName}
-                        titleMeta={t.isVerified ? <SemanticBadge role="success" size="sm">Verified</SemanticBadge> : undefined}
-                        subtitle={t.tenantEmail ? <span>{t.tenantEmail}</span> : undefined}
-                        related={
-                          <RecordRelated
-                            thumbnail={
-                              <Thumbnail
-                                src={storageUrl(t.listingPhotoPath)}
-                                alt={t.listingTitle ?? t.property}
-                                seed={t.property}
-                                size={36}
-                              />
-                            }
-                            title={t.property}
-                            lines={[
-                              [t.unit ? `Unit ${t.unit}` : null, t.propertyCity].filter(Boolean).join(' · ') || undefined,
-                              <span key="rent" style={{ color: 'var(--color-money)' }} className="font-semibold text-xs">{formatCents(t.contract.rent_amount)}/mo</span>,
-                            ]}
-                          />
-                        }
-                        indicator={
-                          <div className="space-y-2">
-                            <div>
-                              <p className="text-xs text-ink-400 mb-0.5">Next payment</p>
-                              <NextPaymentCell nextPayment={t.nextPayment} />
-                            </div>
-                            {t.outstandingCents > 0 && (
-                              <div>
-                                <p className="text-xs text-ink-400 mb-0.5">Balance</p>
-                                <BalanceCell cents={t.outstandingCents} />
-                              </div>
-                            )}
-                          </div>
-                        }
-                        status={
-                          <div className="flex flex-col gap-1.5 items-start">
-                            <PaymentChip status={t.paymentStatus} />
-                            <SemanticBadge role={getContractVariant(t.contract.status)}>
-                              {humanize(t.contract.status)}
-                            </SemanticBadge>
-                          </div>
-                        }
-                        timestamp={
-                          <span
-                            style={{ color: t.isEndingSoon ? 'var(--color-warning-600)' : undefined }}
-                          >
-                            {formatDate(t.contract.start_date)} to {formatDate(t.contract.end_date)}
-                            {' · '}{monthsLeftLabel}
-                          </span>
-                        }
-                        primaryAction={
-                          <Link to={`/app/contracts/${t.contract.id}`}>
-                            <Button variant="secondary" size="sm">View profile</Button>
-                          </Link>
-                        }
-                        menu={<ActionMenu items={menuItems} />}
-                      />
-                    );
-                  })}
-                </RecordList>
-
-                {/* Footer: range label + pagination */}
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-ink-200 pt-3">
-                  <p className="text-xs text-ink-500">{rangeLabel(slice, 'tenant')}</p>
-                  <Pagination slice={slice} onPage={setPage} />
-                </div>
-              </div>
-            )}
-          </CardBody>
-        </Card>
-      )}
-
-      {/* ── Lease detail drawer ───────────────────────────────────────────── */}
-      <DetailDrawer
-        open={leaseTarget !== null}
-        onClose={() => setLeaseTarget(null)}
-        eyebrow="LEASE"
-        title="Lease Summary"
-        description={
-          leaseTarget
-            ? `${leaseTarget.tenantName} · ${leaseTarget.property}${
-                leaseTarget.unit ? ` · Unit ${leaseTarget.unit}` : ''
-              }`
-            : undefined
-        }
-        footer={
-          leaseTarget ? (
-            <>
-              <Button variant="secondary" onClick={() => setLeaseTarget(null)}>
-                Close
-              </Button>
-              <Link to={`/app/contracts/${leaseTarget.contract.id}`}>
-                <Button>View full lease</Button>
-              </Link>
-            </>
-          ) : undefined
-        }
-      >
-        {leaseTarget && (
-          <dl className="space-y-3 text-sm">
-            <Row label="Tenant" value={leaseTarget.tenantName} />
-            {leaseTarget.tenantEmail && <Row label="Email" value={leaseTarget.tenantEmail} />}
-            <Row label="Property" value={leaseTarget.property} />
-            {leaseTarget.unit && <Row label="Unit" value={`Unit ${leaseTarget.unit}`} />}
-            <Row
-              label="Monthly rent"
-              value={formatCents(leaseTarget.contract.rent_amount)}
-              money
-            />
-            <Row label="Payment day" value={`Day ${leaseTarget.contract.payment_day}`} />
-            <Row label="Lease start" value={formatDate(leaseTarget.contract.start_date)} />
-            <Row label="Lease end" value={formatDate(leaseTarget.contract.end_date)} />
-            <Row
-              label="Next payment"
-              value={
-                leaseTarget.nextPayment
-                  ? `${formatCents(leaseTarget.nextPayment.amount_cents)}${
-                      leaseTarget.nextPayment.due_date
-                        ? ` · ${formatDate(leaseTarget.nextPayment.due_date)}`
-                        : ''
-                    }`
-                  : 'All settled'
-              }
-            />
-            <div className="flex items-start justify-between gap-2 pt-1">
-              <dt className="text-ink-500">Payment status</dt>
-              <dd>
-                <PaymentChip status={leaseTarget.paymentStatus} />
-              </dd>
-            </div>
-            {leaseTarget.outstandingCents > 0 && (
-              <div className="flex items-center justify-between gap-2">
-                <dt className="text-ink-500">Outstanding balance</dt>
-                <dd>
-                  <BalanceCell cents={leaseTarget.outstandingCents} />
-                </dd>
-              </div>
-            )}
-            <div className="flex items-center justify-between gap-2">
-              <dt className="text-ink-500">Contract status</dt>
-              <dd>
-                <StatusChip tone={contractStatusTone(leaseTarget.contract.status)}>
-                  {humanize(leaseTarget.contract.status)}
-                </StatusChip>
-              </dd>
-            </div>
-          </dl>
-        )}
-      </DetailDrawer>
+        >
+          <IconCash />
+        </button>
+        <span className="iconbtn" title="Open tenant" style={{ transform: 'rotate(180deg)' }}>
+          <IconBack />
+        </span>
+      </div>
     </div>
   );
 }
