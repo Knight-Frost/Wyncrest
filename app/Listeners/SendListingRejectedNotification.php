@@ -4,15 +4,16 @@ namespace App\Listeners;
 
 use App\Enums\NotificationType;
 use App\Events\ListingRejected;
-use App\Models\EmailLog;
 use App\Services\NotificationService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
 /**
  * SendListingRejectedNotification Listener
  *
- * Creates an in-app notification for the listing's landlord (with rejection reason)
- * and logs an email intent.
+ * Creates an in-app notification for the listing's landlord (with rejection
+ * reason). The real email send (if enabled) happens later via the scheduled
+ * NotificationDeliveryService, which reads from the notifications table —
+ * this listener never fabricates an email_logs row.
  */
 class SendListingRejectedNotification implements ShouldQueue
 {
@@ -43,19 +44,5 @@ class SendListingRejectedNotification implements ShouldQueue
                 ]
             );
         }
-
-        // Email log intent
-        EmailLog::create([
-            'recipient_type' => get_class($landlord),
-            'recipient_id' => $landlord->id,
-            'recipient_email' => $landlord->email,
-            'subject' => 'Listing Rejected - Action Required',
-            'mailable_class' => 'ListingRejectedNotification',
-            'email_type' => 'notification',
-            'related_type' => get_class($listing),
-            'related_id' => $listing->id,
-            'status' => 'sent',
-            'sent_at' => now(),
-        ]);
     }
 }

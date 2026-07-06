@@ -7,11 +7,16 @@ use App\Enums\LedgerStatus;
 use App\Enums\LedgerType;
 use App\Enums\ListingStatus;
 use App\Enums\NotificationType;
+use App\Enums\PaymentMethod;
+use App\Enums\VerificationStatus;
 use App\Events\ListingPublished;
 use App\Events\ListingRejected;
 use App\Events\UserCreated;
 use App\Models\Admin;
+use App\Models\Application;
+use App\Models\AuditLog;
 use App\Models\Contract;
+use App\Models\Document;
 use App\Models\EmailLog;
 use App\Models\LedgerEntry;
 use App\Models\Listing;
@@ -19,6 +24,7 @@ use App\Models\Notification;
 use App\Models\Property;
 use App\Models\Unit;
 use App\Models\User;
+use App\Models\VerificationRequest;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -108,8 +114,10 @@ class LifecycleNotificationsTest extends TestCase
         $this->assertEquals('Listing Approved', $notification->title);
         $this->assertStringContainsString($listing->title, $notification->message);
 
-        // Email log also written
-        $this->assertDatabaseHas('email_logs', [
+        // No fabricated email_logs row: the real send (if enabled) happens
+        // later via the scheduled NotificationDeliveryService, which reads
+        // from the notifications table.
+        $this->assertDatabaseMissing('email_logs', [
             'recipient_email' => $landlord->email,
             'mailable_class' => 'ListingPublishedNotification',
         ]);
@@ -165,8 +173,10 @@ class LifecycleNotificationsTest extends TestCase
         $this->assertEquals('Listing Needs Changes', $notification->title);
         $this->assertStringContainsString($reason, $notification->message);
 
-        // Email log written
-        $this->assertDatabaseHas('email_logs', [
+        // No fabricated email_logs row: the real send (if enabled) happens
+        // later via the scheduled NotificationDeliveryService, which reads
+        // from the notifications table.
+        $this->assertDatabaseMissing('email_logs', [
             'recipient_email' => $landlord->email,
             'mailable_class' => 'ListingRejectedNotification',
         ]);
@@ -176,7 +186,7 @@ class LifecycleNotificationsTest extends TestCase
     // Part A — UserCreated fired on registration (triggers EmailLog)
     // ======================================================================
 
-    public function test_user_created_event_fires_on_registration_and_creates_email_log(): void
+    public function test_user_created_event_fires_on_registration_without_fabricating_email_log(): void
     {
         $response = $this->postJson('/api/register', [
             'email' => 'newuser@example.com',
@@ -189,11 +199,11 @@ class LifecycleNotificationsTest extends TestCase
 
         $response->assertStatus(201);
 
-        // SendWelcomeEmail listener creates an EmailLog row
-        $this->assertDatabaseHas('email_logs', [
+        // No listener fabricates a "sent" welcome email_logs row anymore:
+        // nothing is actually sent at registration time.
+        $this->assertDatabaseMissing('email_logs', [
             'recipient_email' => 'newuser@example.com',
             'mailable_class' => 'WelcomeEmail',
-            'status' => 'sent',
         ]);
     }
 
@@ -623,5 +633,277 @@ class LifecycleNotificationsTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJsonPath('total', 1);
+    }
+
+    // ======================================================================
+    // Part F — Contract sent notifies the tenant, not the landlord
+    // ======================================================================
+
+    public function test_tenant_notified_when_landlord_sends_contract(): void
+    {
+        $landlord = User::factory()->landlord()->create();
+        $tenant = User::factory()->tenant()->create();
+
+        $property = Property::factory()->create(['landlord_id' => $landlord->id]);
+        $unit = Unit::factory()->create(['property_id' => $property->id]);
+        $listing = Listing::factory()->active()->create([
+            'unit_id' => $unit->id,
+            'landlord_id' => $landlord->id,
+        ]);
+
+        $contract = Contract::factory()->create([
+            'listing_id' => $listing->id,
+            'landlord_id' => $landlord->id,
+            'tenant_id' => $tenant->id,
+            'status' => ContractStatus::DRAFT,
+        ]);
+
+        Sanctum::actingAs($landlord, [], 'sanctum');
+
+        $this->postJson("/api/landlord/contracts/{$contract->id}/send")
+            ->assertStatus(200);
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $tenant->id,
+            'type' => NotificationType::CONTRACT_SENT->value,
+        ]);
+
+        $this->assertDatabaseMissing('notifications', [
+            'user_id' => $landlord->id,
+            'type' => NotificationType::CONTRACT_SENT->value,
+        ]);
+
+        // Sending again does not duplicate the notification.
+        $contract->refresh()->update(['status' => ContractStatus::DRAFT]);
+        $this->postJson("/api/landlord/contracts/{$contract->id}/send")
+            ->assertStatus(200);
+
+        $this->assertEquals(
+            1,
+            Notification::where('user_id', $tenant->id)
+                ->where('type', NotificationType::CONTRACT_SENT->value)
+                ->count()
+        );
+    }
+
+    // ======================================================================
+    // Part G — Message notifications on an application conversation
+    // ======================================================================
+
+    public function test_landlord_message_on_application_notifies_tenant_and_tenant_reply_notifies_landlord(): void
+    {
+        $landlord = User::factory()->landlord()->create();
+        $tenant = User::factory()->tenant()->create();
+
+        $property = Property::factory()->create(['landlord_id' => $landlord->id]);
+        $unit = Unit::factory()->create(['property_id' => $property->id]);
+        $listing = Listing::factory()->active()->create([
+            'unit_id' => $unit->id,
+            'landlord_id' => $landlord->id,
+        ]);
+
+        $application = Application::factory()->create([
+            'listing_id' => $listing->id,
+            'landlord_id' => $landlord->id,
+            'tenant_id' => $tenant->id,
+        ]);
+
+        Sanctum::actingAs($landlord, [], 'sanctum');
+
+        $response = $this->postJson("/api/landlord/applications/{$application->id}/messages", [
+            'body' => 'Could you share proof of income?',
+        ]);
+
+        $response->assertStatus(201);
+        $conversationId = $response->json('conversation_id');
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $tenant->id,
+            'type' => NotificationType::MESSAGE_RECEIVED->value,
+        ]);
+
+        $this->assertDatabaseMissing('notifications', [
+            'user_id' => $landlord->id,
+            'type' => NotificationType::MESSAGE_RECEIVED->value,
+        ]);
+
+        // Tenant replies on the same conversation; landlord should be notified.
+        Sanctum::actingAs($tenant, [], 'sanctum');
+
+        $this->postJson("/api/tenant/conversations/{$conversationId}/messages", [
+            'body' => 'Sure, attaching it now.',
+        ])->assertStatus(201);
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $landlord->id,
+            'type' => NotificationType::MESSAGE_RECEIVED->value,
+        ]);
+    }
+
+    // ======================================================================
+    // Part H — Listing approve writes exactly one admin-attributed audit row
+    // ======================================================================
+
+    public function test_listing_approve_writes_exactly_one_admin_attributed_audit_row(): void
+    {
+        $admin = Admin::factory()->create(['is_super_admin' => true]);
+        $landlord = User::factory()->landlord()->create();
+        $property = Property::factory()->create(['landlord_id' => $landlord->id]);
+        $unit = Unit::factory()->create(['property_id' => $property->id]);
+        $listing = Listing::factory()->create([
+            'unit_id' => $unit->id,
+            'landlord_id' => $landlord->id,
+            'status' => ListingStatus::PENDING_REVIEW,
+        ]);
+
+        $this->actingAs($admin, 'admin');
+
+        $this->postJson("/api/admin/listings/review/{$listing->id}/approve")
+            ->assertStatus(200);
+
+        $this->assertEquals(
+            1,
+            AuditLog::where('action', 'listing_published')
+                ->where('subject_type', Listing::class)
+                ->where('subject_id', $listing->id)
+                ->count()
+        );
+
+        $log = AuditLog::where('action', 'listing_published')
+            ->where('subject_id', $listing->id)
+            ->first();
+
+        $this->assertEquals(Admin::class, $log->actor_type);
+        $this->assertEquals($admin->id, $log->actor_id);
+    }
+
+    // ======================================================================
+    // Part I — Identity verification approve writes one admin-attributed
+    // audit row (no landlord-attributed duplicate)
+    // ======================================================================
+
+    public function test_identity_verification_approve_writes_one_admin_attributed_audit_row(): void
+    {
+        $admin = Admin::factory()->create(['is_super_admin' => true]);
+        $landlord = User::factory()->landlord()->create(['verification_status' => VerificationStatus::PENDING->value]);
+
+        Document::create([
+            'owner_user_id' => $landlord->id,
+            'uploaded_by_id' => $landlord->id,
+            'document_type' => 'identity_document',
+            'original_filename' => 'id.pdf',
+            'stored_path' => 'docs/id.pdf',
+            'disk' => 'local',
+            'mime_type' => 'application/pdf',
+            'size_bytes' => 12345,
+        ]);
+
+        $req = VerificationRequest::create([
+            'user_id' => $landlord->id,
+            'status' => 'pending',
+            'submitted_at' => now(),
+        ]);
+
+        $this->actingAs($admin, 'admin');
+
+        $this->postJson("/api/admin/verifications/{$req->id}/approve", [
+            'reason' => 'Documents verified.',
+        ])->assertStatus(200);
+
+        $this->assertEquals(
+            1,
+            AuditLog::whereIn('action', ['identity_verified', 'verification_approved'])
+                ->where('subject_id', $landlord->id)
+                ->where('subject_type', User::class)
+                ->count()
+        );
+
+        $log = AuditLog::whereIn('action', ['identity_verified', 'verification_approved'])
+            ->where('subject_id', $landlord->id)
+            ->where('subject_type', User::class)
+            ->first();
+
+        $this->assertEquals(Admin::class, $log->actor_type);
+        $this->assertEquals($admin->id, $log->actor_id);
+    }
+
+    // ======================================================================
+    // Part J — First rent entry notifies the tenant on contract acceptance
+    // ======================================================================
+
+    public function test_tenant_notified_of_first_rent_entry_when_accepting_contract(): void
+    {
+        $landlord = User::factory()->landlord()->create();
+        $tenant = User::factory()->tenant()->create();
+
+        $property = Property::factory()->create(['landlord_id' => $landlord->id]);
+        $unit = Unit::factory()->create(['property_id' => $property->id]);
+        $listing = Listing::factory()->active()->create([
+            'unit_id' => $unit->id,
+            'landlord_id' => $landlord->id,
+        ]);
+
+        $contract = Contract::factory()->create([
+            'listing_id' => $listing->id,
+            'landlord_id' => $landlord->id,
+            'tenant_id' => $tenant->id,
+            'status' => ContractStatus::PENDING_TENANT,
+        ]);
+
+        Sanctum::actingAs($tenant, [], 'sanctum');
+
+        $this->postJson("/api/tenant/contracts/{$contract->id}/accept")
+            ->assertStatus(200);
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $tenant->id,
+            'type' => NotificationType::RENT_GENERATED->value,
+        ]);
+
+        $this->assertDatabaseHas('ledger_entries', [
+            'contract_id' => $contract->id,
+            'tenant_id' => $tenant->id,
+            'type' => LedgerType::RENT->value,
+        ]);
+    }
+
+    // ======================================================================
+    // Part K — Manual payment recording settles the entry and notifies the tenant
+    // ======================================================================
+
+    public function test_manual_payment_recording_settles_entry_and_notifies_tenant(): void
+    {
+        ['landlord' => $landlord, 'tenant' => $tenant, 'contract' => $contract] = $this->makeContractSetup();
+
+        $entry = LedgerEntry::factory()->create([
+            'contract_id' => $contract->id,
+            'tenant_id' => $tenant->id,
+            'landlord_id' => $landlord->id,
+            'type' => LedgerType::RENT,
+            'amount_cents' => 100000,
+            'status' => LedgerStatus::PENDING,
+            'due_date' => now()->addDays(5),
+            'billing_period_start' => now()->subDays(10),
+            'billing_period_end' => now()->addDays(20),
+        ]);
+
+        Sanctum::actingAs($landlord, [], 'sanctum');
+
+        $response = $this->postJson("/api/landlord/ledger/{$entry->id}/record-payment", [
+            'method' => PaymentMethod::CASH->value,
+            'reference' => 'Received in person',
+        ]);
+
+        $response->assertStatus(201);
+
+        $this->assertDatabaseHas('ledger_entries', [
+            'id' => $entry->id,
+            'status' => LedgerStatus::PAID->value,
+        ]);
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $tenant->id,
+            'type' => NotificationType::PAYMENT_SUCCEEDED->value,
+        ]);
     }
 }

@@ -4,14 +4,16 @@ namespace App\Listeners;
 
 use App\Enums\NotificationType;
 use App\Events\ListingPublished;
-use App\Models\EmailLog;
 use App\Services\NotificationService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
 /**
  * SendListingPublishedNotification Listener
  *
- * Creates an in-app notification for the listing's landlord and logs an email intent.
+ * Creates an in-app notification for the listing's landlord. The real email
+ * send (if enabled) happens later via the scheduled NotificationDeliveryService,
+ * which reads from the notifications table — this listener never fabricates
+ * an email_logs row.
  */
 class SendListingPublishedNotification implements ShouldQueue
 {
@@ -40,19 +42,5 @@ class SendListingPublishedNotification implements ShouldQueue
                 ]
             );
         }
-
-        // Email log intent
-        EmailLog::create([
-            'recipient_type' => get_class($landlord),
-            'recipient_id' => $landlord->id,
-            'recipient_email' => $landlord->email,
-            'subject' => 'Your Listing is Now Live',
-            'mailable_class' => 'ListingPublishedNotification',
-            'email_type' => 'notification',
-            'related_type' => get_class($listing),
-            'related_id' => $listing->id,
-            'status' => 'sent',
-            'sent_at' => now(),
-        ]);
     }
 }

@@ -14,7 +14,7 @@
             padding: 20px;
         }
         .header {
-            background-color: #4F46E5;
+            background-color: #075865;
             color: white;
             padding: 20px;
             border-radius: 8px 8px 0 0;
@@ -28,7 +28,7 @@
             background-color: white;
             padding: 20px;
             border-radius: 6px;
-            border-left: 4px solid #4F46E5;
+            border-left: 4px solid #075865;
             margin: 20px 0;
         }
         .footer {
@@ -61,7 +61,7 @@
         </div>
         
         @if($data && isset($data['amount_cents']))
-            <p><strong>Amount:</strong> ${{ number_format($data['amount_cents'] / 100, 2) }}</p>
+            <p><strong>Amount:</strong> GH₵ {{ number_format($data['amount_cents'] / 100, 2) }}</p>
         @endif
         
         @if($data && isset($data['due_date']))

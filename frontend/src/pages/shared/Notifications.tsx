@@ -10,14 +10,18 @@
  *   Unread   — where read_at === null
  *   Payments — rent_generated | rent_due_soon | rent_overdue |
  *              payment_succeeded | payment_failed | late_fee_added
- *   Contracts — contract_signed | contract_terminated
+ *   Contracts — contract_signed | contract_terminated | contract_renewed
  *
  * NotificationType → visual category (for icon + badge colour):
  *   rent_*  / payment_*  / late_fee_added → "payments"
  *   contract_*                            → "lease"
+ *   maintenance_*                         → "maintenance"
+ *
+ * Rows with a resolvable subject deep-link on click (see deepLinkFor) while
+ * still marking themselves read.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { adminApi, notificationApi } from '@/lib/endpoints';
 import { useAuth } from '@/context/auth';
 import { useApi } from '@/hooks/useApi';
@@ -40,6 +44,7 @@ import {
   IconUsers,
   IconStar,
   IconShield,
+  IconWrench,
 } from '@/components/ui/icons';
 import './notifications.css';
 
@@ -49,6 +54,7 @@ type VisualCategory =
   | 'payments'
   | 'lease'
   | 'applications'
+  | 'maintenance'
   | 'messages'
   | 'system';
 
@@ -63,13 +69,22 @@ const TYPE_CATEGORY: Record<NotificationType, VisualCategory> = {
   payment_succeeded:      'payments',
   payment_failed:         'payments',
   late_fee_added:         'payments',
+  contract_sent:          'lease',
   contract_signed:        'lease',
   contract_terminated:    'lease',
+  contract_renewed:       'lease',
+  message_received:       'messages',
   listing_approved:       'applications',
   listing_rejected:       'applications',
+  listing_changes_requested: 'applications',
   application_submitted:  'applications',
   application_approved:   'applications',
   application_rejected:   'applications',
+  application_needs_action: 'applications',
+  application_updated:    'applications',
+  maintenance_request_submitted:  'maintenance',
+  maintenance_logged_by_landlord: 'maintenance',
+  maintenance_status_updated:     'maintenance',
   review_submitted:       'messages',
   review_approved:        'messages',
   review_response:        'messages',
@@ -90,6 +105,7 @@ const CATEGORY_ICON: Record<VisualCategory, CategoryIconComp> = {
   payments:     IconCheckCircle,
   lease:        IconDoc,
   applications: IconUsers,
+  maintenance:  IconWrench,
   messages:     IconStar,
   system:       IconShield,
 };
@@ -98,6 +114,7 @@ const CATEGORY_LABEL: Record<VisualCategory, string> = {
   payments:     'Payments',
   lease:        'Lease & Rent',
   applications: 'Applications & Listings',
+  maintenance:  'Maintenance',
   messages:     'Reviews',
   system:       'Account & Verification',
 };
@@ -122,8 +139,62 @@ const PAYMENT_TYPES = new Set<NotificationType>([
 ]);
 
 const CONTRACT_TYPES = new Set<NotificationType>([
-  'contract_signed', 'contract_terminated',
+  'contract_sent', 'contract_signed', 'contract_terminated', 'contract_renewed',
 ]);
+
+/* ── per-type deep links ──────────────────────────────────────────────────────
+ * Clicking a notification marks it read AND navigates to the page it is about,
+ * when (a) the payload carries the id and (b) a route exists for the viewer's
+ * role. Anything ambiguous returns null and the row stays a mark-read button.
+ *   payments      → /app/payments (tenants settle rent there; no landlord page)
+ *   contracts     → /app/contracts/:id (shared route)
+ *   applications  → tenant /app/applications/:id · landlord /app/applicants/:id
+ *   maintenance   → /app/maintenance/:id (tenant + landlord route)
+ */
+function deepLinkFor(n: AppNotification, role: string | undefined): string | null {
+  const dataId = (key: string): string | null => {
+    const v = n.data?.[key];
+    return typeof v === 'string' || typeof v === 'number' ? String(v) : null;
+  };
+  switch (n.type) {
+    case 'rent_generated':
+    case 'rent_due_soon':
+    case 'rent_overdue':
+    case 'payment_succeeded':
+    case 'payment_failed':
+    case 'late_fee_added':
+      return role === 'tenant' ? '/app/payments' : null;
+    case 'contract_sent':
+    case 'contract_signed':
+    case 'contract_terminated':
+    case 'contract_renewed': {
+      const contractId = dataId('contract_id');
+      return contractId ? `/app/contracts/${contractId}` : '/app/contracts';
+    }
+    case 'message_received':
+      return role === 'tenant' || role === 'landlord' ? '/app/messages' : null;
+    case 'application_submitted':
+    case 'application_approved':
+    case 'application_rejected':
+    case 'application_needs_action':
+    case 'application_updated': {
+      const applicationId = dataId('application_id');
+      if (!applicationId) return null;
+      if (role === 'tenant') return `/app/applications/${applicationId}`;
+      if (role === 'landlord') return `/app/applicants/${applicationId}`;
+      return null;
+    }
+    case 'maintenance_request_submitted':
+    case 'maintenance_logged_by_landlord':
+    case 'maintenance_status_updated': {
+      const requestId = dataId('maintenance_request_id');
+      if (!requestId) return null;
+      return role === 'tenant' || role === 'landlord' ? `/app/maintenance/${requestId}` : null;
+    }
+    default:
+      return null;
+  }
+}
 
 /* ── date helpers ─────────────────────────────────────────────────────────── */
 
@@ -336,6 +407,7 @@ function PlatformDeliveryMonitor() {
 
 export function Notifications() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const isAdmin = user?.role === 'admin';
   /** Admins can switch between their personal feed and the platform monitor. */
   const [view, setView] = useState<'personal' | 'platform'>('personal');
@@ -466,13 +538,17 @@ export function Notifications() {
           const cat  = TYPE_CATEGORY[n.type] ?? FALLBACK_CATEGORY;
           const Icon = CATEGORY_ICON[cat];
           const isUnread = n.read_at === null;
+          const to = deepLinkFor(n, user?.role);
           return (
             <button
               type="button"
               className={`nt-row${isUnread ? ' unread' : ''}`}
               key={n.id}
               disabled={busy}
-              onClick={() => void onMarkRead(n)}
+              onClick={() => {
+                void onMarkRead(n);
+                if (to) navigate(to);
+              }}
             >
               <span className="nt-dot" aria-hidden="true" />
               <span className={`nt-ico ${cat}`}><Icon size={20} /></span>

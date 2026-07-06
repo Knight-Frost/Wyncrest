@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Tenant;
 
+use App\Enums\NotificationType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SendMessageRequest;
 use App\Http\Requests\StartConversationRequest;
@@ -11,6 +12,7 @@ use App\Models\Message;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Services\MessageAttachmentService;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -194,6 +196,22 @@ class ConversationController extends Controller
                 ],
             );
 
+            $notificationService = app(NotificationService::class);
+            $eventId = "message-received:{$message->id}";
+            if (! $notificationService->exists($landlord, $eventId)) {
+                $notificationService->create(
+                    user: $landlord,
+                    type: NotificationType::MESSAGE_RECEIVED,
+                    title: 'New message',
+                    message: "{$tenant->full_name} sent you a message about \"{$listing->title}\".",
+                    data: [
+                        'event_id' => $eventId,
+                        'listing_id' => $listing->id,
+                        'message_id' => $message->id,
+                    ]
+                );
+            }
+
             DB::commit();
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -307,6 +325,25 @@ class ConversationController extends Controller
                 description: "Message sent in conversation #{$conversation->id}",
                 metadata: ['message_id' => $message->id],
             );
+
+            $recipient = $conversation->otherParticipant($authUser);
+            if ($recipient instanceof User) {
+                $notificationService = app(NotificationService::class);
+                $eventId = "message-received:{$message->id}";
+                if (! $notificationService->exists($recipient, $eventId)) {
+                    $notificationService->create(
+                        user: $recipient,
+                        type: NotificationType::MESSAGE_RECEIVED,
+                        title: 'New message',
+                        message: "{$authUser->full_name} sent you a message.",
+                        data: [
+                            'event_id' => $eventId,
+                            'conversation_id' => $conversation->id,
+                            'message_id' => $message->id,
+                        ]
+                    );
+                }
+            }
 
             DB::commit();
         } catch (\Throwable $e) {

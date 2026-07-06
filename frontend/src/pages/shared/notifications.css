@@ -9,11 +9,16 @@
 .nt-page { max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; color: var(--color-ink-700); }
 
 /* ── page header (title · actions) ────────────────────────────────────────── */
-.nt-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.nt-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; flex-wrap: wrap;
+  background: var(--color-surface); border: 1px solid var(--color-ink-200); border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-sm); padding: clamp(1.4rem, 3vw, 2.1rem);
+}
 .nt-head-title { min-width: 0; }
-.nt-eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--color-brand-700); }
-.nt-title { font-family: var(--font-display); font-weight: 600; font-size: clamp(28px, 3vw, 40px); line-height: 1.05; letter-spacing: -.02em; color: var(--color-ink-950); margin: 6px 0 0; }
-.nt-sub { font-size: 15px; color: var(--color-ink-500); margin: 10px 0 0; max-width: 64ch; }
+.nt-eyebrow { font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: .2em; text-transform: uppercase; color: var(--color-brand-700); display: inline-flex; align-items: center; gap: 0.6em; }
+.nt-eyebrow::before { content: ''; width: 24px; height: 1px; background: var(--color-brand-700); }
+.nt-title { font-family: var(--font-display); font-weight: 400; font-size: clamp(2.1rem, 4.4vw, 3rem); line-height: 1.02; color: var(--color-ink-950); margin: 0.6rem 0 0.4rem; }
+.nt-sub { font-size: 15px; color: var(--color-ink-500); margin: 0; max-width: 64ch; }
 .nt-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
 /* ── buttons ──────────────────────────────────────────────────────────────── */
