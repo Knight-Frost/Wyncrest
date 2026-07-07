@@ -10,6 +10,7 @@ use App\Events\RentGenerated;
 use App\Models\Contract;
 use App\Models\LedgerEntry;
 use App\Models\User;
+use App\Services\Ledger\BillingPeriodCalculator;
 use Carbon\Carbon;
 
 /**
@@ -26,70 +27,22 @@ use Carbon\Carbon;
 class LedgerAutomationService
 {
     public function __construct(
-        protected AuditService $auditService
+        protected AuditService $auditService,
+        protected BillingPeriodCalculator $billingPeriods,
     ) {}
 
     /**
-     * Calculate the current billing period for a contract
+     * Calculate the current (today-based) billing period for a contract.
      *
-     * Returns array with:
-     * - 'start': Carbon (billing_period_start)
-     * - 'end': Carbon (billing_period_end)
-     * - 'due_date': Carbon (when payment is due)
+     * Delegates to BillingPeriodCalculator::currentPeriod(), which owns the
+     * period math and the end-anchored due-date rule. Kept as a public method
+     * because LedgerReconciliationService relies on it.
      *
-     * @return array|null Returns null if contract shouldn't generate rent
+     * @return array{start: Carbon, end: Carbon, due_date: Carbon}|null Null if the contract shouldn't generate rent
      */
     public function getCurrentBillingPeriod(Contract $contract): ?array
     {
-        // Only active contracts generate rent
-        if ($contract->status !== ContractStatus::ACTIVE) {
-            return null;
-        }
-
-        $today = Carbon::today();
-        $startDate = $contract->start_date->copy();
-
-        // If contract has ended, don't generate rent
-        if ($contract->end_date && $today->isAfter($contract->end_date)) {
-            return null;
-        }
-
-        // Calculate how many billing periods have passed since start
-        $periodsSinceStart = 0;
-        $currentPeriodStart = $startDate->copy();
-
-        // Find the current billing period
-        while ($currentPeriodStart->lte($today)) {
-            $currentPeriodEnd = $currentPeriodStart->copy()->addMonth()->subDay();
-
-            // If today falls within this period, we found it
-            if ($today->between($currentPeriodStart, $currentPeriodEnd)) {
-                // Calculate due date: payment_day of month containing billing_period_end
-                $dueDate = $currentPeriodEnd->copy()->startOfMonth()->day($contract->payment_day);
-
-                // Handle invalid days (e.g., Feb 30 -> Feb 28)
-                if ($dueDate->day !== $contract->payment_day) {
-                    $dueDate = $currentPeriodEnd->copy()->endOfMonth();
-                }
-
-                return [
-                    'start' => $currentPeriodStart,
-                    'end' => $currentPeriodEnd,
-                    'due_date' => $dueDate,
-                ];
-            }
-
-            // Move to next period
-            $currentPeriodStart->addMonth();
-            $periodsSinceStart++;
-
-            // Safety: don't loop forever
-            if ($periodsSinceStart > 1200) { // 100 years
-                return null;
-            }
-        }
-
-        return null;
+        return $this->billingPeriods->currentPeriod($contract);
     }
 
     /**

@@ -11,7 +11,7 @@ use App\Models\Admin;
 use App\Models\Contract;
 use App\Models\LedgerEntry;
 use App\Models\User;
-use Carbon\Carbon;
+use App\Services\Ledger\BillingPeriodCalculator;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -24,7 +24,8 @@ use Illuminate\Support\Facades\DB;
 class LedgerService
 {
     public function __construct(
-        protected AuditService $auditService
+        protected AuditService $auditService,
+        protected BillingPeriodCalculator $billingPeriods,
     ) {}
 
     /**
@@ -32,17 +33,11 @@ class LedgerService
      */
     public function generateFirstRentEntry(Contract $contract): LedgerEntry
     {
-        // Calculate billing period (monthly)
-        $billingStart = Carbon::parse($contract->start_date);
-        $billingEnd = $billingStart->copy()->addMonth()->subDay();
-
-        // Due date is based on payment_day of the month
-        $dueDate = $billingStart->copy()->day($contract->payment_day);
-
-        // If due date is before billing start, push to next month
-        if ($dueDate->lt($billingStart)) {
-            $dueDate->addMonth();
-        }
+        // Billing period + start-anchored due date (see BillingPeriodCalculator).
+        $period = $this->billingPeriods->firstPeriod($contract);
+        $billingStart = $period['start'];
+        $billingEnd = $period['end'];
+        $dueDate = $period['due_date'];
 
         $entry = LedgerEntry::create([
             'contract_id' => $contract->id,
@@ -97,15 +92,12 @@ class LedgerService
             return $this->generateFirstRentEntry($contract);
         }
 
-        // Next billing period starts the day after the last one ended
-        $billingStart = $lastEntry->billing_period_end->copy()->addDay();
-        $billingEnd = $billingStart->copy()->addMonth()->subDay();
-
-        // Due date
-        $dueDate = $billingStart->copy()->day($contract->payment_day);
-        if ($dueDate->lt($billingStart)) {
-            $dueDate->addMonth();
-        }
+        // Next billing period starts the day after the last one ended;
+        // start-anchored due date (see BillingPeriodCalculator).
+        $period = $this->billingPeriods->periodAfter($lastEntry->billing_period_end, $contract->payment_day);
+        $billingStart = $period['start'];
+        $billingEnd = $period['end'];
+        $dueDate = $period['due_date'];
 
         $entry = LedgerEntry::create([
             'contract_id' => $contract->id,
