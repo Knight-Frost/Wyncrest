@@ -74,6 +74,13 @@ class LandlordDashboardTest extends TestCase
 
     public function test_dashboard_counts_reflect_seeded_data(): void
     {
+        // Freeze time to early in a month so the "due this month" ledger entries
+        // below are deterministic. The suite's DB/now() run in UTC, so without
+        // this the pending entry (due on the 6th) reads as overdue whenever the
+        // test runs after midnight UTC on/after the 6th. The global tearDown in
+        // Tests\TestCase resets setTestNow, so this does not leak.
+        \Illuminate\Support\Carbon::setTestNow(\Illuminate\Support\Carbon::create(2026, 6, 4, 12));
+
         $property = Property::factory()->create(['landlord_id' => $this->landlord->id]);
 
         // Units: 1 occupied, 2 available, 1 maintenance (neither occupied nor vacant)
