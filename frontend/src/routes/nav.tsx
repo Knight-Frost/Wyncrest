@@ -1,5 +1,5 @@
 import type { Role } from '@/lib/types';
-import { adminHasCapability } from '@/lib/permissions';
+import { adminHasCapability, isSuperAdmin } from '@/lib/permissions';
 import {
   IconActivity,
   IconBarChart,
@@ -42,6 +42,13 @@ export interface NavItem {
    * API independently enforces the same rule.
    */
   requiresCapability?: string;
+  /**
+   * Hides this item from super admins even though they'd otherwise pass every
+   * capability check. For pages designed for a SCOPED admin's own limited
+   * workload (e.g. "My Analytics") where a super admin has a dedicated,
+   * full-platform equivalent instead (e.g. "Platform Analytics").
+   */
+  hideForSuperAdmin?: boolean;
 }
 
 /** Minimal shape of the signed-in user needed to gate capability nav items. */
@@ -57,6 +64,7 @@ export interface NavGateUser {
  * scoped admin needs the exact capability).
  */
 function canSeeNavItem(item: NavItem, user?: NavGateUser): boolean {
+  if (item.hideForSuperAdmin && isSuperAdmin(user)) return false;
   if (!item.requiresCapability) return true;
   return adminHasCapability(user, item.requiresCapability);
 }
@@ -163,12 +171,16 @@ const ADMIN_GROUPS: NavGroup[] = [
       // (terminate/notes, late fees) require manage_contracts/manage_ledger.
       { to: '/app/contracts', label: 'Contracts', icon: <IconScale {...ICON} /> },
       { to: '/app/ledger', label: 'Ledger', icon: <IconLedger {...ICON} /> },
+      // Same rule as Contracts/Ledger: viewing is universal, only mutating
+      // actions (assign/escalate/notes/override/export) require manage_maintenance.
+      { to: '/app/maintenance', label: 'Maintenance', icon: <IconWrench {...ICON} /> },
       { to: '/app/audit', label: 'Audit Logs', icon: <IconActivity {...ICON} />, requiresCapability: 'view_audit' },
-      // Reachable by any admin — the scoped "your own workload" analytics
+      // Reachable by any SCOPED admin — the "your own workload" analytics
       // page. Distinct from Platform Analytics below (full platform, requires
       // view_analytics); this page shows only the modules this admin holds
-      // capabilities for.
-      { to: '/app/admin-analytics', label: 'My Analytics', icon: <IconBarChart {...ICON} /> },
+      // capabilities for. Hidden from super admins: Platform Analytics is
+      // their equivalent, so showing both would be redundant/confusing.
+      { to: '/app/admin-analytics', label: 'My Analytics', icon: <IconBarChart {...ICON} />, hideForSuperAdmin: true },
       { to: '/app/platform-analytics', label: 'Platform Analytics', icon: <IconBarChart {...ICON} />, requiresCapability: 'view_analytics' },
     ],
   },

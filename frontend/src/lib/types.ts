@@ -176,7 +176,8 @@ export type AdminCapability =
   | 'manage_contracts'
   | 'manage_ledger'
   | 'view_analytics'
-  | 'manage_settings';
+  | 'manage_settings'
+  | 'manage_maintenance';
 
 export interface Admin {
   id: number;
@@ -1358,6 +1359,23 @@ export interface TenantProfileResponse {
   readiness: Readiness;
 }
 
+export interface LandlordProfile {
+  id: number;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  initials: string;
+  email: string;
+  phone: string | null;
+  user_type: UserType;
+  identity_verified: boolean;
+  avatar_url: string | null;
+  created_at: string | null;
+}
+export interface LandlordProfileResponse {
+  user: LandlordProfile;
+}
+
 /* ---- Tenant dashboard (single source of dashboard truth) ----------------- */
 export interface TenantDashboard {
   user: {
@@ -2033,6 +2051,8 @@ export interface AdminAnalyticsListingsModule {
   oldest_pending_age_hours: number | null;
   queue_preview: AdminAnalyticsListingRow[];
   my_decisions: { approved: number; rejected: number; sent_back: number };
+  /** Platform-wide (every admin's decisions), not personal — why listings fail review across the whole team. */
+  top_reasons: AdminAnalyticsReason[];
   route: string;
 }
 
@@ -2061,8 +2081,30 @@ export interface AdminAnalyticsMaintenanceModule {
     waiting: number;
     oldest: Record<string, unknown> | null;
   };
+  /** Real open-request counts keyed by MaintenanceStatus value (e.g. "in_progress", "waiting"). */
+  by_status: Record<string, number>;
   queue_preview: AdminAnalyticsMaintenanceRow[];
   route: string;
+}
+
+/** An attention/risk-queue item, enriched with age + a suggested next action beyond the base PlatformAnalyticsRiskItem shape. */
+export interface AdminAnalyticsAttentionItem extends PlatformAnalyticsRiskItem {
+  age_hours: number | null;
+  /** Human string like "2d 4h" or "<1h"; null when no comparable clock exists for this item. */
+  age: string | null;
+  action: string;
+}
+
+export interface AdminAnalyticsDecisionTrendPoint {
+  week: string;
+  approved: number;
+  rejected: number;
+  sent_back: number;
+}
+
+export interface AdminAnalyticsReason {
+  reason: string;
+  count: number;
 }
 
 export interface AdminAnalyticsLedgerModule {
@@ -2070,8 +2112,17 @@ export interface AdminAnalyticsLedgerModule {
   overdue_cents: number;
   outstanding_cents: number;
   affected_tenants: number;
+  /** Period-scoped (respects the selected range), unlike the all-time overdue/outstanding figures above. */
+  collected_cents: number;
+  charged_cents: number;
   queue_preview: AdminAnalyticsLedgerRow[];
   route: string;
+}
+
+export interface AdminAnalyticsNotificationChannel {
+  channel: string;
+  sent: number;
+  failed: number;
 }
 
 export interface AdminAnalyticsNotificationsModule {
@@ -2079,6 +2130,7 @@ export interface AdminAnalyticsNotificationsModule {
   email_failed: number;
   sms_failed: number;
   recent_failures: AdminAnalyticsNotificationRow[];
+  channel: AdminAnalyticsNotificationChannel[];
   route: string;
 }
 
@@ -2087,6 +2139,8 @@ export interface AdminAnalyticsActivityRow {
   title: string;
   area: string;
   severity: string;
+  /** "Important" | "Needs review" | "Routine" | "Export" — mirrors AuditClassifier::classification(). */
+  type: string;
   created_at: string | null;
   detail_route: string | null;
 }
@@ -2095,7 +2149,7 @@ export interface AdminAnalyticsSummary {
   generated_at: string;
   admin: { name: string; is_super_admin: boolean };
   scope: { permitted_modules: string[]; restricted_modules: string[] };
-  attention: PlatformAnalyticsRiskItem[];
+  attention: AdminAnalyticsAttentionItem[];
   workload: { pending_total: number; by_module: Record<string, number> };
   modules: {
     listings?: AdminAnalyticsListingsModule;
@@ -2110,6 +2164,11 @@ export interface AdminAnalyticsSummary {
     decisions_period: number;
     exports_period: number;
     recent_activity: AdminAnalyticsActivityRow[];
+    /** Covers Listings + Verifications decisions only — see backend AdminAnalyticsService docblock for why Ledger/Maintenance are excluded. */
+    decision_trend: AdminAnalyticsDecisionTrendPoint[];
+    outcome_totals: { approved: number; rejected: number; sent_back: number };
+    top_reasons: AdminAnalyticsReason[];
+    avg_decision_hours: { listings: number | null; verifications: number | null };
   };
 }
 
@@ -2133,6 +2192,67 @@ export interface AdminMaintenanceCase {
   expected_completion_date: string | null;
   is_overdue: boolean;
   has_severe_safety_flag: boolean;
+  handling_admin: { id: number; name: string } | null;
+  escalated_at: string | null;
+  escalation_reason: string | null;
+}
+
+export interface AdminMaintenanceEvent {
+  id: number;
+  event: string;
+  description: string;
+  actor_type: string | null;
+  actor_name: string | null;
+  created_at: string | null;
+}
+
+export interface AdminMaintenanceNote {
+  id: number;
+  body: string;
+  admin_id: number;
+  admin_name: string | null;
+  created_at: string | null;
+}
+
+export interface AdminMaintenanceDetail extends AdminMaintenanceCase {
+  description: string;
+  assignee_name: string | null;
+  assignee_phone: string | null;
+  assignee_type: string | null;
+  appointment_at: string | null;
+  resolution_notes: string | null;
+  labor_cost_cents: number | null;
+  parts_cost_cents: number | null;
+  total_cost_cents: number | null;
+  invoice_reference: string | null;
+  cost_notes: string | null;
+  cost_paid: boolean | null;
+  acknowledged_at: string | null;
+  assigned_at: string | null;
+  resolved_at: string | null;
+  closed_at: string | null;
+  safety_flags: string[] | null;
+  events: AdminMaintenanceEvent[];
+  media: { id: string; caption: string | null; created_at: string | null }[];
+  admin_notes: AdminMaintenanceNote[];
+}
+
+export interface AdminMaintenanceAnalytics {
+  resolved_count: number;
+  average_response_hours: number;
+  average_resolution_days: number;
+  repeat_issue_properties: number;
+  by_priority: Record<string, number>;
+  by_category: Record<string, number>;
+  resolution_trend_by_month: Record<string, number>;
+}
+
+export interface AdminMaintenanceOversight {
+  open_platform_wide: number;
+  unresolved_safety_flags: AdminMaintenanceCase[];
+  landlords_with_repeat_overdue: { landlord_id: number; landlord_name: string | null; overdue_count: number }[];
+  admin_caseload: { admin_id: number; admin_name: string | null; open_case_count: number }[];
+  properties_with_recurring_issues: { property_id: number; property_name: string | null; open_case_count: number }[];
 }
 
 /* ---- Admin platform delivery monitor ------------------------------------- */

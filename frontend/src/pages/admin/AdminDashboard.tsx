@@ -2,20 +2,13 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApi } from '@/hooks/useApi';
 import { useAuth } from '@/context/auth';
-import { isSuperAdmin as userIsSuperAdmin } from '@/lib/permissions';
+import { isSuperAdmin as userIsSuperAdmin, adminHasCapability } from '@/lib/permissions';
 import { adminApi } from '@/lib/endpoints';
+import { timeAgo } from '@/lib/format';
 import { ErrorState, ForbiddenState } from '@/components/ui/states';
 import { PageHeader } from '@/components/layout/PageHeader';
 import type { AdminDashboard as AdminDashboardData } from '@/lib/types';
-import { AttentionQueue } from './dashboard/AttentionQueue';
-import { PriorityCasesTable } from './dashboard/PriorityCasesTable';
-import {
-  PlatformSnapshot,
-  RentRiskMonitor,
-  ReviewQueuePanel,
-  SystemHealthPanel,
-  RecentActivityFeed,
-} from './dashboard/DashboardPanels';
+import { SuperDashboard } from './dashboard/SuperDashboard';
 import heroArt1 from '@/assets/dashboard/home-7.jpg';
 import heroArt2 from '@/assets/dashboard/home-2.jpg';
 import heroArt3 from '@/assets/dashboard/home-6.jpg';
@@ -142,10 +135,34 @@ export function AdminDashboard() {
   const adminName = user && user.role === 'admin' ? user.name : 'Administrator';
   const firstName = adminName.split(' ')[0];
   const isSuperAdmin = userIsSuperAdmin(user);
+  const canListings = adminHasCapability(user, 'moderate_listings');
+
+  const [range, setRange] = useState<'7d' | '30d' | '90d' | 'this_month' | 'ytd'>('30d');
 
   const dashboardReq = useApi(() => adminApi.dashboard(), []);
+  // Platform analytics powers the cross-domain sections. A scoped admin without
+  // the `view_analytics` capability gets a 403 here — we swallow it and pass
+  // null so those sections gracefully hide (operational sections still render).
+  const analyticsReq = useApi(() => adminApi.platformAnalytics({ range }), [range]);
+  // Real maintenance rows for the maintenance table (read-only, any admin).
+  const maintReq = useApi(() => adminApi.maintenanceQueue({ status: 'open', limit: 8 }), []);
 
   const [now] = useState(() => new Date());
+
+  const analytics =
+    analyticsReq.error?.status === 403 ? null : analyticsReq.data?.analytics ?? null;
+  // A non-403 error (500/network) shouldn't silently hide every analytics
+  // section the same way a lack-of-capability 403 does — surface it instead.
+  const analyticsOutage = Boolean(analyticsReq.error) && analyticsReq.error?.status !== 403;
+  const generatedLabel = analyticsReq.data?.analytics.generated_at
+    ? timeAgo(analyticsReq.data.analytics.generated_at)
+    : 'just now';
+
+  const handleRefresh = () => {
+    dashboardReq.reload();
+    analyticsReq.reload();
+    maintReq.reload();
+  };
 
   // A 403 on the primary endpoint means this account isn't an admin.
   if (dashboardReq.error?.status === 403) {
@@ -201,9 +218,11 @@ export function AdminDashboard() {
             </p>
           </div>
           <div className="hc-actions">
-            <button className="btn btn-blood" type="button" onClick={() => navigate('/app/listing-review')}>
-              Review listings <ArrowRight />
-            </button>
+            {canListings && (
+              <button className="btn btn-blood" type="button" onClick={() => navigate('/app/listing-review')}>
+                Review listings <ArrowRight />
+              </button>
+            )}
           </div>
         </div>
         <div className="hc-art">
@@ -211,16 +230,26 @@ export function AdminDashboard() {
         </div>
       </section>
 
+      {analyticsOutage && (
+        <ErrorState
+          title="Platform analytics unavailable"
+          message={analyticsReq.error?.message ?? 'Could not load platform analytics right now.'}
+          onRetry={analyticsReq.reload}
+        />
+      )}
+
       {data && (
-        <>
-          <AttentionQueue data={data} user={user} />
-          <PriorityCasesTable cases={data.priority_cases} />
-          <PlatformSnapshot data={data} user={user} />
-          <RentRiskMonitor data={data} />
-          <ReviewQueuePanel data={data} user={user} />
-          <SystemHealthPanel data={data} />
-          <RecentActivityFeed data={data} user={user} />
-        </>
+        <SuperDashboard
+          dashboard={data}
+          analytics={analytics}
+          maintenanceRows={maintReq.data?.data ?? []}
+          user={user}
+          range={range}
+          onRange={setRange}
+          onRefresh={handleRefresh}
+          refreshing={dashboardReq.loading || analyticsReq.loading}
+          updatedLabel={generatedLabel}
+        />
       )}
     </div>
   );

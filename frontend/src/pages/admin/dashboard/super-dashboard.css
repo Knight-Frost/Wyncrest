@@ -1,0 +1,996 @@
+/* ============================================================================
+   SUPER ADMIN DASHBOARD — the platform command center, faithfully ported from
+   wyncrest_super_dashboard.html. Everything is scoped under `.wsad` so the
+   petrol / Big-Shoulders identity never leaks into the rest of the app (same
+   pattern as .wpa / .wprop / .wapp / .wled on the other rebuilt pages).
+
+   The mockup's hard-coded palette is remapped onto the app's design tokens so
+   the page is theme-aware (light + dark) for free, exactly like .wpa. Nothing
+   here fabricates data — every rendered element is fed a real backend value by
+   SuperDashboard.tsx.
+   ============================================================================ */
+
+.wsad {
+  --w-ink: var(--color-ink-900);
+  --w-ink-2: var(--color-ink-700);
+  --w-mut: var(--color-ink-500);
+  --w-line: var(--color-ink-200);
+  --w-line-2: color-mix(in srgb, var(--color-ink-200) 55%, transparent);
+  --w-card: var(--color-surface);
+  --w-petrol: var(--color-action-600);
+  --w-petrol-2: var(--color-action-500);
+  --w-ox: var(--color-danger-600);
+  --w-green: var(--color-success-600);
+  --w-amber: var(--color-warning-600);
+  --w-crit: var(--color-danger-600);
+  --w-high: var(--color-warning-600, #b4571b);
+  --w-med: var(--color-warning-600);
+  --w-low: var(--color-success-600);
+  --w-shadow: 0 1px 2px rgba(18, 37, 43, 0.04), 0 8px 24px rgba(18, 37, 43, 0.05);
+  --w-disp: 'Big Shoulders Display', Impact, sans-serif;
+  --w-sans: 'Hanken Grotesque', system-ui, sans-serif;
+  --w-mono: 'Space Grotesk', monospace;
+
+  /* Aliases so the reused pa-charts (LineChart/DualBarChart/DonutChart/
+     HBarList/BarChart) render with the right colors inside .wsad. They read
+     --wpa-* vars that platform-analytics.css only defines on .wpa. */
+  --wpa-petrol: var(--w-petrol);
+  --wpa-petrol-2: var(--w-petrol-2);
+  --wpa-oxblood: var(--w-ox);
+  --wpa-green: var(--w-green);
+  --wpa-amber: var(--w-amber);
+  --wpa-slate: var(--w-mut);
+  --wpa-card: var(--w-card);
+  --wpa-ink: var(--w-ink);
+  --wpa-ink-3: var(--w-mut);
+  --wpa-line: var(--w-line);
+  --wpa-line-2: var(--w-line-2);
+
+  font-family: var(--w-sans);
+  color: var(--w-ink);
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 1.9rem;
+  padding-bottom: 2.5rem;
+}
+
+.wsad *,
+.wsad *::before,
+.wsad *::after {
+  box-sizing: border-box;
+}
+.wsad button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+}
+/* Size ONLY our own hairline icons (class .wsvg). The reused pa-charts SVGs
+   (donut/line/bar) must keep their own responsive sizing, so they are NOT
+   constrained here — otherwise they collapse to 16px. */
+.wsad svg.wsvg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  vertical-align: middle;
+}
+.wsad .mono {
+  font-family: var(--w-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- toolbar (range / refresh / export — the real, supported controls) --- */
+.wsad-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.wsad-toolbar .updated {
+  margin-right: auto;
+  font-size: 0.78rem;
+  color: var(--w-mut);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.wsad .seg {
+  display: flex;
+  background: var(--w-card);
+  border: 1px solid var(--w-line);
+  border-radius: 10px;
+  padding: 2px;
+  box-shadow: var(--w-shadow);
+}
+.wsad .seg button {
+  padding: 6px 11px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--w-mut);
+}
+.wsad .seg button.on {
+  background: var(--w-petrol);
+  color: #fff;
+}
+.wsad .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 8px 13px;
+  border-radius: 10px;
+  background: var(--w-card);
+  border: 1px solid var(--w-line);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--w-ink);
+  box-shadow: var(--w-shadow);
+  white-space: nowrap;
+}
+.wsad .btn svg {
+  color: var(--w-mut);
+}
+.wsad .btn:hover {
+  border-color: var(--w-petrol-2);
+  color: var(--w-petrol);
+}
+
+/* ---- section ---- */
+.wsad .sec {
+  scroll-margin-top: 1rem;
+}
+.wsad .sec-h {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.85rem;
+}
+.wsad .sec-h .ix {
+  font-family: var(--w-disp);
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: #fff;
+  background: var(--w-petrol);
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  letter-spacing: 0.02em;
+}
+.wsad .sec-h h2 {
+  font-family: var(--w-disp);
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: 0.01em;
+  margin: 0;
+  color: var(--w-ink);
+}
+.wsad .sec-h .hint {
+  font-size: 0.76rem;
+  color: var(--w-mut);
+  margin-top: 1px;
+}
+.wsad .sec-h .spacer {
+  flex: 1;
+}
+.wsad .sec-h .link {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--w-petrol-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* ---- grids ---- */
+.wsad .grid {
+  display: grid;
+  gap: 0.85rem;
+}
+.wsad .g2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+.wsad .g3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.wsad .g4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* ---- card + stat ---- */
+.wsad .card {
+  background: var(--w-card);
+  border: 1px solid var(--w-line);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: var(--w-shadow);
+  position: relative;
+}
+.wsad .card.pad-lg {
+  padding: 20px;
+}
+.wsad .stat .k {
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--w-mut);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.wsad .stat .k svg {
+  width: 15px;
+  height: 15px;
+  color: var(--w-petrol-2);
+}
+.wsad .stat .v {
+  font-family: var(--w-disp);
+  font-weight: 700;
+  font-size: 1.65rem;
+  line-height: 1;
+  margin-top: 0.55rem;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.wsad .stat .sub {
+  font-size: 0.76rem;
+  color: var(--w-mut);
+  margin-top: 0.45rem;
+}
+.wsad .stat .sub b {
+  color: var(--w-ink);
+  font-weight: 600;
+}
+.wsad button.card.stat {
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.wsad button.card.stat:hover {
+  border-color: var(--w-petrol-2);
+}
+
+/* ---- pills ---- */
+.wsad .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 20px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.wsad .pill .pd {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.wsad .pill.crit {
+  background: color-mix(in srgb, var(--w-crit) 12%, transparent);
+  color: var(--w-crit);
+}
+.wsad .pill.high {
+  background: color-mix(in srgb, var(--w-high) 14%, transparent);
+  color: var(--w-high);
+}
+.wsad .pill.med {
+  background: color-mix(in srgb, var(--w-med) 15%, transparent);
+  color: var(--w-med);
+}
+.wsad .pill.low {
+  background: color-mix(in srgb, var(--w-low) 13%, transparent);
+  color: var(--w-low);
+}
+.wsad .pill.info {
+  background: color-mix(in srgb, var(--w-petrol-2) 11%, transparent);
+  color: var(--w-petrol-2);
+}
+.wsad .pill.neutral {
+  background: var(--w-line-2);
+  color: var(--w-mut);
+}
+
+/* ---- critical alert strips ---- */
+.wsad .alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.wsad .alert {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 12px 15px;
+  border-radius: 14px;
+  border: 1px solid var(--w-line);
+  background: var(--w-card);
+  box-shadow: var(--w-shadow);
+  text-align: left;
+  width: 100%;
+}
+.wsad .alert:hover {
+  border-color: var(--w-petrol-2);
+}
+.wsad .alert .dotwrap {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.wsad .alert.crit {
+  border-left: 3px solid var(--w-crit);
+}
+.wsad .alert.crit .dotwrap {
+  background: color-mix(in srgb, var(--w-crit) 11%, transparent);
+  color: var(--w-crit);
+}
+.wsad .alert.high {
+  border-left: 3px solid var(--w-high);
+}
+.wsad .alert.high .dotwrap {
+  background: color-mix(in srgb, var(--w-high) 12%, transparent);
+  color: var(--w-high);
+}
+.wsad .alert.med {
+  border-left: 3px solid var(--w-med);
+}
+.wsad .alert.med .dotwrap {
+  background: color-mix(in srgb, var(--w-med) 13%, transparent);
+  color: var(--w-med);
+}
+.wsad .alert .body {
+  flex: 1;
+  min-width: 0;
+}
+.wsad .alert .msg {
+  font-weight: 600;
+  font-size: 0.86rem;
+}
+.wsad .alert .msg .n {
+  font-family: var(--w-disp);
+  font-weight: 700;
+  font-size: 1.35rem;
+  line-height: 1;
+  margin-right: 0.15rem;
+}
+.wsad .alert .subtxt {
+  font-size: 0.76rem;
+  color: var(--w-mut);
+  margin-top: 2px;
+}
+.wsad .alert .go {
+  color: var(--w-petrol-2);
+  flex: none;
+}
+
+/* ---- chart card ---- */
+.wsad .ch {
+  background: var(--w-card);
+  border: 1px solid var(--w-line);
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: var(--w-shadow);
+}
+.wsad .ch-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.25rem;
+}
+.wsad .ch-h .t {
+  font-family: var(--w-disp);
+  font-weight: 700;
+  font-size: 1rem;
+}
+.wsad .ch-h .u {
+  font-size: 0.72rem;
+  color: var(--w-mut);
+}
+.wsad .ch .cap {
+  font-size: 0.75rem;
+  color: var(--w-mut);
+  margin-bottom: 0.75rem;
+}
+.wsad .legend {
+  display: flex;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  margin-top: 0.7rem;
+  font-size: 0.72rem;
+  color: var(--w-mut);
+}
+.wsad .legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  display: inline-block;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+.wsad .legend b {
+  color: var(--w-ink);
+}
+
+/* ---- tables ---- */
+.wsad .tbl-wrap {
+  background: var(--w-card);
+  border: 1px solid var(--w-line);
+  border-radius: 14px;
+  box-shadow: var(--w-shadow);
+  overflow: hidden;
+}
+.wsad .tbl-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--w-line);
+  flex-wrap: wrap;
+}
+.wsad .tbl-top .tt {
+  font-family: var(--w-disp);
+  font-weight: 700;
+  font-size: 1rem;
+}
+.wsad .tbl-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+.wsad .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--w-line);
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--w-mut);
+  background: var(--w-card);
+}
+.wsad .chip.on {
+  background: var(--w-petrol);
+  color: #fff;
+  border-color: var(--w-petrol);
+}
+.wsad .chip:hover:not(.on) {
+  border-color: var(--w-petrol-2);
+  color: var(--w-petrol);
+}
+.wsad .search {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--w-line);
+  border-radius: 8px;
+  padding: 5px 10px;
+  background: var(--w-card);
+  min-width: 170px;
+}
+.wsad .search input {
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 0.78rem;
+  width: 100%;
+  background: none;
+  color: var(--w-ink);
+}
+.wsad .search svg {
+  color: var(--w-mut);
+}
+.wsad .tbl-scroll {
+  overflow-x: auto;
+}
+.wsad table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+.wsad thead th {
+  text-align: left;
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--w-mut);
+  font-weight: 700;
+  padding: 10px 16px;
+  background: var(--w-line-2);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--w-line);
+}
+.wsad thead th.num,
+.wsad td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.wsad tbody td {
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--w-line-2);
+  vertical-align: middle;
+}
+.wsad tbody tr:last-child td {
+  border-bottom: none;
+}
+.wsad tbody tr.clk {
+  cursor: pointer;
+}
+.wsad tbody tr.clk:hover {
+  background: color-mix(in srgb, var(--w-petrol-2) 5%, transparent);
+}
+.wsad td .who {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.wsad td .who .a {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 0.68rem;
+  color: #fff;
+  font-family: var(--w-disp);
+}
+.wsad td .who .nm {
+  font-weight: 600;
+  color: var(--w-ink);
+}
+.wsad td .who .m {
+  font-size: 0.68rem;
+  color: var(--w-mut);
+}
+.wsad td.age.over {
+  color: var(--w-ox);
+  font-weight: 600;
+}
+.wsad .rowact {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--w-petrol-2);
+}
+.wsad .empty {
+  padding: 30px;
+  text-align: center;
+  color: var(--w-mut);
+  font-size: 0.82rem;
+}
+.wsad .empty .em-h {
+  font-family: var(--w-disp);
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--w-ink);
+  margin-bottom: 0.3rem;
+}
+
+/* ---- horizontal reason / distribution bars ---- */
+.wsad .hb {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 0.25rem;
+}
+.wsad .hb .row {
+  display: grid;
+  grid-template-columns: 130px 1fr 44px;
+  align-items: center;
+  gap: 0.6rem;
+}
+.wsad .hb .lb {
+  font-size: 0.76rem;
+  color: var(--w-ink);
+  font-weight: 500;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wsad .hb .track {
+  height: 9px;
+  background: var(--w-line-2);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.wsad .hb .fill {
+  height: 100%;
+  border-radius: 6px;
+  background: var(--w-petrol-2);
+}
+.wsad .hb .val {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--w-ink);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- aging bars ---- */
+.wsad .aging {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.wsad .aging .arow {
+  display: grid;
+  grid-template-columns: 110px 1fr auto;
+  align-items: center;
+  gap: 0.7rem;
+}
+.wsad .aging .al {
+  font-size: 0.76rem;
+  color: var(--w-ink);
+  font-weight: 500;
+}
+.wsad .aging .at {
+  height: 10px;
+  background: var(--w-line-2);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.wsad .aging .af {
+  height: 100%;
+  border-radius: 6px;
+}
+.wsad .aging .av {
+  font-size: 0.76rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- funnel ---- */
+.wsad .funnel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-top: 0.25rem;
+}
+.wsad .funnel .frow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.wsad .funnel .flab {
+  width: 140px;
+  font-size: 0.76rem;
+  color: var(--w-mut);
+  text-align: right;
+  font-weight: 500;
+  flex: none;
+}
+.wsad .funnel .ftrack {
+  flex: 1;
+  background: var(--w-line-2);
+  border-radius: 7px;
+  height: 30px;
+  overflow: hidden;
+}
+.wsad .funnel .ffill {
+  height: 100%;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  padding: 0 11px;
+  color: #fff;
+  font-weight: 700;
+  font-family: var(--w-disp);
+  font-size: 0.95rem;
+  min-width: 2.4rem;
+}
+
+/* ---- health status ---- */
+.wsad .hstatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+  font-family: var(--w-disp);
+}
+.wsad .hstatus .pd {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.wsad .hstatus.ok {
+  color: var(--w-green);
+}
+.wsad .hstatus.ok .pd {
+  background: var(--w-green);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--w-green) 18%, transparent);
+}
+.wsad .hstatus.warn {
+  color: var(--w-amber);
+}
+.wsad .hstatus.warn .pd {
+  background: var(--w-amber);
+}
+.wsad .hstatus.bad {
+  color: var(--w-ox);
+}
+.wsad .hstatus.bad .pd {
+  background: var(--w-ox);
+}
+
+/* ---- work-queue cards ---- */
+.wsad .qgrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.85rem;
+}
+.wsad .qcard {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 15px;
+  border-radius: 14px;
+  border: 1px solid var(--w-line);
+  background: var(--w-card);
+  box-shadow: var(--w-shadow);
+  text-align: left;
+  width: 100%;
+}
+.wsad .qcard:hover {
+  border-color: var(--w-petrol-2);
+}
+.wsad .qcard .qic {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--w-petrol-2) 10%, transparent);
+  color: var(--w-petrol-2);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.wsad .qcard .qn {
+  font-family: var(--w-disp);
+  font-weight: 700;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+.wsad .qcard .ql {
+  font-size: 0.76rem;
+  color: var(--w-mut);
+  margin-top: 2px;
+}
+.wsad .qcard .go {
+  margin-left: auto;
+  color: var(--w-mut);
+}
+
+/* ---- recent activity feed ---- */
+.wsad .feed {
+  background: var(--w-card);
+  border: 1px solid var(--w-line);
+  border-radius: 14px;
+  box-shadow: var(--w-shadow);
+  overflow: hidden;
+}
+.wsad .feed .fr {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--w-line-2);
+  width: 100%;
+  text-align: left;
+}
+.wsad .feed .fr:last-child {
+  border-bottom: none;
+}
+.wsad .feed .fr:hover {
+  background: color-mix(in srgb, var(--w-petrol-2) 4%, transparent);
+}
+.wsad .feed .fi {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.wsad .feed .fi.crit {
+  background: color-mix(in srgb, var(--w-crit) 11%, transparent);
+  color: var(--w-crit);
+}
+.wsad .feed .fi.warn {
+  background: color-mix(in srgb, var(--w-amber) 13%, transparent);
+  color: var(--w-amber);
+}
+.wsad .feed .fi.info {
+  background: color-mix(in srgb, var(--w-petrol-2) 11%, transparent);
+  color: var(--w-petrol-2);
+}
+.wsad .feed .fd {
+  flex: 1;
+  font-size: 0.82rem;
+  min-width: 0;
+}
+.wsad .feed .fd .fmeta {
+  font-size: 0.7rem;
+  color: var(--w-mut);
+  margin-top: 1px;
+}
+.wsad .feed .fa {
+  color: var(--w-petrol-2);
+  font-size: 0.74rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: none;
+}
+
+/* ---- note ---- */
+.wsad .note {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.74rem;
+  color: var(--w-mut);
+  margin-top: 0.6rem;
+}
+.wsad .note svg {
+  color: var(--w-petrol-2);
+}
+
+/* ---- reused pa-charts (LineChart/DualBarChart/BarChart/DonutChart/HBarList)
+   The pa-* rules in platform-analytics.css are scoped to `.wpa`, so we restate
+   the chart-specific ones here under `.wsad`. Colors read the --wpa-* aliases
+   declared at the top of this file. ---- */
+.wsad .pa-chart-svg {
+  width: 100%;
+  height: auto;
+}
+.wsad .pa-axis,
+.wsad .pa-bar-cap {
+  font-size: 9px;
+  fill: var(--w-mut);
+  font-family: var(--w-sans);
+}
+.wsad .pa-gl {
+  stroke: var(--w-line-2);
+  stroke-width: 1;
+}
+.wsad .pa-legend {
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+.wsad .pa-legend-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--w-ink-2);
+}
+.wsad .pa-legend-row i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.wsad .pa-legend-row b {
+  color: var(--w-ink);
+  margin-left: auto;
+}
+.wsad .pa-donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  flex-wrap: wrap;
+}
+.wsad .pa-donut {
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.wsad .pa-donut-total {
+  width: 82px;
+  height: 82px;
+  border-radius: 50%;
+  background: var(--w-card);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.wsad .pa-donut-total b {
+  font-family: var(--w-disp);
+  font-weight: 700;
+  font-size: 1.15rem;
+}
+.wsad .pa-donut-total span {
+  font-size: 0.6rem;
+  color: var(--w-mut);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.wsad .pa-hbars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.wsad .pa-hbar-row .pa-hbar-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.76rem;
+  margin-bottom: 0.25rem;
+}
+.wsad .pa-hbar-row .pa-hbar-top b {
+  font-family: var(--w-mono);
+}
+.wsad .pa-track {
+  height: 12px;
+  background: color-mix(in srgb, var(--w-ink) 6%, transparent);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.wsad .pa-track i {
+  display: block;
+  height: 100%;
+  background: var(--w-petrol-2);
+  border-radius: 4px;
+}
+.wsad .pa-track i.danger {
+  background: var(--w-ox);
+}
+.wsad .pa-empty {
+  font-size: 0.78rem;
+  color: var(--w-mut);
+  padding: 1rem 0;
+  text-align: center;
+}
+
+/* ---- responsive ---- */
+@media (max-width: 1080px) {
+  .wsad .g4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .wsad .g3 {
+    grid-template-columns: 1fr;
+  }
+  .wsad .qgrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 620px) {
+  .wsad .g2,
+  .wsad .g4 {
+    grid-template-columns: 1fr;
+  }
+  .wsad .qgrid {
+    grid-template-columns: 1fr;
+  }
+  .wsad .hb .row {
+    grid-template-columns: 92px 1fr 40px;
+  }
+  .wsad .funnel .flab {
+    width: 96px;
+  }
+}

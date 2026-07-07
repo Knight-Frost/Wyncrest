@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { brand } from '@/config/brand';
 import { useAuth } from '@/context/auth';
 import { useApi } from '@/hooks/useApi';
-import { authApi, tenantApi } from '@/lib/endpoints';
+import { authApi, landlordApi, tenantApi } from '@/lib/endpoints';
 import { fieldErrors } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { Donut } from '@/components/ui/charts';
@@ -20,9 +20,10 @@ import {
   IconDoc,
   IconChevronRight,
   IconUpload,
+  IconLock,
 } from '@/components/ui/icons';
 import { SemanticBadge } from '@/components/cards';
-import type { TenantProfile, Readiness, ApiError, MediaAsset } from '@/lib/types';
+import type { TenantProfile, LandlordProfile, Readiness, ApiError, MediaAsset } from '@/lib/types';
 import './account.css';
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
@@ -36,10 +37,12 @@ function AvatarUploader({
   name,
   currentUrl,
   onUploaded,
+  upload,
 }: {
   name: string;
   currentUrl?: string | null;
   onUploaded: (asset: MediaAsset) => void;
+  upload: (file: File) => Promise<MediaAsset>;
 }) {
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -68,7 +71,7 @@ function AvatarUploader({
     setLocalUrl(preview);
     setUploading(true);
     try {
-      const asset = await tenantApi.uploadAvatar(file);
+      const asset = await upload(file);
       onUploaded(asset);
       // Replace preview with server URL if available
       if (asset.url) setLocalUrl(asset.url);
@@ -132,6 +135,26 @@ function HeadphonesIcon({ size = 20 }: { size?: number }) {
   );
 }
 
+/* ── SecurityRailCard (shared across roles) — password change lives on the
+   Settings page (one real implementation, POST /user/password for every
+   role); this just makes it easy to find from Profile. ── */
+function SecurityRailCard() {
+  return (
+    <div className="ac-card">
+      <div className="ac-mini-row">
+        <span className="ac-mini-ico"><IconLock size={20} /></span>
+        <div>
+          <div className="ac-mini-title" style={{ marginBottom: 4 }}>Security</div>
+          <div className="ac-mini-text">Change your password or manage sign-in from Settings.</div>
+        </div>
+      </div>
+      <Link to="/app/settings" className="ac-btn ac-btn-ghost" style={{ marginTop: 14, width: '100%' }}>
+        Go to Security settings
+      </Link>
+    </div>
+  );
+}
+
 /* ── IdentityCard (shared across roles) ──────────────────────────────────── */
 function IdentityCard({
   name, abbrev, email, phone, role, memberSince, verified, avatarUrl,
@@ -181,7 +204,7 @@ function IdentityCard({
 }
 
 /* ── VerificationCard ────────────────────────────────────────────────────── */
-function VerificationCard({ verified }: { verified: boolean }) {
+function VerificationCard({ verified, verifyHref }: { verified: boolean; verifyHref: string }) {
   const steps = ['Government ID uploaded', 'Selfie verification', 'Admin review', 'Complete'];
   const current = verified ? 4 : 1;
   return (
@@ -211,7 +234,7 @@ function VerificationCard({ verified }: { verified: boolean }) {
       </div>
       {!verified && (
         <div className="ac-vactions">
-          <Link to="/app/verification" className="ac-btn ac-btn-primary">Continue verification</Link>
+          <Link to={verifyHref} className="ac-btn ac-btn-primary">Continue verification</Link>
         </div>
       )}
     </div>
@@ -397,6 +420,203 @@ function TenantProfileForm({
   );
 }
 
+/* ── LandlordProfileForm ─────────────────────────────────────────────────── */
+function LandlordProfileForm({
+  profile,
+  onSaved,
+}: {
+  profile: LandlordProfile;
+  onSaved: (p: LandlordProfile) => void;
+}) {
+  const { toast } = useToast();
+
+  const [form, setForm] = useState({
+    first_name: profile.first_name ?? '',
+    last_name: profile.last_name ?? '',
+    phone: profile.phone ?? '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [ferrors, setFerrors] = useState<Record<string, string>>({});
+
+  function set(key: keyof typeof form, value: string) {
+    setForm((f) => ({ ...f, [key]: value }));
+    setFerrors((e) => { const n = { ...e }; delete n[key]; return n; });
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setFerrors({});
+    try {
+      const res = await landlordApi.updateProfile({
+        first_name: form.first_name || undefined,
+        last_name: form.last_name || undefined,
+        phone: form.phone || null,
+      });
+      onSaved(res.user);
+      toast('Profile updated', 'success');
+    } catch (err) {
+      const fe = fieldErrors(err as ApiError);
+      if (Object.keys(fe).length) {
+        setFerrors(fe);
+      } else {
+        toast((err as ApiError).message ?? 'Could not save profile', 'error');
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function field(label: string, key: keyof typeof form, opts?: { type?: string }) {
+    return (
+      <div className="ac-field">
+        <label className="ac-field-lab" htmlFor={`lpf-${key}`}>{label}</label>
+        <input
+          id={`lpf-${key}`}
+          type={opts?.type ?? 'text'}
+          value={form[key]}
+          onChange={(e) => set(key, e.target.value)}
+          style={{
+            display: 'block',
+            width: '100%',
+            marginTop: 4,
+            padding: '9px 12px',
+            borderRadius: 'var(--radius-xl)',
+            border: ferrors[key]
+              ? '1.5px solid var(--color-danger-600)'
+              : '1px solid var(--color-ink-300)',
+            fontSize: 14,
+            color: 'var(--color-ink-900)',
+            background: 'var(--color-surface)',
+            fontFamily: 'var(--font-sans)',
+            boxSizing: 'border-box',
+          }}
+          aria-describedby={ferrors[key] ? `lpf-${key}-err` : undefined}
+        />
+        {ferrors[key] && (
+          <p id={`lpf-${key}-err`} role="alert" style={{ fontSize: 12, color: 'var(--color-danger-600)', marginTop: 3 }}>
+            {ferrors[key]}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div className="ac-card">
+        <div className="ac-card-head">
+          <h2 className="ac-card-title">Personal details</h2>
+          <button type="submit" className="ac-btn ac-btn-primary ac-btn-sm" disabled={saving}>
+            {saving ? 'Saving…' : 'Save changes'}
+          </button>
+        </div>
+
+        {/* Read-only identifiers */}
+        <div style={{ marginBottom: 20 }}>
+          <p className="ac-field-lab" style={{ marginBottom: 4 }}>Email address</p>
+          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink-700)' }}>
+            {profile.email}
+            <span className="ac-verified" style={{ marginLeft: 10 }}><IconCheck size={11} /> Read-only</span>
+          </p>
+          <p style={{ fontSize: 12, color: 'var(--color-ink-400)', marginTop: 2 }}>
+            Email changes require verification and aren't supported here yet. Contact support if needed.
+          </p>
+        </div>
+
+        <div className="ac-fields">
+          {field('First name', 'first_name')}
+          {field('Last name', 'last_name')}
+          {field('Phone number', 'phone', { type: 'tel' })}
+        </div>
+      </div>
+    </form>
+  );
+}
+
+/* ── Landlord profile view (fetches real data) ───────────────────────────── */
+function LandlordProfileView() {
+  const { data, loading, error, reload } = useApi(() => landlordApi.profile(), []);
+  const [liveProfile, setLiveProfile] = useState<LandlordProfile | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  if (loading) {
+    return (
+      <div className="ac-main">
+        <div className="ac-card" style={{ padding: 48, textAlign: 'center', color: 'var(--color-ink-400)', fontSize: 14 }}>
+          Loading profile…
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="ac-main">
+        <div className="ac-card" style={{ padding: 32 }}>
+          <p style={{ color: 'var(--color-danger-600)', fontWeight: 600, marginBottom: 10 }}>
+            Could not load profile
+          </p>
+          <p style={{ color: 'var(--color-ink-500)', fontSize: 14, marginBottom: 16 }}>
+            {error?.message ?? 'An unexpected error occurred.'}
+          </p>
+          <button className="ac-btn ac-btn-ghost" onClick={reload}>Try again</button>
+        </div>
+      </div>
+    );
+  }
+
+  const profile = liveProfile ?? data.user;
+  const currentAvatar = avatarUrl ?? data.user.avatar_url ?? null;
+
+  function handleSaved(p: LandlordProfile) {
+    setLiveProfile(p);
+  }
+
+  return (
+    <>
+      <div className="ac-main">
+        <AvatarUploader
+          name={profile.full_name}
+          currentUrl={currentAvatar}
+          upload={landlordApi.uploadAvatar}
+          onUploaded={(asset) => { if (asset.url) setAvatarUrl(asset.url); }}
+        />
+        <IdentityCard
+          name={profile.full_name}
+          abbrev={profile.initials || initials(profile.full_name)}
+          avatarUrl={currentAvatar}
+          email={profile.email}
+          phone={profile.phone}
+          role={profile.user_type}
+          memberSince={formatDate(profile.created_at)}
+          verified={profile.identity_verified}
+        />
+        <VerificationCard verified={profile.identity_verified} verifyHref="/app/landlord-verification" />
+        <LandlordProfileForm profile={profile} onSaved={handleSaved} />
+      </div>
+
+      <aside className="ac-rail">
+        <div className="ac-card">
+          <div className="ac-mini-row">
+            <span className="ac-mini-ico"><HeadphonesIcon size={20} /></span>
+            <div>
+              <div className="ac-mini-title" style={{ marginBottom: 4 }}>Need help?</div>
+              <div className="ac-mini-text">Our support team can help with account questions.</div>
+            </div>
+          </div>
+          <Link to="/app/messages" className="ac-btn ac-btn-ghost" style={{ marginTop: 14, width: '100%' }}>
+            Contact support
+          </Link>
+        </div>
+
+        <SecurityRailCard />
+      </aside>
+    </>
+  );
+}
+
 /* ── Tenant profile view (fetches real data) ─────────────────────────────── */
 function TenantProfileView() {
   const { data, loading, error, reload } = useApi(() => tenantApi.profile(), []);
@@ -445,6 +665,7 @@ function TenantProfileView() {
         <AvatarUploader
           name={profile.full_name}
           currentUrl={currentAvatar}
+          upload={tenantApi.uploadAvatar}
           onUploaded={(asset) => { if (asset.url) setAvatarUrl(asset.url); }}
         />
         <IdentityCard
@@ -457,7 +678,7 @@ function TenantProfileView() {
           memberSince={formatDate(profile.created_at)}
           verified={profile.identity_verified}
         />
-        <VerificationCard verified={profile.identity_verified} />
+        <VerificationCard verified={profile.identity_verified} verifyHref="/app/verification" />
         <TenantProfileForm profile={profile} onSaved={handleSaved} />
       </div>
 
@@ -490,6 +711,8 @@ function TenantProfileView() {
             .
           </p>
         </div>
+
+        <SecurityRailCard />
       </aside>
     </>
   );
@@ -629,8 +852,10 @@ function AdminAccountForm({
   );
 }
 
-/* ── Non-tenant (landlord / admin) profile view ──────────────────────────── */
-function NonTenantProfileView() {
+/* ── Admin profile view — admins edit name/email inline (AdminAccountForm);
+   they have no phone/avatar (Admin is a separate table with no media
+   relation, see App\Models\Admin::toAuthPayload()), so neither is offered. ── */
+function AdminProfileView() {
   const { user } = useAuth();
   if (!user) return null;
 
@@ -640,7 +865,6 @@ function NonTenantProfileView() {
   const role = user.role;
   const verified = 'identity_verified' in user ? user.identity_verified : false;
   const memberSince = 'created_at' in user ? formatDate(user.created_at) : '—';
-  const isAdmin = role === 'admin';
 
   return (
     <div className="ac-main">
@@ -655,54 +879,14 @@ function NonTenantProfileView() {
         verified={verified}
       />
 
-      {isAdmin ? (
-        <AdminAccountForm
-          name={name}
-          email={email}
-          phone={phone}
-          role={role}
-          memberSince={memberSince}
-          verified={verified}
-        />
-      ) : (
-        <div className="ac-card">
-          <div className="ac-card-head">
-            <h2 className="ac-card-title">Account details</h2>
-          </div>
-          <div className="ac-fields">
-            <div className="ac-field">
-              <div className="ac-field-lab">Full name</div>
-              <div className="ac-field-val">{name}</div>
-            </div>
-            <div className="ac-field">
-              <div className="ac-field-lab">Email address</div>
-              <div className="ac-field-val">{email}</div>
-            </div>
-            {phone && (
-              <div className="ac-field">
-                <div className="ac-field-lab">Phone</div>
-                <div className="ac-field-val">{phone}</div>
-              </div>
-            )}
-            <div className="ac-field">
-              <div className="ac-field-lab">Role</div>
-              <div className="ac-field-val" style={{ textTransform: 'capitalize' }}>{role}</div>
-            </div>
-            <div className="ac-field">
-              <div className="ac-field-lab">Member since</div>
-              <div className="ac-field-val">{memberSince}</div>
-            </div>
-            <div className="ac-field">
-              <div className="ac-field-lab">Identity</div>
-              <div className="ac-field-val">
-                {verified
-                  ? <SemanticBadge role="success">Verified</SemanticBadge>
-                  : <SemanticBadge role="neutral">Not verified</SemanticBadge>}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <AdminAccountForm
+        name={name}
+        email={email}
+        phone={phone}
+        role={role}
+        memberSince={memberSince}
+        verified={verified}
+      />
 
       <div className="ac-card">
         <div className="ac-mini-row">
@@ -716,6 +900,8 @@ function NonTenantProfileView() {
           Contact support
         </Link>
       </div>
+
+      <SecurityRailCard />
     </div>
   );
 }
@@ -723,7 +909,6 @@ function NonTenantProfileView() {
 /* ── Page shell ──────────────────────────────────────────────────────────── */
 export function ProfilePage() {
   const { user } = useAuth();
-  const isTenant = user?.role === 'tenant';
 
   return (
     <div className="ac-page">
@@ -734,7 +919,9 @@ export function ProfilePage() {
       </div>
 
       <div className="ac-grid">
-        {isTenant ? <TenantProfileView /> : <NonTenantProfileView />}
+        {user?.role === 'tenant' ? <TenantProfileView />
+          : user?.role === 'admin' ? <AdminProfileView />
+          : <LandlordProfileView />}
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router';
 import { AppShell } from '@/components/layout/AppShell';
-import { RequireAuth, RequireRole, RequireAdminCapability, RedirectIfAuthed } from '@/components/routing/guards';
+import { RequireAuth, RequireRole, RequireAdminCapability, RequireScopedAdminOnly, RedirectIfAuthed } from '@/components/routing/guards';
 import { useAuth } from '@/context/auth';
 
 import { Login } from '@/pages/auth/Login';
@@ -65,6 +65,7 @@ const AuditLogs               = lazy(() => import('@/pages/admin/AuditLogs').the
 const AuditLogDetail          = lazy(() => import('@/pages/admin/AuditLogDetail').then((m) => ({ default: m.AuditLogDetail })));
 const UsersPage               = lazy(() => import('@/pages/admin/UsersPage').then((m) => ({ default: m.UsersPage })));
 const AdminMaintenanceQueue    = lazy(() => import('@/pages/admin/AdminMaintenanceQueue').then((m) => ({ default: m.AdminMaintenanceQueue })));
+const AdminMaintenanceDetail   = lazy(() => import('@/pages/admin/AdminMaintenanceDetail').then((m) => ({ default: m.AdminMaintenanceDetail })));
 const ManageAccessPage        = lazy(() => import('@/pages/admin/ManageAccessPage').then((m) => ({ default: m.ManageAccessPage })));
 const VerificationsPage       = lazy(() => import('@/pages/admin/VerificationsPage').then((m) => ({ default: m.VerificationsPage })));
 const PlatformAnalytics       = lazy(() => import('@/pages/admin/PlatformAnalytics').then((m) => ({ default: m.PlatformAnalytics })));
@@ -87,8 +88,7 @@ const MessagesPage      = lazy(() => import('@/pages/shared/MessagesPage').then(
 
 /* ---- Role-aware maintenance view ----------------------------------------
    Tenants raise/track requests; landlords triage/advance them; admins get a
-   read-only platform-wide queue (no per-case detail yet — see
-   AdminMaintenanceQueue's own docblock). Same route, role-specific page. */
+   platform-wide oversight command centre. Same route, role-specific page. */
 function MaintenanceRouter() {
   const { user } = useAuth();
   if (user?.role === 'admin') {
@@ -100,9 +100,12 @@ function MaintenanceRouter() {
   return <Lazy><MaintenancePage /></Lazy>;
 }
 
-/* Role-aware maintenance DETAIL: landlords triage, tenants view their own report. */
+/* Role-aware maintenance DETAIL: admins oversee, landlords triage, tenants view their own report. */
 function MaintenanceDetailRouter() {
   const { user } = useAuth();
+  if (user?.role === 'admin') {
+    return <Lazy><AdminMaintenanceDetail /></Lazy>;
+  }
   if (user?.role === 'landlord') {
     return <Lazy><LandlordMaintenanceDetail /></Lazy>;
   }
@@ -354,7 +357,7 @@ export default function App() {
         <Route
           path="maintenance/:id"
           element={
-            <RequireRole roles={['tenant', 'landlord']}>
+            <RequireRole roles={['tenant', 'landlord', 'admin']}>
               <MaintenanceDetailRouter />
             </RequireRole>
           }
@@ -565,14 +568,16 @@ export default function App() {
             </RequireAdminCapability>
           }
         />
-        {/* Scoped "your own workload" analytics — reachable by any admin;
-            the response itself omits modules the admin lacks capabilities for. */}
+        {/* Scoped "your own workload" analytics — reachable by any SCOPED
+            admin; the response itself omits modules the admin lacks
+            capabilities for. A super admin is redirected to Platform
+            Analytics instead (their full-platform equivalent). */}
         <Route
           path="admin-analytics"
           element={
-            <RequireRole roles={['admin']}>
+            <RequireScopedAdminOnly>
               <Lazy><AdminAnalytics /></Lazy>
-            </RequireRole>
+            </RequireScopedAdminOnly>
           }
         />
         {/* Admin-exclusive but not capability-gated for reading — viewing the

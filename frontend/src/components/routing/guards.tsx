@@ -1,7 +1,7 @@
 import { Navigate, useLocation } from 'react-router';
 import { useAuth } from '@/context/auth';
 import { LoadingState, ForbiddenState } from '@/components/ui/states';
-import { adminHasCapability } from '@/lib/permissions';
+import { adminHasCapability, isSuperAdmin } from '@/lib/permissions';
 import { getActivePortal } from '@/lib/storage';
 import type { AdminCapability, Role } from '@/lib/types';
 
@@ -90,6 +90,21 @@ export function RequireAdminCapability({
       <RequireCapability capability={capability}>{children}</RequireCapability>
     </RequireRole>
   );
+}
+
+/**
+ * Gates the scoped "My Analytics" page: any admin role, but a super admin is
+ * redirected to Platform Analytics rather than shown a page built for a
+ * scoped admin's own capability-limited workload. Platform Analytics already
+ * supersedes it for them (full platform scope, not "my queue"), so this
+ * avoids two competing analytics surfaces for the same user.
+ */
+export function RequireScopedAdminOnly({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (user && isSuperAdmin(user)) {
+    return <Navigate to="/app/platform-analytics" replace />;
+  }
+  return <RequireRole roles={['admin']}>{children}</RequireRole>;
 }
 
 /** Sends already-authenticated users away from auth pages. */

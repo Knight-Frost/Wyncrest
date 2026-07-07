@@ -20,6 +20,10 @@ import type {
   AdminDashboard,
   PlatformAnalyticsResponse,
   AdminMaintenanceCase,
+  AdminMaintenanceAnalytics,
+  AdminMaintenanceDetail,
+  AdminMaintenanceNote,
+  AdminMaintenanceOversight,
   AdminNotificationDeliveriesResponse,
   AdminReviewDetail,
   AdminReviewQueueResponse,
@@ -56,6 +60,7 @@ import type {
   ConversationSummary,
   LandlordDashboard,
   LandlordOnboarding,
+  LandlordProfileResponse,
   LandlordReviewsResponse,
   InitiatePaymentResponse,
   LedgerEntry,
@@ -727,6 +732,29 @@ export const landlordApi = {
   },
   async onboarding(): Promise<LandlordOnboarding> {
     const { data } = await portalHttp.landlord.get<LandlordOnboarding>('/landlord/onboarding');
+    return data;
+  },
+
+  /* ---- Profile ------------------------------------------------------------ */
+  async profile(): Promise<LandlordProfileResponse> {
+    const { data } = await portalHttp.landlord.get<LandlordProfileResponse>('/landlord/profile');
+    return data;
+  },
+  async updateProfile(payload: {
+    first_name?: string;
+    last_name?: string;
+    phone?: string | null;
+  }): Promise<LandlordProfileResponse> {
+    const { data } = await portalHttp.landlord.patch<LandlordProfileResponse>(
+      '/landlord/profile',
+      payload,
+    );
+    return data;
+  },
+  async uploadAvatar(file: File): Promise<MediaAsset> {
+    const form = new FormData();
+    form.append('file', file);
+    const { data } = await portalHttp.landlord.post<MediaAsset>('/landlord/avatar', form);
     return data;
   },
 
@@ -1408,9 +1436,9 @@ export const adminApi = {
     const { data } = await portalHttp.admin.post(`/admin/users/${id}/archive`, { reason });
     return data;
   },
-  // ── Maintenance (read-only admin visibility; no capability gate) ───────
+  // ── Maintenance oversight (viewing is baseline; mutations need manage_maintenance) ───────
   async maintenanceQueue(params?: {
-    status?: 'open' | 'urgent' | 'overdue' | 'waiting' | 'all';
+    status?: 'open' | 'urgent' | 'overdue' | 'waiting' | 'escalated' | 'unassigned' | 'all';
     limit?: number;
   }): Promise<{ data: AdminMaintenanceCase[] }> {
     const { data } = await portalHttp.admin.get<{ data: AdminMaintenanceCase[] }>('/admin/maintenance', {
@@ -1421,6 +1449,85 @@ export const adminApi = {
   async maintenanceSummary(): Promise<DashboardMaintenanceSummary> {
     const { data } = await portalHttp.admin.get<DashboardMaintenanceSummary>('/admin/maintenance/summary');
     return data;
+  },
+  async maintenanceDetail(id: string): Promise<{ data: AdminMaintenanceDetail }> {
+    const { data } = await portalHttp.admin.get<{ data: AdminMaintenanceDetail }>(`/admin/maintenance/${id}`);
+    return data;
+  },
+  async maintenanceAnalytics(params?: { date_from?: string; date_to?: string }): Promise<AdminMaintenanceAnalytics> {
+    const { data } = await portalHttp.admin.get<AdminMaintenanceAnalytics>('/admin/maintenance/analytics', { params });
+    return data;
+  },
+  /** Super-admin only — platform-wide oversight aggregates. */
+  async maintenanceOversight(): Promise<AdminMaintenanceOversight> {
+    const { data } = await portalHttp.admin.get<AdminMaintenanceOversight>('/admin/maintenance/oversight');
+    return data;
+  },
+  async assignMaintenanceCaseOwner(id: string, handlingAdminId: number): Promise<{ data: AdminMaintenanceDetail }> {
+    const { data } = await portalHttp.admin.post<{ data: AdminMaintenanceDetail }>(
+      `/admin/maintenance/${id}/assign`,
+      { handling_admin_id: handlingAdminId },
+    );
+    return data;
+  },
+  async escalateMaintenance(id: string, reason: string): Promise<{ data: AdminMaintenanceDetail }> {
+    const { data } = await portalHttp.admin.post<{ data: AdminMaintenanceDetail }>(
+      `/admin/maintenance/${id}/escalate`,
+      { reason },
+    );
+    return data;
+  },
+  async clearMaintenanceEscalation(id: string): Promise<{ data: AdminMaintenanceDetail }> {
+    const { data } = await portalHttp.admin.post<{ data: AdminMaintenanceDetail }>(
+      `/admin/maintenance/${id}/clear-escalation`,
+    );
+    return data;
+  },
+  async addMaintenanceNote(id: string, body: string): Promise<{ message: string; note: AdminMaintenanceNote }> {
+    const { data } = await portalHttp.admin.post(`/admin/maintenance/${id}/notes`, { body });
+    return data;
+  },
+  async overrideCloseMaintenance(id: string, reason: string): Promise<{ data: AdminMaintenanceDetail }> {
+    const { data } = await portalHttp.admin.post<{ data: AdminMaintenanceDetail }>(
+      `/admin/maintenance/${id}/override-close`,
+      { reason },
+    );
+    return data;
+  },
+  async overrideReopenMaintenance(id: string, reason: string): Promise<{ data: AdminMaintenanceDetail }> {
+    const { data } = await portalHttp.admin.post<{ data: AdminMaintenanceDetail }>(
+      `/admin/maintenance/${id}/override-reopen`,
+      { reason },
+    );
+    return data;
+  },
+  /** Scoped CSV export; the checksum is a real SHA-256 of the returned bytes. */
+  async exportMaintenance(params: {
+    scope: 'filtered' | 'property' | 'landlord' | 'single' | 'full';
+    status?: string;
+    priority?: string;
+    property_id?: number;
+    landlord_id?: number;
+    maintenance_request_id?: string;
+    reason?: string;
+  }): Promise<{ blob: Blob; filename: string; checksum: string; rowCount: number }> {
+    const response = await portalHttp.admin.get('/admin/maintenance/export', {
+      params,
+      responseType: 'blob',
+    });
+    const disposition = String(response.headers['content-disposition'] ?? '');
+    const filenameMatch = /filename="?([^"]+)"?/.exec(disposition);
+    return {
+      blob: response.data,
+      filename: filenameMatch?.[1] ?? 'maintenance.csv',
+      checksum: String(response.headers['x-export-checksum'] ?? ''),
+      rowCount: Number(response.headers['x-export-row-count'] ?? 0),
+    };
+  },
+  /** Stream a restricted media asset (e.g. maintenance evidence) as a Bearer-authed Blob. */
+  async mediaBlob(mediaAssetId: string): Promise<Blob> {
+    const { data } = await portalHttp.admin.get(`/admin/media/${mediaAssetId}`, { responseType: 'blob' });
+    return data as Blob;
   },
   /** Review queue with truthful per-status counts + filtered/sorted summaries. */
   async listingReviewQueue(params?: {
