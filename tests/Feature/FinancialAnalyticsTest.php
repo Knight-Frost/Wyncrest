@@ -572,4 +572,87 @@ class FinancialAnalyticsTest extends TestCase
         $this->assertEquals(0.00, $metrics['outstanding']['total_outstanding_balance']);
         $this->assertEquals(0, $metrics['ledger_integrity']['negative_balances_count']);
     }
+
+    public function test_outstanding_balance_includes_overdue_not_just_pending()
+    {
+        // Pending obligation (future due date, still unpaid).
+        LedgerEntry::factory()->pending()->create([
+            'contract_id' => $this->contract->id,
+            'tenant_id' => $this->tenant->id,
+            'landlord_id' => $this->landlord->id,
+            'type' => LedgerType::RENT,
+            'amount_cents' => 100000,
+        ]);
+
+        // Overdue obligation (also still unpaid).
+        LedgerEntry::factory()->overdue()->create([
+            'contract_id' => $this->contract->id,
+            'tenant_id' => $this->tenant->id,
+            'landlord_id' => $this->landlord->id,
+            'type' => LedgerType::RENT,
+            'amount_cents' => 50000,
+        ]);
+
+        $metrics = $this->analyticsService->getOutstandingMetrics();
+
+        // Outstanding must be pending + overdue (1500), not pending-only (1000).
+        $this->assertEquals(1500.00, $metrics['total_outstanding_balance']);
+    }
+
+    public function test_legitimate_negative_payment_is_not_flagged_as_corruption()
+    {
+        // A settled obligation: PAID rent obligation + its linked negative
+        // PAYMENT entry, exactly as PaymentEntryFactory records real payments.
+        $rent = LedgerEntry::factory()->paid()->create([
+            'contract_id' => $this->contract->id,
+            'tenant_id' => $this->tenant->id,
+            'landlord_id' => $this->landlord->id,
+            'type' => LedgerType::RENT,
+            'amount_cents' => 100000,
+        ]);
+
+        LedgerEntry::factory()->create([
+            'contract_id' => $this->contract->id,
+            'tenant_id' => $this->tenant->id,
+            'landlord_id' => $this->landlord->id,
+            'type' => LedgerType::PAYMENT,
+            'amount_cents' => -100000, // canonical: payments stored negative
+            'status' => LedgerStatus::PAID,
+            'related_rent_entry_id' => $rent->id,
+        ]);
+
+        $metrics = $this->analyticsService->getLedgerIntegrityMetrics();
+
+        // The negative payment is legitimate, not corruption.
+        $this->assertEquals(0, $metrics['negative_balances_count']);
+        // Charges (100000) - collected (100000) - outstanding (0) == 0.
+        $this->assertFalse($metrics['balance_mismatch_detected']);
+    }
+
+    public function test_wrong_signed_entries_are_flagged_as_corruption()
+    {
+        // A rent obligation stored negative (impossible under the convention).
+        LedgerEntry::factory()->create([
+            'contract_id' => $this->contract->id,
+            'tenant_id' => $this->tenant->id,
+            'landlord_id' => $this->landlord->id,
+            'type' => LedgerType::RENT,
+            'amount_cents' => -20000,
+            'status' => LedgerStatus::PENDING,
+        ]);
+
+        // A payment stored positive (impossible under the convention).
+        LedgerEntry::factory()->create([
+            'contract_id' => $this->contract->id,
+            'tenant_id' => $this->tenant->id,
+            'landlord_id' => $this->landlord->id,
+            'type' => LedgerType::PAYMENT,
+            'amount_cents' => 20000,
+            'status' => LedgerStatus::PAID,
+        ]);
+
+        $metrics = $this->analyticsService->getLedgerIntegrityMetrics();
+
+        $this->assertEquals(2, $metrics['negative_balances_count']);
+    }
 }

@@ -6,6 +6,7 @@ use App\Enums\LedgerStatus;
 use App\Enums\LedgerType;
 use App\Models\Contract;
 use App\Models\LedgerEntry;
+use App\Services\Ledger\LedgerComputationEngine;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -19,9 +20,42 @@ use Illuminate\Support\Facades\DB;
  * - Types: rent, late_fee
  * - Amount stored in cents
  * - Contracts use listing_id (not unit_id)
+ *
+ * Financial truth (outstanding balance, collected, sign convention) is delegated
+ * to LedgerComputationEngine so this module can never disagree with the ledger
+ * page/dashboards. The revenue metrics remain accrual-style and intentionally
+ * separate (see getRevenueMetrics()).
  */
 class FinancialAnalyticsService
 {
+    public function __construct(
+        protected LedgerComputationEngine $engine
+    ) {}
+
+    /**
+     * Translate this module's filter keys into the shape
+     * LedgerComputationEngine::applyFilters() expects.
+     */
+    protected function engineFilters(array $filters): array
+    {
+        $mapped = [];
+
+        if (isset($filters['start_date'])) {
+            $mapped['date_from'] = $filters['start_date'];
+        }
+        if (isset($filters['end_date'])) {
+            $mapped['date_to'] = $filters['end_date'];
+        }
+        if (isset($filters['user_id'])) {
+            $mapped['tenant_id'] = $filters['user_id'];
+        }
+        if (isset($filters['property_id'])) {
+            $mapped['property_id'] = $filters['property_id'];
+        }
+
+        return $mapped;
+    }
+
     /**
      * Get complete financial analytics
      */
@@ -92,12 +126,16 @@ class FinancialAnalyticsService
         $query = LedgerEntry::query();
         $this->applyFilters($query, $filters);
 
-        // Total outstanding (pending entries)
-        $totalOutstanding = (clone $query)
-            ->where('status', LedgerStatus::PENDING)
-            ->sum('amount_cents') / 100;
+        // Total outstanding: ALL still-unpaid obligations (pending + overdue,
+        // net of any linked payments). Delegated to the engine so this figure
+        // agrees with the ledger page — the old "pending only" sum understated
+        // the balance by excluding overdue obligations.
+        $totalOutstanding = $this->engine->computeOutstanding($this->engineFilters($filters)) / 100;
 
-        // Total overdue (overdue status)
+        // Total overdue: obligations explicitly in OVERDUE status. Kept as a
+        // status-based figure (a subset of the engine's overdue definition,
+        // which also treats pending-past-due as overdue) so it stays
+        // deterministic; documented as a minor, intentional divergence.
         $totalOverdue = (clone $query)
             ->where('status', LedgerStatus::OVERDUE)
             ->sum('amount_cents') / 100;
@@ -135,12 +173,25 @@ class FinancialAnalyticsService
         $query = LedgerEntry::query();
         $this->applyFilters($query, $filters);
 
-        // Ledger balance sum
+        // Ledger balance sum (raw signed sum = net balance; already sign-correct).
         $ledgerBalanceSum = (clone $query)->sum('amount_cents') / 100;
 
-        // Negative balances (should be 0)
+        // Sign-rule violations = genuinely corrupt entries. Under the canonical
+        // convention (LedgerComputationEngine) obligations (rent/late_fee) are
+        // stored POSITIVE and payments NEGATIVE, so a corrupt entry is a
+        // rent/late_fee with a negative amount OR a payment with a positive
+        // amount. The old check counted every amount_cents < 0, which flagged
+        // every legitimate payment as an anomaly.
         $negativeBalancesCount = (clone $query)
-            ->where('amount_cents', '<', 0)
+            ->where(function ($q) {
+                $q->where(function ($obligation) {
+                    $obligation->whereIn('type', [LedgerType::RENT->value, LedgerType::LATE_FEE->value])
+                        ->where('amount_cents', '<', 0);
+                })->orWhere(function ($payment) {
+                    $payment->where('type', LedgerType::PAYMENT->value)
+                        ->where('amount_cents', '>', 0);
+                });
+            })
             ->count();
 
         // Orphan entries (entries without valid contract)
@@ -148,16 +199,20 @@ class FinancialAnalyticsService
             ->whereDoesntHave('contract')
             ->count();
 
-        // Balance mismatch detection
-        $rentGenerated = (clone $query)->where('type', LedgerType::RENT)->sum('amount_cents') / 100;
-        $lateFees = (clone $query)->where('type', LedgerType::LATE_FEE)->sum('amount_cents') / 100;
-        $paid = (clone $query)->where('ledger_entries.status', LedgerStatus::PAID)->sum('amount_cents') / 100;
-        $pending = (clone $query)->where('status', LedgerStatus::PENDING)->sum('amount_cents') / 100;
-        $overdue = (clone $query)->where('status', LedgerStatus::OVERDUE)->sum('amount_cents') / 100;
+        // Balance mismatch: total (non-waived) charges minus what was collected
+        // must equal what is still outstanding. Computed in cents against the
+        // engine's sign-aware collected/outstanding figures so legitimate
+        // negative payment entries net correctly (the old check summed
+        // status=PAID entries, mixing positive paid-rent with negative payments
+        // and false-triggering once real payments existed).
+        $chargesNonWaived = (int) (clone $query)
+            ->whereIn('type', [LedgerType::RENT->value, LedgerType::LATE_FEE->value])
+            ->where('status', '!=', LedgerStatus::WAIVED->value)
+            ->sum('amount_cents');
+        $collected = $this->engine->computeCollected($this->engineFilters($filters));
+        $outstanding = $this->engine->computeOutstanding($this->engineFilters($filters));
 
-        $expectedBalance = $rentGenerated + $lateFees;
-        $actualBalance = $paid + $pending + $overdue;
-        $balanceMismatch = abs($expectedBalance - $actualBalance) > 0.01;
+        $balanceMismatch = ($chargesNonWaived - $collected - $outstanding) !== 0;
 
         return [
             'ledger_balance_sum' => (float) $ledgerBalanceSum,
