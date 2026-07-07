@@ -97,6 +97,11 @@
   align-items: center;
   gap: 0.4rem;
 }
+.wsad-toolbar .seg-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
 .wsad .seg {
   display: flex;
   background: var(--w-card);

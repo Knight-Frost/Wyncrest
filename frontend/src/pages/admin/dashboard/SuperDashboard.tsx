@@ -450,12 +450,15 @@ export function SuperDashboard({
           <Icon name="refresh" /> Updated <b>{updatedLabel}</b>
         </span>
         {a && (
-          <div className="seg">
-            {RANGES.map((r) => (
-              <button key={r.key} type="button" className={range === r.key ? 'on' : ''} onClick={() => onRange(r.key)}>
-                {r.label}
-              </button>
-            ))}
+          <div className="seg-wrap">
+            <div className="seg">
+              {RANGES.map((r) => (
+                <button key={r.key} type="button" className={range === r.key ? 'on' : ''} onClick={() => onRange(r.key)}>
+                  {r.label}
+                </button>
+              ))}
+            </div>
+            <InfoHint text={help.dateRange} label="About the date range" />
           </div>
         )}
         <button className="btn" type="button" onClick={onRefresh} disabled={refreshing}>
