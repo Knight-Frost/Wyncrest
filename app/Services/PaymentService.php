@@ -9,6 +9,7 @@ use App\Events\PaymentSucceeded;
 use App\Models\LedgerEntry;
 use App\Models\User;
 use App\Services\Ledger\LedgerComputationEngine;
+use App\Services\Ledger\PaymentEntryFactory;
 use Illuminate\Support\Facades\DB;
 use Stripe\Exception\ApiErrorException;
 use Stripe\StripeClient;
@@ -27,7 +28,8 @@ class PaymentService
 
     public function __construct(
         protected AuditService $auditService,
-        protected LedgerComputationEngine $engine
+        protected LedgerComputationEngine $engine,
+        protected PaymentEntryFactory $paymentEntries,
     ) {
         // Only initialize Stripe client if API key is configured
         // This allows the service to be instantiated in tests without real keys
@@ -222,21 +224,14 @@ class PaymentService
                 throw new \Exception("Ledger entry {$lockedEntry->id} is not payable (status: {$lockedEntry->status->value})");
             }
 
-            // Create PAYMENT ledger entry (negative amount = money received)
-            $paymentEntry = LedgerEntry::create([
-                'contract_id' => $lockedEntry->contract_id,
-                'tenant_id' => $lockedEntry->tenant_id,
-                'landlord_id' => $lockedEntry->landlord_id,
-                'type' => LedgerType::PAYMENT,
-                'amount_cents' => -$lockedEntry->amount_cents, // Negative = reduces balance
-                'currency' => $lockedEntry->currency,
-                'billing_period_start' => $lockedEntry->billing_period_start,
-                'billing_period_end' => $lockedEntry->billing_period_end,
-                'due_date' => now(),
-                'status' => LedgerStatus::PAID,
-                'related_rent_entry_id' => $lockedEntry->id,
-                'stripe_payment_intent_id' => $paymentIntentId,
-            ]);
+            // Create PAYMENT ledger entry (negative amount = money received).
+            // Shared shape lives in PaymentEntryFactory; the Stripe identity is
+            // the settling payment intent id.
+            $paymentEntry = LedgerEntry::create(
+                $this->paymentEntries->forObligation($lockedEntry, [
+                    'stripe_payment_intent_id' => $paymentIntentId,
+                ])
+            );
 
             // Settle the obligation itself so it stops being due (and can no
             // longer be marked overdue, fined, or paid a second time).

@@ -12,6 +12,7 @@ use App\Models\Contract;
 use App\Models\LedgerEntry;
 use App\Models\User;
 use App\Services\Ledger\BillingPeriodCalculator;
+use App\Services\Ledger\PaymentEntryFactory;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -26,6 +27,7 @@ class LedgerService
     public function __construct(
         protected AuditService $auditService,
         protected BillingPeriodCalculator $billingPeriods,
+        protected PaymentEntryFactory $paymentEntries,
     ) {}
 
     /**
@@ -202,21 +204,14 @@ class LedgerService
                 throw new \InvalidArgumentException('This entry was settled by another payment while recording. No payment was recorded.');
             }
 
-            return LedgerEntry::create([
-                'contract_id' => $entry->contract_id,
-                'tenant_id' => $entry->tenant_id,
-                'landlord_id' => $entry->landlord_id,
-                'type' => LedgerType::PAYMENT,
-                'amount_cents' => -$entry->amount_cents,
-                'currency' => $entry->currency,
-                'billing_period_start' => $entry->billing_period_start,
-                'billing_period_end' => $entry->billing_period_end,
-                'due_date' => now(),
-                'status' => LedgerStatus::PAID,
-                'related_rent_entry_id' => $entry->id,
-                'payment_method' => $method->value,
-                'payment_reference' => $reference,
-            ]);
+            // Shared PAYMENT-entry shape lives in PaymentEntryFactory; the
+            // manual identity is the offline method + reference.
+            return LedgerEntry::create(
+                $this->paymentEntries->forObligation($entry, [
+                    'payment_method' => $method->value,
+                    'payment_reference' => $reference,
+                ])
+            );
         });
 
         $amount = number_format($entry->amount_cents / 100, 2);
