@@ -44,11 +44,14 @@ trait ResolvesAnalyticsScope
             return null;
         }
 
-        $property = $user->properties()->first();
-
-        // why: a landlord with zero properties must never fall through to an
-        // unscoped (platform-wide) query; property_id 0 matches nothing.
-        $filters['property_id'] = $property?->id ?? 0;
+        // why: with no explicit property_id, scope to EVERY property the
+        // landlord owns — not just their first. The previous first-property
+        // fallback silently understated a multi-property landlord's figures
+        // (they saw one property's totals as if it were their whole book).
+        // landlord_id lives directly on ledger_entries / contracts and is
+        // honoured by both analytics services' applyFilters(); a landlord with
+        // zero properties still matches nothing but their own (empty) rows.
+        $filters['landlord_id'] = $user->id;
 
         return null;
     }

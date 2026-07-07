@@ -170,8 +170,31 @@ class SuperAdminAnalyticsService
     protected function financialSection(array $ledgerFilters): array
     {
         $summary = $this->ledger->computePlatformFinancialSummary($ledgerFilters);
-        $collectionRate = $summary['rent_charged_cents'] > 0
-            ? round(($summary['collected_cents'] / $summary['rent_charged_cents']) * 100, 2)
+
+        // Outstanding / overdue / due-soon are point-in-time STOCK balances
+        // ("as of now"), not date-ranged flows. Recompute them without the
+        // date filter so this section agrees with the Overview cards (which
+        // call computeOutstanding()/computeOverdue() unscoped) and with the
+        // aging / by-landlord / trend breakdowns below (also as-of-now). The
+        // date-filtered summary silently dropped arrears whose charge predated
+        // the selected range, producing three different "outstanding" numbers
+        // on one page. rent_charged / fees_charged / collected stay date-scoped
+        // — those are genuine flows over the selected window.
+        $nonDateFilters = array_diff_key($ledgerFilters, array_flip(['date_from', 'date_to']));
+        $summary['outstanding_cents'] = $this->ledger->computeOutstanding($nonDateFilters);
+        $summary['overdue_cents'] = $this->ledger->computeOverdue($nonDateFilters);
+        $summary['due_soon_cents'] = $summary['outstanding_cents'] - $summary['overdue_cents'];
+
+        // Collection rate over the SELECTED window, cohort-consistent: of every
+        // charge billed in the window (rent + late fees), what fraction is no
+        // longer outstanding. Bounded to [0, 100] by construction. The old
+        // ratio (all cash collected / rent charged) mixed cohorts — a payment
+        // settling a late fee or a prior-period rent inflated the numerator
+        // without a matching denominator, so it could exceed 100%.
+        $billedInWindow = $summary['rent_charged_cents'] + $summary['fees_charged_cents'];
+        $outstandingFromWindow = $this->ledger->computeOutstanding($ledgerFilters);
+        $collectionRate = $billedInWindow > 0
+            ? round((($billedInWindow - $outstandingFromWindow) / $billedInWindow) * 100, 2)
             : 0.0;
 
         $legacyFilters = array_filter([

@@ -231,6 +231,78 @@ class LandlordAnalyticsTest extends TestCase
         }
     }
 
+    public function test_financial_trend_includes_a_payment_made_on_the_last_day_of_the_month(): void
+    {
+        // Regression: financialTrend()'s per-month computeCollected() bounds used
+        // to be bare dates (toDateString()), so a "…-31 00:00:00" upper bound
+        // silently excluded a same-day timestamped payment made later that day.
+        $property = Property::factory()->create(['landlord_id' => $this->landlord->id]);
+        $unit = Unit::factory()->create(['property_id' => $property->id, 'availability_status' => UnitAvailabilityStatus::OCCUPIED]);
+        $listing = Listing::factory()->active()->create(['unit_id' => $unit->id, 'landlord_id' => $this->landlord->id]);
+        $contract = Contract::factory()->active()->create([
+            'listing_id' => $listing->id,
+            'landlord_id' => $this->landlord->id,
+        ]);
+
+        $lastMonthEnd = now()->subMonthNoOverflow()->endOfMonth();
+
+        LedgerEntry::factory()->paid()->create([
+            'contract_id' => $contract->id,
+            'tenant_id' => $contract->tenant_id,
+            'landlord_id' => $this->landlord->id,
+            'type' => 'payment',
+            'amount_cents' => -220000,
+            // Last calendar day of last month, at a non-midnight time.
+            'created_at' => $lastMonthEnd->copy()->setTime(23, 15, 0),
+        ]);
+
+        Sanctum::actingAs($this->landlord, [], 'sanctum');
+
+        $response = $this->getJson('/api/landlord/analytics')->assertStatus(200);
+
+        $trend = collect($response->json('financial_trend'));
+        $monthLabel = $lastMonthEnd->format('M');
+        $row = $trend->firstWhere('month', $monthLabel);
+
+        $this->assertNotNull($row);
+        $this->assertEquals(220000, $row['collected_cents']);
+    }
+
+    public function test_overdue_tenants_includes_a_pending_entry_whose_due_date_has_passed(): void
+    {
+        // Regression: overdueTenants() used to select on the narrow
+        // status=OVERDUE-only scope, missing rent that is genuinely past due
+        // but hasn't yet been flipped to OVERDUE by the nightly job.
+        $tenant = User::factory()->tenant()->create(['first_name' => 'Kofi', 'last_name' => 'Mensah']);
+        $property = Property::factory()->create(['landlord_id' => $this->landlord->id]);
+        $unit = Unit::factory()->create(['property_id' => $property->id, 'availability_status' => UnitAvailabilityStatus::OCCUPIED]);
+        $listing = Listing::factory()->active()->create(['unit_id' => $unit->id, 'landlord_id' => $this->landlord->id]);
+        $contract = Contract::factory()->active()->create([
+            'listing_id' => $listing->id,
+            'tenant_id' => $tenant->id,
+            'landlord_id' => $this->landlord->id,
+        ]);
+
+        LedgerEntry::factory()->pending()->create([
+            'contract_id' => $contract->id,
+            'tenant_id' => $tenant->id,
+            'landlord_id' => $this->landlord->id,
+            'amount_cents' => 275000,
+            'due_date' => now()->subDays(12),
+        ]);
+
+        Sanctum::actingAs($this->landlord, [], 'sanctum');
+
+        $response = $this->getJson('/api/landlord/analytics')->assertStatus(200);
+
+        $overdue = collect($response->json('payments.overdue_tenants'));
+        $row = $overdue->firstWhere('contract_id', $contract->id);
+
+        $this->assertNotNull($row);
+        $this->assertGreaterThan(0, $row['overdue_cents']);
+        $this->assertGreaterThan(0, $row['days_overdue']);
+    }
+
     public function test_analytics_requires_authentication(): void
     {
         $this->getJson('/api/landlord/analytics')->assertStatus(401);

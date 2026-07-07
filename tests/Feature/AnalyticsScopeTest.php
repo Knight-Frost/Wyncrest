@@ -29,12 +29,15 @@ class AnalyticsScopeTest extends TestCase
 {
     use RefreshDatabase;
 
-    protected function landlordWithRevenue(int $rentCents = 500000): array
+    protected function landlordWithRevenue(int $rentCents = 500000, ?string $propertyName = null): array
     {
         $landlord = User::factory()->landlord()->create();
         $tenant = User::factory()->tenant()->create();
 
-        $property = Property::factory()->create(['landlord_id' => $landlord->id]);
+        $property = Property::factory()->create(array_filter([
+            'landlord_id' => $landlord->id,
+            'name' => $propertyName,
+        ]));
         $unit = Unit::factory()->create(['property_id' => $property->id]);
         $listing = Listing::factory()->create([
             'unit_id' => $unit->id,
@@ -123,5 +126,81 @@ class AnalyticsScopeTest extends TestCase
         $this->actingAs($admin, 'admin');
 
         $this->getJson('/api/admin/analytics/financial')->assertOk();
+    }
+
+    /**
+     * Regression for the CRITICAL cross-landlord revenue leak: getRevenueByProperty()
+     * built its own joined query and never re-applied ownership scoping, so any
+     * authenticated caller could see every landlord's property names + paid-rent totals.
+     */
+    public function test_revenue_by_property_does_not_leak_another_landlords_property(): void
+    {
+        $a = $this->landlordWithRevenue(500000, 'Ridge Heights A');
+        $b = $this->landlordWithRevenue(300000, 'Harbor View B');
+
+        Sanctum::actingAs($a['landlord'], [], 'sanctum');
+        $response = $this->getJson('/api/analytics/financial')->assertOk();
+
+        $byProperty = $response->json('analytics.revenue.revenue_by_property');
+        $this->assertArrayHasKey('Ridge Heights A', $byProperty);
+        $this->assertArrayNotHasKey('Harbor View B', $byProperty);
+
+        // A tenant caller must likewise only ever see their own property's revenue.
+        Sanctum::actingAs($a['tenant'], [], 'sanctum');
+        $tenantResponse = $this->getJson('/api/analytics/financial')->assertOk();
+        $tenantByProperty = $tenantResponse->json('analytics.revenue.revenue_by_property');
+        $this->assertArrayHasKey('Ridge Heights A', $tenantByProperty);
+        $this->assertArrayNotHasKey('Harbor View B', $tenantByProperty);
+    }
+
+    /**
+     * Regression for the "first property only" scoping collapse: a landlord with
+     * multiple properties, each carrying outstanding rent, must see the SUM across
+     * their whole portfolio, not just whichever property happened to resolve first.
+     */
+    public function test_multi_property_landlord_sees_outstanding_summed_across_the_whole_portfolio(): void
+    {
+        $landlord = User::factory()->landlord()->create();
+
+        $propertyA = Property::factory()->create(['landlord_id' => $landlord->id]);
+        $unitA = Unit::factory()->create(['property_id' => $propertyA->id]);
+        $listingA = Listing::factory()->create(['unit_id' => $unitA->id, 'landlord_id' => $landlord->id]);
+        $contractA = Contract::factory()->create([
+            'listing_id' => $listingA->id,
+            'landlord_id' => $landlord->id,
+            'status' => ContractStatus::ACTIVE,
+        ]);
+        LedgerEntry::factory()->create([
+            'contract_id' => $contractA->id,
+            'tenant_id' => $contractA->tenant_id,
+            'landlord_id' => $landlord->id,
+            'type' => LedgerType::RENT,
+            'status' => LedgerStatus::PENDING,
+            'amount_cents' => 400000,
+        ]);
+
+        $propertyB = Property::factory()->create(['landlord_id' => $landlord->id]);
+        $unitB = Unit::factory()->create(['property_id' => $propertyB->id]);
+        $listingB = Listing::factory()->create(['unit_id' => $unitB->id, 'landlord_id' => $landlord->id]);
+        $contractB = Contract::factory()->create([
+            'listing_id' => $listingB->id,
+            'landlord_id' => $landlord->id,
+            'status' => ContractStatus::ACTIVE,
+        ]);
+        LedgerEntry::factory()->create([
+            'contract_id' => $contractB->id,
+            'tenant_id' => $contractB->tenant_id,
+            'landlord_id' => $landlord->id,
+            'type' => LedgerType::RENT,
+            'status' => LedgerStatus::PENDING,
+            'amount_cents' => 250000,
+        ]);
+
+        Sanctum::actingAs($landlord, [], 'sanctum');
+
+        $response = $this->getJson('/api/analytics/financial')->assertOk();
+
+        // 400000 + 250000 cents = 6500.00, not either property's total alone.
+        $this->assertEquals(6500.0, $response->json('analytics.outstanding.total_outstanding_balance'));
     }
 }

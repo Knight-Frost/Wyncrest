@@ -29,11 +29,7 @@ class PlatformAnalyticsService
 
     public function getOccupancyMetrics(array $filters = []): array
     {
-        $unitsQuery = Unit::query();
-
-        if (isset($filters['property_id'])) {
-            $unitsQuery->where('property_id', $filters['property_id']);
-        }
+        $unitsQuery = $this->scopeUnits(Unit::query(), $filters);
 
         $totalUnits = $unitsQuery->count();
 
@@ -67,49 +63,51 @@ class PlatformAnalyticsService
 
     public function getGrowthMetrics(array $filters = []): array
     {
-        $usersByRole = User::select('user_type', DB::raw('COUNT(*) as count'))
-            ->groupBy('user_type')
-            ->get()
-            ->mapWithKeys(function ($item) {
-                $roleValue = $item->user_type instanceof \UnitEnum
-                    ? $item->user_type->value
-                    : $item->user_type;
-
-                return [$roleValue => $item->count];
-            })
-            ->toArray();
-
         $propertyQuery = Property::query();
         if (isset($filters['property_id'])) {
             $propertyQuery->where('id', $filters['property_id']);
         }
+        if (isset($filters['landlord_id'])) {
+            $propertyQuery->where('landlord_id', $filters['landlord_id']);
+        }
 
         $totalProperties = $propertyQuery->count();
 
-        $unitQuery = Unit::query();
-        if (isset($filters['property_id'])) {
-            $unitQuery->where('property_id', $filters['property_id']);
-        }
+        $totalUnits = $this->scopeUnits(Unit::query(), $filters)->count();
 
-        $totalUnits = $unitQuery->count();
-
-        return [
-            'total_users' => User::count(),
-            'users_by_role' => $usersByRole,
+        $growth = [
             'total_properties' => $totalProperties,
             'total_units' => $totalUnits,
         ];
+
+        // why: platform-wide user counts are a super-admin figure. A landlord-
+        // scoped caller must NOT receive the platform's total user count or the
+        // tenant/landlord role split — that is neither their data nor a truthful
+        // "their portfolio" number. Only the unscoped (admin) view exposes it.
+        if (! isset($filters['landlord_id'])) {
+            $growth = [
+                'total_users' => User::count(),
+                'users_by_role' => User::select('user_type', DB::raw('COUNT(*) as count'))
+                    ->groupBy('user_type')
+                    ->get()
+                    ->mapWithKeys(function ($item) {
+                        $roleValue = $item->user_type instanceof \UnitEnum
+                            ? $item->user_type->value
+                            : $item->user_type;
+
+                        return [$roleValue => $item->count];
+                    })
+                    ->toArray(),
+                ...$growth,
+            ];
+        }
+
+        return $growth;
     }
 
     public function getUtilizationMetrics(array $filters = []): array
     {
-        $listingQuery = Listing::query();
-
-        if (isset($filters['property_id'])) {
-            $listingQuery->whereHas('unit', function ($q) use ($filters) {
-                $q->where('property_id', $filters['property_id']);
-            });
-        }
+        $listingQuery = $this->scopeListings(Listing::query(), $filters);
 
         $totalListings = $listingQuery->count();
 
@@ -124,6 +122,9 @@ class PlatformAnalyticsService
                     $subQ->where('property_id', $filters['property_id']);
                 });
             })
+            ->when(isset($filters['landlord_id']), function ($q) use ($filters) {
+                $q->where('landlord_id', $filters['landlord_id']);
+            })
             ->count();
 
         $conversionRate = $totalListings > 0
@@ -137,16 +138,52 @@ class PlatformAnalyticsService
         ];
     }
 
-    protected function getAverageVacancyDuration(array $filters = []): float
+    /**
+     * Scope a Unit query to the requested property and/or landlord. property_id
+     * is the specific unit's property; landlord_id constrains to every property
+     * the landlord owns (via the property relation). Both may be present (the
+     * intersection is still correct); an admin passes neither → platform-wide.
+     */
+    protected function scopeUnits($query, array $filters)
     {
-        $unitsQuery = Unit::query();
-
         if (isset($filters['property_id'])) {
-            $unitsQuery->where('property_id', $filters['property_id']);
+            $query->where('property_id', $filters['property_id']);
         }
 
+        if (isset($filters['landlord_id'])) {
+            $query->whereHas('property', function ($q) use ($filters) {
+                $q->where('landlord_id', $filters['landlord_id']);
+            });
+        }
+
+        return $query;
+    }
+
+    /**
+     * Scope a Listing query to the requested property and/or landlord via
+     * listing → unit → property.
+     */
+    protected function scopeListings($query, array $filters)
+    {
+        if (isset($filters['property_id'])) {
+            $query->whereHas('unit', function ($q) use ($filters) {
+                $q->where('property_id', $filters['property_id']);
+            });
+        }
+
+        if (isset($filters['landlord_id'])) {
+            $query->whereHas('unit.property', function ($q) use ($filters) {
+                $q->where('landlord_id', $filters['landlord_id']);
+            });
+        }
+
+        return $query;
+    }
+
+    protected function getAverageVacancyDuration(array $filters = []): float
+    {
         // Get vacant units (units without active contracts)
-        $vacantUnits = $unitsQuery
+        $vacantUnits = $this->scopeUnits(Unit::query(), $filters)
             ->whereDoesntHave('listings', function ($listingQuery) {
                 $listingQuery->whereIn('id', function ($subQuery) {
                     $subQuery->select('listing_id')

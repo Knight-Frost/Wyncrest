@@ -27,7 +27,7 @@ class NotificationAnalyticsService
             'volume' => $this->getVolumeMetrics($filters),
             'delivery' => $this->getDeliveryMetrics($filters),
             'performance' => $this->getPerformanceMetrics($filters),
-            'preferences' => $this->getPreferenceMetrics(),
+            'preferences' => $this->getPreferenceMetrics($filters),
             'digests' => $this->getDigestMetrics($filters),
         ];
     }
@@ -116,6 +116,12 @@ class NotificationAnalyticsService
             $query->where('created_at', '<=', $filters['end_date']);
         }
 
+        // why: a personal-scoped caller (tenant/landlord) must never receive
+        // platform-wide delivery-latency figures for other users' notifications.
+        if (isset($filters['user_id'])) {
+            $query->where('user_id', $filters['user_id']);
+        }
+
         // Calculate average delivery latency in seconds
         $latencies = $query->get()->map(function ($notification) {
             if ($notification->delivered_at && $notification->created_at) {
@@ -147,15 +153,28 @@ class NotificationAnalyticsService
     /**
      * Preference Metrics
      */
-    public function getPreferenceMetrics(): array
+    public function getPreferenceMetrics(array $filters = []): array
     {
-        $totalUsers = User::count();
-        $usersWithPreferences = NotificationPreference::distinct('user_id')->count('user_id');
+        // why: a personal-scoped caller (tenant/landlord) must never receive
+        // platform-wide preference aggregates for other users; scope every
+        // query to the caller and report total_users as just themselves.
+        if (isset($filters['user_id'])) {
+            $totalUsers = User::whereKey($filters['user_id'])->count();
+            $usersWithPreferences = NotificationPreference::where('user_id', $filters['user_id'])->distinct('user_id')->count('user_id');
 
-        $emailEnabled = NotificationPreference::where('email_enabled', true)->count();
-        $smsEnabled = NotificationPreference::where('sms_enabled', true)->count();
-        $emailDisabled = NotificationPreference::where('email_enabled', false)->count();
-        $smsDisabled = NotificationPreference::where('sms_enabled', false)->count();
+            $emailEnabled = NotificationPreference::where('user_id', $filters['user_id'])->where('email_enabled', true)->count();
+            $smsEnabled = NotificationPreference::where('user_id', $filters['user_id'])->where('sms_enabled', true)->count();
+            $emailDisabled = NotificationPreference::where('user_id', $filters['user_id'])->where('email_enabled', false)->count();
+            $smsDisabled = NotificationPreference::where('user_id', $filters['user_id'])->where('sms_enabled', false)->count();
+        } else {
+            $totalUsers = User::count();
+            $usersWithPreferences = NotificationPreference::distinct('user_id')->count('user_id');
+
+            $emailEnabled = NotificationPreference::where('email_enabled', true)->count();
+            $smsEnabled = NotificationPreference::where('sms_enabled', true)->count();
+            $emailDisabled = NotificationPreference::where('email_enabled', false)->count();
+            $smsDisabled = NotificationPreference::where('sms_enabled', false)->count();
+        }
 
         return [
             'total_users' => $totalUsers,
@@ -174,9 +193,16 @@ class NotificationAnalyticsService
      */
     public function getDigestMetrics(array $filters = []): array
     {
-        $immediateCount = NotificationPreference::where('delivery_mode', 'immediate')->count();
-        $dailyCount = NotificationPreference::where('delivery_mode', 'daily_digest')->count();
-        $weeklyCount = NotificationPreference::where('delivery_mode', 'weekly_digest')->count();
+        // why: a personal-scoped caller (tenant/landlord) must never receive
+        // platform-wide digest-adoption aggregates for other users.
+        $preferenceQuery = NotificationPreference::query();
+        if (isset($filters['user_id'])) {
+            $preferenceQuery->where('user_id', $filters['user_id']);
+        }
+
+        $immediateCount = (clone $preferenceQuery)->where('delivery_mode', 'immediate')->count();
+        $dailyCount = (clone $preferenceQuery)->where('delivery_mode', 'daily_digest')->count();
+        $weeklyCount = (clone $preferenceQuery)->where('delivery_mode', 'weekly_digest')->count();
         $total = $immediateCount + $dailyCount + $weeklyCount;
 
         return [
@@ -245,6 +271,12 @@ class NotificationAnalyticsService
             $query->where('created_at', '<=', $filters['end_date']);
         }
 
+        // why: a personal-scoped caller (tenant/landlord) must never receive
+        // the platform-wide daily volume trend for other users' notifications.
+        if (isset($filters['user_id'])) {
+            $query->where('user_id', $filters['user_id']);
+        }
+
         return $query->select(DB::raw('DATE(created_at) as date'), DB::raw('count(*) as count'))
             ->groupBy('date')
             ->orderBy('date')
@@ -268,6 +300,12 @@ class NotificationAnalyticsService
             $query->where('notifications.created_at', '<=', $filters['end_date']);
         }
 
+        // why: a personal-scoped caller (tenant/landlord) must never receive
+        // the platform-wide by-role breakdown for other users' notifications.
+        if (isset($filters['user_id'])) {
+            $query->where('notifications.user_id', $filters['user_id']);
+        }
+
         return $query->select('users.user_type', DB::raw('count(*) as count'))
             ->groupBy('users.user_type')
             ->get()
@@ -288,6 +326,12 @@ class NotificationAnalyticsService
 
         if (isset($filters['end_date'])) {
             $query->where('created_at', '<=', $filters['end_date']);
+        }
+
+        // why: a personal-scoped caller (tenant/landlord) must never receive
+        // the platform-wide per-user average for other users' notifications.
+        if (isset($filters['user_id'])) {
+            $query->where('user_id', $filters['user_id']);
         }
 
         $totalNotifications = $query->count();

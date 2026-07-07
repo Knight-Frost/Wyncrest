@@ -49,6 +49,9 @@ class FinancialAnalyticsService
         if (isset($filters['user_id'])) {
             $mapped['tenant_id'] = $filters['user_id'];
         }
+        if (isset($filters['landlord_id'])) {
+            $mapped['landlord_id'] = $filters['landlord_id'];
+        }
         if (isset($filters['property_id'])) {
             $mapped['property_id'] = $filters['property_id'];
         }
@@ -239,6 +242,10 @@ class FinancialAnalyticsService
             $query->where('tenant_id', $filters['user_id']);
         }
 
+        if (isset($filters['landlord_id'])) {
+            $query->where('landlord_id', $filters['landlord_id']);
+        }
+
         if (isset($filters['property_id'])) {
             $query->whereHas('contract.listing.unit', function ($q) use ($filters) {
                 $q->where('property_id', $filters['property_id']);
@@ -293,6 +300,23 @@ class FinancialAnalyticsService
 
         if (isset($filters['end_date'])) {
             $query->where('ledger_entries.created_at', '<=', $filters['end_date']);
+        }
+
+        // why: this helper builds its own join query instead of going through
+        // applyFilters(), so it MUST re-apply the same ownership scoping or it
+        // leaks every landlord's property names + paid-rent totals to any
+        // authenticated caller (tenant or landlord). Scope on the already-
+        // joined columns to mirror applyFilters() exactly.
+        if (isset($filters['user_id'])) {
+            $query->where('ledger_entries.tenant_id', $filters['user_id']);
+        }
+
+        if (isset($filters['landlord_id'])) {
+            $query->where('ledger_entries.landlord_id', $filters['landlord_id']);
+        }
+
+        if (isset($filters['property_id'])) {
+            $query->where('units.property_id', $filters['property_id']);
         }
 
         $results = $query->select(

@@ -252,6 +252,62 @@ class NotificationAnalyticsTest extends TestCase
         $this->assertEquals('personal', $response->json('scoped_to'));
     }
 
+    /**
+     * Regression: a personal-scoped caller (tenant/landlord) must never receive
+     * platform-wide preference/digest/volume-trend aggregates for other users —
+     * only getVolumeMetrics()'s total_notifications was previously scoped.
+     */
+    public function test_tenant_personal_scope_does_not_leak_platform_wide_preferences_or_trend()
+    {
+        // Preferences exist for the tenant AND two other users — if scoping
+        // leaked, total_users would report the whole platform, not just 1.
+        NotificationPreference::create([
+            'user_id' => $this->tenant->id,
+            'notification_type' => 'rent_generated',
+            'email_enabled' => true,
+            'sms_enabled' => false,
+        ]);
+
+        $other1 = User::factory()->tenant()->create();
+        $other2 = User::factory()->landlord()->create();
+
+        NotificationPreference::create([
+            'user_id' => $other1->id,
+            'notification_type' => 'rent_generated',
+            'email_enabled' => true,
+            'sms_enabled' => true,
+            'delivery_mode' => 'daily_digest',
+        ]);
+        NotificationPreference::create([
+            'user_id' => $other2->id,
+            'notification_type' => 'payment_failed',
+            'email_enabled' => false,
+            'sms_enabled' => true,
+            'delivery_mode' => 'weekly_digest',
+        ]);
+
+        // Notifications: 2 for the tenant, 5 for another user.
+        Notification::factory()->count(2)->create(['user_id' => $this->tenant->id]);
+        Notification::factory()->count(5)->create(['user_id' => $other1->id]);
+
+        $response = $this->actingAs($this->tenant, 'sanctum')
+            ->getJson('/api/analytics/notifications');
+
+        $response->assertStatus(200);
+
+        // Preferences: only the caller, never the platform's 5 users.
+        $this->assertEquals(1, $response->json('analytics.preferences.total_users'));
+
+        // Digests: none of the OTHER users' digest preferences should leak in.
+        $this->assertEquals(0, $response->json('analytics.digests.daily_digest_users'));
+        $this->assertEquals(0, $response->json('analytics.digests.weekly_digest_users'));
+
+        // by_day trend: only the tenant's own 2 notifications, not the other
+        // user's 5.
+        $byDay = $response->json('analytics.volume.by_day');
+        $this->assertEquals(2, array_sum($byDay));
+    }
+
     public function test_unauthenticated_user_cannot_access_analytics()
     {
         $response = $this->getJson('/api/analytics/notifications');

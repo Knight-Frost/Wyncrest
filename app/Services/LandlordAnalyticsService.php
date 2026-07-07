@@ -208,8 +208,14 @@ class LandlordAnalyticsService
                 'collected_cents' => $this->engine->computeCollected([
                     'landlord_id' => $landlordId,
                     'property_id' => $propertyId,
-                    'date_from' => $monthStart->toDateString(),
-                    'date_to' => $monthEnd->toDateString(),
+                    // why: full datetime bounds, not bare dates. computeCollected
+                    // filters PAYMENT.created_at, and a bare 'YYYY-MM-31' compares
+                    // as '…-31 00:00:00', silently dropping every payment made on
+                    // the last day of the month — so the trend disagreed with the
+                    // summary card that included it. Every other method here
+                    // already uses from_datetime/to_datetime; this was the lone gap.
+                    'date_from' => $monthStart->copy()->startOfDay()->toDateTimeString(),
+                    'date_to' => $monthEnd->copy()->endOfDay()->toDateTimeString(),
                 ]),
                 'expected_cents' => $this->rentDueInWindow($landlordId, $monthStart->toDateString(), $monthEnd->toDateString(), $propertyId),
             ];
@@ -547,8 +553,23 @@ class LandlordAnalyticsService
      */
     protected function overdueTenants(int $landlordId, ?int $propertyId = null): array
     {
+        // why: select overdue contracts using the ENGINE's overdue definition
+        // (status OVERDUE, OR still-PENDING with a due date in the past), not
+        // the narrow status=OVERDUE-only model scope. The summary card,
+        // balance-aging buckets, and the Ledger Balances page all treat
+        // pending-past-due as overdue (via LedgerComputationEngine); the old
+        // ->overdue() scope omitted any contract whose rent was past due but
+        // not yet flipped by the nightly mark-overdue job, so this table
+        // silently disagreed with every other overdue figure on the portfolio.
+        $overduePredicate = function ($q) {
+            $today = Carbon::today()->toDateString();
+            $q->where('status', LedgerStatus::OVERDUE)
+                ->orWhere(fn ($q2) => $q2->where('status', LedgerStatus::PENDING)->whereDate('due_date', '<', $today));
+        };
+
         $contractIds = LedgerEntry::byLandlord($landlordId)
-            ->overdue()
+            ->unpaid()
+            ->where($overduePredicate)
             ->when($propertyId, fn ($q) => $q->whereHas('contract.listing.unit', fn ($q2) => $q2->where('property_id', $propertyId)))
             ->distinct()
             ->pluck('contract_id');
@@ -559,9 +580,13 @@ class LandlordAnalyticsService
 
         $contracts = Contract::whereIn('id', $contractIds)->with(['tenant', 'listing.unit.property'])->get();
 
-        return $contracts->map(function (Contract $contract) {
+        return $contracts->map(function (Contract $contract) use ($overduePredicate) {
             $unit = $contract->listing?->unit;
-            $oldestUnpaid = LedgerEntry::where('contract_id', $contract->id)->overdue()->orderBy('due_date')->first();
+            $oldestUnpaid = LedgerEntry::where('contract_id', $contract->id)
+                ->unpaid()
+                ->where($overduePredicate)
+                ->orderBy('due_date')
+                ->first();
             $lastPayment = LedgerEntry::where('contract_id', $contract->id)
                 ->where('type', LedgerType::PAYMENT->value)
                 ->latest('created_at')

@@ -466,4 +466,81 @@ class AdminAnalyticsOverviewTest extends TestCase
         $trend = $response->json('analytics.financial.outstanding_trend_by_month');
         $this->assertCount(6, $trend);
     }
+
+    /**
+     * Regression: financial.outstanding_cents/overdue_cents/due_soon_cents must be
+     * recomputed point-in-time (date filter stripped) so a narrow selected range
+     * never hides real arrears that were charged before the window, and so the
+     * Financial tab always agrees with the Overview cards (both "as of now" stocks).
+     */
+    public function test_financial_outstanding_is_point_in_time_and_matches_the_overview_card(): void
+    {
+        $contract = Contract::factory()->active()->create();
+
+        // Charged and became overdue well before a narrow 7-day window, but is
+        // STILL unpaid today. A date-scoped "outstanding" would silently drop it.
+        LedgerEntry::factory()->overdue()->create([
+            'contract_id' => $contract->id,
+            'tenant_id' => $contract->tenant_id,
+            'landlord_id' => $contract->landlord_id,
+            'amount_cents' => 45_000,
+            'created_at' => now()->subDays(60),
+            'due_date' => now()->subDays(50),
+        ]);
+
+        $this->actingAs($this->superAdmin, 'admin');
+
+        $response = $this->getJson('/api/admin/analytics/overview?range=7d');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('analytics.financial.outstanding_cents', 45_000);
+
+        $this->assertEquals(
+            $response->json('analytics.overview.outstanding_cents'),
+            $response->json('analytics.financial.outstanding_cents')
+        );
+    }
+
+    /**
+     * Regression: collection_rate_percentage must never exceed 100, even when raw
+     * cash collected in a window exceeds rent billed in that same window (e.g. a
+     * payment settling a late fee or a prior-period charge). The cohort-consistent
+     * formula (billed - stillOutstandingFromThatCohort) / billed is bounded by
+     * construction; the old (allCashCollected / rentCharged) ratio was not.
+     */
+    public function test_collection_rate_never_exceeds_100_percent(): void
+    {
+        $contract = Contract::factory()->active()->create();
+
+        // $500 rent, charged and fully paid within the window.
+        LedgerEntry::factory()->paid()->create([
+            'contract_id' => $contract->id,
+            'tenant_id' => $contract->tenant_id,
+            'landlord_id' => $contract->landlord_id,
+            'type' => LedgerType::RENT,
+            'amount_cents' => 50_000,
+            'created_at' => now()->subDays(2),
+        ]);
+
+        // An extra $800 payment recorded in the same window (e.g. settling a
+        // late fee / prior-period rent) — raw cash collected in-window now
+        // exceeds rent billed in-window.
+        LedgerEntry::factory()->create([
+            'contract_id' => $contract->id,
+            'tenant_id' => $contract->tenant_id,
+            'landlord_id' => $contract->landlord_id,
+            'type' => LedgerType::PAYMENT,
+            'status' => LedgerStatus::PAID,
+            'amount_cents' => -80_000,
+            'created_at' => now()->subDays(1),
+        ]);
+
+        $this->actingAs($this->superAdmin, 'admin');
+
+        $response = $this->getJson('/api/admin/analytics/overview?range=7d');
+        $response->assertStatus(200);
+
+        $rate = $response->json('analytics.financial.collection_rate_percentage');
+        $this->assertLessThanOrEqual(100, $rate);
+    }
 }

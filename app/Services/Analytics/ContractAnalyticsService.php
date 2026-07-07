@@ -214,6 +214,11 @@ class ContractAnalyticsService
             $query->where('tenant_id', $filters['user_id']);
         }
 
+        if (isset($filters['landlord_id'])) {
+            // Scope to every contract the landlord owns (contracts.landlord_id).
+            $query->where('landlord_id', $filters['landlord_id']);
+        }
+
         if (isset($filters['property_id'])) {
             // Property filter via listing → unit → property
             $query->whereHas('listing.unit', function ($q) use ($filters) {

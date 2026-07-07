@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Admin;
 use App\Services\MetricsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -96,9 +97,26 @@ class MetricsController extends Controller
     {
         $limit = $request->query('limit', 20);
 
+        $requests = $this->metricsService->getRecentRequests($limit);
+
+        // why: /admin/metrics/* is open to admin.or.landlord, but recent_requests
+        // records every user's activity (user_id/user_type). A landlord is not
+        // entitled to enumerate other users' identities, only the operational
+        // shape of traffic — so redact identity fields unless the caller is an
+        // Admin. MetricsService stays a pure recorder; redaction is a read-time,
+        // caller-scoped concern that belongs in the controller.
+        if (! $request->user() instanceof Admin) {
+            $requests = array_map(static function (array $entry) {
+                $entry['user_id'] = null;
+                $entry['user_type'] = null;
+
+                return $entry;
+            }, $requests);
+        }
+
         return response()->json([
             'success' => true,
-            'data' => $this->metricsService->getRecentRequests($limit),
+            'data' => $requests,
         ]);
     }
 }
