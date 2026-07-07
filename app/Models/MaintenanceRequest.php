@@ -39,6 +39,7 @@ class MaintenanceRequest extends Model
         'property_id',
         'unit_id',
         'landlord_id',
+        'handling_admin_id',
         'reported_by',
         'title',
         'description',
@@ -70,6 +71,8 @@ class MaintenanceRequest extends Model
         'expected_completion_date',
         'resolved_at',
         'closed_at',
+        'escalated_at',
+        'escalation_reason',
     ];
 
     protected $casts = [
@@ -94,6 +97,7 @@ class MaintenanceRequest extends Model
         'expected_completion_date' => 'date',
         'resolved_at' => 'datetime',
         'closed_at' => 'datetime',
+        'escalated_at' => 'datetime',
     ];
 
     /**
@@ -136,6 +140,16 @@ class MaintenanceRequest extends Model
         return $this->belongsTo(User::class, 'landlord_id');
     }
 
+    /**
+     * The platform admin currently triaging/owning this case, if any.
+     * Distinct from assignee_name/assignee_type, which is the landlord's own
+     * contractor/vendor.
+     */
+    public function handlingAdmin(): BelongsTo
+    {
+        return $this->belongsTo(Admin::class, 'handling_admin_id');
+    }
+
     public function contract(): BelongsTo
     {
         return $this->belongsTo(Contract::class);
@@ -167,6 +181,14 @@ class MaintenanceRequest extends Model
         return $this->morphMany(MediaAsset::class, 'attachable')
             ->active()
             ->ordered();
+    }
+
+    /**
+     * Internal, admin-only notes — never exposed to the tenant or landlord.
+     */
+    public function adminNotes(): HasMany
+    {
+        return $this->hasMany(MaintenanceAdminNote::class)->latest();
     }
 
     // ─── Scopes ───────────────────────────────────────────────────────────────

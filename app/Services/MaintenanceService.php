@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\MaintenanceReporter;
 use App\Enums\MaintenanceStatus;
 use App\Enums\NotificationType;
+use App\Models\Admin;
 use App\Models\Contract;
 use App\Models\MaintenanceEvent;
 use App\Models\MaintenanceRequest;
@@ -321,6 +322,40 @@ class MaintenanceService
     }
 
     /**
+     * Platform-admin override: force-close a case the landlord has stalled
+     * on. A genuine MaintenanceStatus transition (unlike escalate/assign-
+     * owner, which are admin-only metadata) — so it goes through the same
+     * tenant-visible timeline + audit trail as a landlord-driven close, with
+     * the admin recorded as the actor.
+     */
+    public function adminOverrideClose(MaintenanceRequest $request, Admin $admin, string $reason): MaintenanceRequest
+    {
+        $request->status = MaintenanceStatus::CLOSED;
+        $request->closed_at = now();
+        $request->save();
+
+        $this->recordEvent($request, 'closed', "Closed by platform admin: {$reason}", $admin, ['override' => true, 'reason' => $reason]);
+        $this->logAndNotify($request, $admin, 'closed');
+
+        return $request->fresh();
+    }
+
+    /**
+     * Platform-admin override: reopen a case (e.g. the tenant disputes that
+     * it was actually resolved). Mirrors reopen()'s status logic exactly.
+     */
+    public function adminOverrideReopen(MaintenanceRequest $request, Admin $admin, string $reason): MaintenanceRequest
+    {
+        $request->status = $request->assignee_name ? MaintenanceStatus::ASSIGNED : MaintenanceStatus::ACKNOWLEDGED;
+        $request->save();
+
+        $this->recordEvent($request, 'reopened', "Reopened by platform admin: {$reason}", $admin, ['override' => true, 'reason' => $reason]);
+        $this->logAndNotify($request, $admin, 'reopened');
+
+        return $request->fresh();
+    }
+
+    /**
      * Cancel an open request as the tenant. Only OPEN requests are cancellable
      * (enforced by the policy/controller before this is called).
      */
@@ -348,13 +383,15 @@ class MaintenanceService
     // -------------------------------------------------------------------------
 
     /**
-     * Shared audit + tenant-notification tail for every landlord-driven
-     * status transition.
+     * Shared audit + tenant-notification tail for every status transition.
+     * $actor is typically the landlord, but admin override actions pass an
+     * Admin instead — both satisfy AuditService::log()'s Model contract, and
+     * notifyTenantStatusUpdated() never reads the actor itself.
      */
-    protected function logAndNotify(MaintenanceRequest $request, User $landlord, string $transition): void
+    protected function logAndNotify(MaintenanceRequest $request, Model $actor, string $transition): void
     {
         $this->auditService->log(
-            actor: $landlord,
+            actor: $actor,
             action: 'maintenance_status_updated',
             subject: $request,
             description: "Maintenance request status updated to '{$request->status->value}': {$request->title}",

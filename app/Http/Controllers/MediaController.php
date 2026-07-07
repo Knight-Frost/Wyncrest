@@ -11,6 +11,7 @@ use App\Models\MaintenanceRequest;
 use App\Models\MediaAsset;
 use App\Models\Property;
 use App\Models\Unit;
+use App\Policies\MediaAssetPolicy;
 use App\Services\MediaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -203,6 +204,26 @@ class MediaController extends Controller
     public function show(Request $request, MediaAsset $mediaAsset): StreamedResponse|JsonResponse
     {
         $this->authorize('view', $mediaAsset);
+
+        $disk = $mediaAsset->getRawOriginal('disk');
+        $path = $mediaAsset->getRawOriginal('path');
+
+        if (! Storage::disk($disk)->exists($path)) {
+            return response()->json(['message' => 'File not found.'], 404);
+        }
+
+        return Storage::disk($disk)->download($path, $mediaAsset->original_filename);
+    }
+
+    /**
+     * Admin media stream (e.g. maintenance evidence photos during platform
+     * oversight). Route runs under the admin guard, so $request->user() is
+     * guaranteed to be an Admin — uses MediaAssetPolicy::viewAsAdmin() rather
+     * than the generic User-typed view() gate.
+     */
+    public function showForAdmin(Request $request, MediaAsset $mediaAsset): StreamedResponse|JsonResponse
+    {
+        abort_unless(app(MediaAssetPolicy::class)->viewAsAdmin($request->user(), $mediaAsset), 403);
 
         $disk = $mediaAsset->getRawOriginal('disk');
         $path = $mediaAsset->getRawOriginal('path');

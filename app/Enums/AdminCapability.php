@@ -29,6 +29,7 @@ enum AdminCapability: string
     case MANAGE_LEDGER = 'manage_ledger';
     case VIEW_ANALYTICS = 'view_analytics';
     case MANAGE_SETTINGS = 'manage_settings';
+    case MANAGE_MAINTENANCE = 'manage_maintenance';
 
     /**
      * Human label for the matrix / UI.
@@ -47,6 +48,7 @@ enum AdminCapability: string
             self::MANAGE_LEDGER => 'Manage ledger',
             self::VIEW_ANALYTICS => 'View analytics',
             self::MANAGE_SETTINGS => 'Manage platform settings',
+            self::MANAGE_MAINTENANCE => 'Manage maintenance oversight',
         };
     }
 
@@ -69,6 +71,7 @@ enum AdminCapability: string
             self::MANAGE_LEDGER => 'Apply late fees on ledger entries (every admin can already view the ledger)',
             self::VIEW_ANALYTICS => 'View platform-wide analytics dashboards',
             self::MANAGE_SETTINGS => 'Change global platform configuration',
+            self::MANAGE_MAINTENANCE => 'Assign case owners, escalate, add internal notes, override-close/reopen, and export maintenance requests (every admin can already view the maintenance queue)',
         };
     }
 
@@ -82,6 +85,7 @@ enum AdminCapability: string
             self::REVIEW_VERIFICATIONS, self::MODERATE_LISTINGS, self::MODERATE_REVIEWS => 'Content moderation',
             self::MANAGE_CONTRACTS, self::MANAGE_LEDGER => 'Finance',
             self::MANAGE_FEATURES, self::VIEW_AUDIT, self::VIEW_ANALYTICS, self::MANAGE_SETTINGS => 'Platform',
+            self::MANAGE_MAINTENANCE => 'Operations',
         };
     }
 

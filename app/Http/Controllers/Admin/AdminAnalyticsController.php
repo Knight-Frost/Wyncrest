@@ -77,10 +77,36 @@ class AdminAnalyticsController extends Controller
             ['Range', "{$dateFrom->toDateString()} to {$dateTo->toDateString()}"],
             ['Permission scope', implode(', ', $analytics['scope']['permitted_modules'])],
             [],
-            ['Attention item', 'Severity', 'Area', 'Detail'],
+            ['Attention item', 'Severity', 'Area', 'Detail', 'Age', 'Suggested action'],
         ];
         foreach ($analytics['attention'] as $item) {
-            $rows[] = [$item['title'], $item['severity'], $item['area'], $item['subject']];
+            $rows[] = [$item['title'], $item['severity'], $item['area'], $item['subject'], $item['age'] ?? '', $item['action']];
+        }
+
+        $rows[] = [];
+        // why: the on-screen "My decisions this period" card shows the full
+        // decision count (decisions_period — listing/verification reviews PLUS
+        // ledger actions like waives and late fees). The breakdown below is
+        // narrower (review outcomes only: approvals/rejections/send-backs), so
+        // it must NOT reuse the same "My decisions" label or the CSV total
+        // silently disagrees with the screen. Emit the headline figure first,
+        // then the review-outcome breakdown under its own honest heading.
+        $rows[] = ['My decisions this period', $analytics['me']['decisions_period']];
+        $rows[] = [];
+        $rows[] = ['My review outcomes this period', 'Approved', 'Rejected', 'Sent back'];
+        $rows[] = [
+            'Total',
+            $analytics['me']['outcome_totals']['approved'],
+            $analytics['me']['outcome_totals']['rejected'],
+            $analytics['me']['outcome_totals']['sent_back'],
+        ];
+
+        if (! empty($analytics['me']['top_reasons'])) {
+            $rows[] = [];
+            $rows[] = ['Common send-back / rejection reason', 'Count'];
+            foreach ($analytics['me']['top_reasons'] as $reason) {
+                $rows[] = [$reason['reason'], $reason['count']];
+            }
         }
 
         return response()->streamDownload(function () use ($rows) {

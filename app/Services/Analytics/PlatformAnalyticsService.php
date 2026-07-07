@@ -127,8 +127,13 @@ class PlatformAnalyticsService
             })
             ->count();
 
+        // why: a listing can produce more than one contract over its lifetime
+        // (renewals/re-lets), and the date/property/landlord scoping between
+        // $listingQuery and $contractsFromListings isn't identical, so the
+        // raw ratio can mathematically exceed 100%. Conversion is conceptually
+        // capped at 100% — clamp rather than show an impossible rate.
         $conversionRate = $totalListings > 0
-            ? round(($contractsFromListings / $totalListings) * 100, 2)
+            ? min(100.0, round(($contractsFromListings / $totalListings) * 100, 2))
             : 0.0;
 
         return [

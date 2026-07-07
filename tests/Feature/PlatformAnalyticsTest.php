@@ -176,6 +176,44 @@ class PlatformAnalyticsTest extends TestCase
         $this->assertEqualsWithDelta(66.67, $analytics['utilization']['listing_to_contract_conversion_rate'], 0.1);
     }
 
+    public function test_listing_conversion_rate_is_clamped_at_100_percent()
+    {
+        // A listing can back more than one contract over its lifetime
+        // (renewals/re-lets), and contracts on a since-removed listing still
+        // count — so the raw ratio can exceed 100%. Simulate that: one visible
+        // listing but two live contracts (the second listing is soft-deleted,
+        // dropping it from the listing count while its contract remains).
+        $unit2 = Unit::factory()->create(['property_id' => $this->property->id]);
+        $listing2 = Listing::factory()->create([
+            'unit_id' => $unit2->id,
+            'landlord_id' => $this->landlord->id,
+            'status' => ListingStatus::ACTIVE,
+        ]);
+
+        Contract::factory()->create([
+            'listing_id' => $this->listing->id,
+            'tenant_id' => $this->tenant->id,
+            'landlord_id' => $this->landlord->id,
+            'status' => ContractStatus::ACTIVE,
+        ]);
+        Contract::factory()->create([
+            'listing_id' => $listing2->id,
+            'tenant_id' => $this->tenant->id,
+            'landlord_id' => $this->landlord->id,
+            'status' => ContractStatus::ACTIVE,
+        ]);
+
+        // Soft-delete listing2: now 1 visible listing, 2 live contracts -> 200% raw.
+        $listing2->delete();
+
+        $analytics = $this->analyticsService->getAnalytics();
+
+        $this->assertEquals(1, $analytics['utilization']['total_listings']);
+        // Must be clamped to 100, never an impossible >100% conversion rate.
+        $this->assertLessThanOrEqual(100.0, $analytics['utilization']['listing_to_contract_conversion_rate']);
+        $this->assertEquals(100.0, $analytics['utilization']['listing_to_contract_conversion_rate']);
+    }
+
     public function test_active_listings_count()
     {
         // Create inactive listing

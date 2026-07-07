@@ -45,6 +45,7 @@ use App\Http\Controllers\Landlord\LandlordLedgerController;
 use App\Http\Controllers\Landlord\LandlordListingController;
 use App\Http\Controllers\Landlord\LandlordMaintenanceController;
 use App\Http\Controllers\Landlord\LandlordOnboardingController;
+use App\Http\Controllers\Landlord\LandlordProfileController;
 use App\Http\Controllers\Landlord\LandlordReviewController;
 use App\Http\Controllers\Landlord\PropertyController;
 use App\Http\Controllers\Landlord\UnitController;
@@ -279,6 +280,13 @@ Route::middleware(['metrics'])->group(function () {
 
         // Dashboard
         Route::get('/dashboard', [LandlordDashboardController::class, 'index']);
+
+        // Profile
+        Route::get('/profile', [LandlordProfileController::class, 'show']);
+        Route::patch('/profile', [LandlordProfileController::class, 'update']);
+
+        // Avatar upload
+        Route::post('/avatar', [MediaController::class, 'storeAvatar']);
 
         // Properties
         Route::get('/properties', [PropertyController::class, 'index']);
@@ -530,11 +538,30 @@ Route::middleware(['metrics'])->group(function () {
             Route::post('/ledger/{ledgerEntry}/waive', [AdminLedgerController::class, 'waive']);
         });
 
-        // Maintenance — read-only admin visibility (Phase A dashboard rebuild).
-        // No admin.can: gate: viewing is a baseline admin privilege, same as
-        // Contracts/Ledger above. No mutating admin action exists yet.
+        // Maintenance oversight. Viewing (index/summary/analytics/show) is a
+        // baseline admin privilege, same as Contracts/Ledger above. Mutating
+        // actions require manage_maintenance. Oversight is gated inline in the
+        // controller to super admins only (a different privilege tier).
+        // Static paths MUST come before the {maintenanceRequest} wildcard.
         Route::get('/maintenance', [AdminMaintenanceController::class, 'index']);
         Route::get('/maintenance/summary', [AdminMaintenanceController::class, 'summary']);
+        Route::get('/maintenance/analytics', [AdminMaintenanceController::class, 'analytics']);
+        Route::get('/maintenance/oversight', [AdminMaintenanceController::class, 'oversight']);
+        Route::middleware('admin.can:manage_maintenance')->group(function () {
+            Route::get('/maintenance/export', [AdminMaintenanceController::class, 'export']);
+        });
+        Route::get('/maintenance/{maintenanceRequest}', [AdminMaintenanceController::class, 'show']);
+        Route::middleware('admin.can:manage_maintenance')->group(function () {
+            Route::post('/maintenance/{maintenanceRequest}/assign', [AdminMaintenanceController::class, 'assignCaseOwner']);
+            Route::post('/maintenance/{maintenanceRequest}/escalate', [AdminMaintenanceController::class, 'escalate']);
+            Route::post('/maintenance/{maintenanceRequest}/clear-escalation', [AdminMaintenanceController::class, 'clearEscalation']);
+            Route::post('/maintenance/{maintenanceRequest}/notes', [AdminMaintenanceController::class, 'storeNote']);
+            Route::post('/maintenance/{maintenanceRequest}/override-close', [AdminMaintenanceController::class, 'overrideClose']);
+            Route::post('/maintenance/{maintenanceRequest}/override-reopen', [AdminMaintenanceController::class, 'overrideReopen']);
+        });
+        // Evidence photo streaming (e.g. maintenance evidence) — baseline
+        // viewing privilege, same as the maintenance queue itself.
+        Route::get('/media/{mediaAsset}', [MediaController::class, 'showForAdmin']);
 
         // Reviews moderation (Phase 8)
         Route::middleware('admin.can:moderate_reviews')->group(function () {

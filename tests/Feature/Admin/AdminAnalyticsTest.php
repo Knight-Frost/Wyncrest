@@ -204,6 +204,196 @@ class AdminAnalyticsTest extends TestCase
         $this->assertNull($analytics['me']['recent_activity'][0]['detail_route']);
     }
 
+    // ---- Date range scoping -----------------------------------------------------
+
+    public function test_date_range_correctly_scopes_my_decisions(): void
+    {
+        $admin = $this->scopedAdmin(['moderate_listings']);
+
+        AuditLog::factory()->forActor($admin)->create([
+            'action' => 'listing_published',
+            'created_at' => now()->subDays(3),
+        ]);
+        AuditLog::factory()->forActor($admin)->create([
+            'action' => 'listing_published',
+            'created_at' => now()->subDays(60),
+        ]);
+
+        $this->actingAs($admin, 'admin');
+
+        $sevenDay = $this->getJson('/api/admin/analytics/admin-summary?range=7d')->assertOk()->json('analytics');
+        $this->assertSame(1, $sevenDay['modules']['listings']['my_decisions']['approved']);
+
+        $ninetyDay = $this->getJson('/api/admin/analytics/admin-summary?range=90d')->assertOk()->json('analytics');
+        $this->assertSame(2, $ninetyDay['modules']['listings']['my_decisions']['approved']);
+    }
+
+    // ---- Attention item age/action enrichment ----------------------------------
+
+    public function test_attention_items_carry_age_and_suggested_action(): void
+    {
+        MaintenanceRequest::factory()->create(['priority' => 'urgent', 'status' => 'open', 'submitted_at' => now()->subHours(30)]);
+
+        $admin = $this->scopedAdmin([]);
+        $this->actingAs($admin, 'admin');
+
+        $analytics = $this->getJson('/api/admin/analytics/admin-summary')->assertOk()->json('analytics');
+        $critical = collect($analytics['attention'])->firstWhere('title', 'Urgent maintenance open');
+
+        $this->assertNotNull($critical['age_hours']);
+        $this->assertIsString($critical['age']);
+        $this->assertSame('Escalate', $critical['action']);
+    }
+
+    // ---- My performance (decision trend / outcomes / reasons / timing) --------
+
+    public function test_my_performance_aggregates_real_listing_and_verification_decisions(): void
+    {
+        $admin = $this->scopedAdmin(['moderate_listings', 'review_verifications']);
+
+        $rejectedListing = Listing::factory()->create();
+        AuditLog::factory()->forActor($admin)->create([
+            'action' => 'listing_rejected',
+            'subject_type' => Listing::class,
+            'subject_id' => $rejectedListing->id,
+            'metadata' => ['reason' => 'Photos below standard'],
+            'severity' => 'warning',
+        ]);
+        AuditLog::factory()->forActor($admin)->create([
+            'action' => 'listing_published',
+            'subject_type' => Listing::class,
+            'subject_id' => Listing::factory()->create()->id,
+            'severity' => 'info',
+        ]);
+
+        // Mirrors VerificationService::reject(), which always writes both the
+        // model row (decision_reason, reviewed_by_admin_id) AND a matching
+        // AuditLog entry together — outcome_totals/decision_trend are read
+        // from AuditLog, while reasons/timing are read from the model.
+        $tenant = User::factory()->tenant()->create();
+        $verification = VerificationRequest::create([
+            'user_id' => $tenant->id,
+            'status' => 'rejected',
+            'submitted_at' => now()->subHours(20),
+            'reviewed_at' => now(),
+            'reviewed_by_admin_id' => $admin->id,
+            'decision_reason' => 'Photos below standard',
+        ]);
+        AuditLog::factory()->forActor($admin)->create([
+            'action' => 'verification_rejected',
+            'subject_type' => User::class,
+            'subject_id' => $tenant->id,
+            'metadata' => ['reason' => 'Photos below standard'],
+            'severity' => 'warning',
+        ]);
+
+        $this->actingAs($admin, 'admin');
+        $me = $this->getJson('/api/admin/analytics/admin-summary')->assertOk()->json('analytics.me');
+
+        $this->assertSame(1, $me['outcome_totals']['approved']);
+        $this->assertSame(2, $me['outcome_totals']['rejected']); // 1 listing + 1 verification
+        $this->assertSame(0, $me['outcome_totals']['sent_back']);
+        $this->assertNotEmpty($me['decision_trend']);
+
+        $topReason = collect($me['top_reasons'])->firstWhere('reason', 'Photos below standard');
+        $this->assertNotNull($topReason);
+        $this->assertSame(2, $topReason['count']); // merged from both listing + verification sources
+
+        // Submitted 20h before decision — exact, since the fixture controls both timestamps.
+        $this->assertEqualsWithDelta(20.0, $me['avg_decision_hours']['verifications'], 0.1);
+        // Listing "submitted_at" is the record's created_at; the AuditLog factory's own
+        // created_at is randomized, so just assert a real (non-null) figure was computed.
+        $this->assertIsNumeric($me['avg_decision_hours']['listings']);
+        $this->assertGreaterThanOrEqual(0, $me['avg_decision_hours']['listings']);
+    }
+
+    // ---- New module breakdowns (mockup-parity pass) ----------------------------
+
+    public function test_listings_module_exposes_platform_wide_reasons(): void
+    {
+        $admin = $this->scopedAdmin(['moderate_listings']);
+        $otherAdmin = Admin::factory()->create(['is_super_admin' => true]);
+        $listing = Listing::factory()->create();
+
+        // A DIFFERENT admin's rejection reason must still count — this is
+        // platform-wide, not "my decisions".
+        AuditLog::factory()->forActor($otherAdmin)->create([
+            'action' => 'listing_rejected',
+            'subject_type' => Listing::class,
+            'subject_id' => $listing->id,
+            'metadata' => ['reason' => 'Missing ownership proof'],
+        ]);
+
+        $this->actingAs($admin, 'admin');
+        $reasons = $this->getJson('/api/admin/analytics/admin-summary')->assertOk()->json('analytics.modules.listings.top_reasons');
+
+        $this->assertNotEmpty(collect($reasons)->firstWhere('reason', 'Missing ownership proof'));
+    }
+
+    public function test_maintenance_module_exposes_by_status_breakdown(): void
+    {
+        MaintenanceRequest::factory()->create(['priority' => 'medium', 'status' => 'in_progress']);
+        MaintenanceRequest::factory()->create(['priority' => 'medium', 'status' => 'waiting']);
+
+        $admin = $this->scopedAdmin([]);
+        $this->actingAs($admin, 'admin');
+
+        $byStatus = $this->getJson('/api/admin/analytics/admin-summary')->assertOk()->json('analytics.modules.maintenance.by_status');
+
+        $this->assertSame(1, $byStatus['in_progress']);
+        $this->assertSame(1, $byStatus['waiting']);
+    }
+
+    public function test_notifications_module_exposes_channel_breakdown(): void
+    {
+        Notification::factory()->create(['delivered_at' => now()]);
+        Notification::factory()->failed()->create();
+
+        $admin = $this->scopedAdmin(['view_audit']);
+        $this->actingAs($admin, 'admin');
+
+        $channel = collect($this->getJson('/api/admin/analytics/admin-summary')->assertOk()->json('analytics.modules.notifications.channel'));
+
+        $inApp = $channel->firstWhere('channel', 'In-app');
+        $email = $channel->firstWhere('channel', 'Email');
+        $this->assertSame(2, $inApp['sent']);
+        $this->assertGreaterThanOrEqual(1, $email['sent']);
+    }
+
+    /**
+     * Regression: $failedBase (the failed_total/email_failed/sms_failed stat
+     * cards) must respect the selected date range exactly like the per-channel
+     * chart, or the same tab shows two different "email failed" numbers.
+     */
+    public function test_notifications_module_range_scopes_failed_counts_to_match_the_channel_chart(): void
+    {
+        Notification::factory()->failed()->create(['created_at' => now()->subDays(20)]);
+        Notification::factory()->failed()->create(['created_at' => now()->subDays(1)]);
+
+        $admin = $this->scopedAdmin(['view_audit']);
+        $this->actingAs($admin, 'admin');
+
+        $analytics = $this->getJson('/api/admin/analytics/admin-summary?range=7d')->assertOk()->json('analytics');
+
+        $notifications = $analytics['modules']['notifications'];
+        $this->assertSame(1, $notifications['failed_total']);
+        $this->assertSame(1, $notifications['email_failed']);
+
+        $emailChannel = collect($notifications['channel'])->firstWhere('channel', 'Email');
+        $this->assertSame($notifications['email_failed'], $emailChannel['failed']);
+    }
+
+    public function test_ledger_module_exposes_period_collected_and_charged(): void
+    {
+        $admin = $this->scopedAdmin(['manage_ledger']);
+        $this->actingAs($admin, 'admin');
+
+        $ledger = $this->getJson('/api/admin/analytics/admin-summary')->assertOk()->json('analytics.modules.ledger');
+
+        $this->assertArrayHasKey('collected_cents', $ledger);
+        $this->assertArrayHasKey('charged_cents', $ledger);
+    }
+
     // ---- Empty state --------------------------------------------------------
 
     public function test_empty_platform_returns_no_attention_items(): void
@@ -227,6 +417,7 @@ class AdminAnalyticsTest extends TestCase
         $response = $this->get('/api/admin/analytics/admin-summary/export');
         $response->assertOk();
         $response->assertHeader('content-type', 'text/csv; charset=utf-8');
+        $this->assertStringContainsString('My decisions this period', $response->streamedContent());
 
         $this->assertDatabaseHas('audit_logs', [
             'action' => 'admin_analytics_exported',

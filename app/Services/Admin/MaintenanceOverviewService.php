@@ -36,7 +36,7 @@ class MaintenanceOverviewService
         $waiting = $this->openBase()->where('status', MaintenanceStatus::WAITING->value)->count();
 
         $oldest = $this->openBase()
-            ->with(['tenant', 'landlord', 'property', 'unit'])
+            ->with(['tenant', 'landlord', 'property', 'unit', 'handlingAdmin'])
             ->orderBy('submitted_at', 'asc')
             ->first();
 
@@ -60,12 +60,14 @@ class MaintenanceOverviewService
     {
         $status = $filters['status'] ?? 'open';
 
-        $query = MaintenanceRequest::query()->with(['tenant', 'landlord', 'property', 'unit']);
+        $query = MaintenanceRequest::query()->with(['tenant', 'landlord', 'property', 'unit', 'handlingAdmin']);
 
         match ($status) {
             'urgent' => $query->open()->whereIn('priority', [MaintenancePriority::URGENT->value, MaintenancePriority::HIGH->value]),
             'overdue' => $this->applyOverdue($query->open()),
             'waiting' => $query->open()->where('status', MaintenanceStatus::WAITING->value),
+            'escalated' => $query->open()->whereNotNull('escalated_at'),
+            'unassigned' => $query->open()->whereNull('handling_admin_id'),
             'all' => null,
             default => $query->open(),
         };
@@ -82,11 +84,13 @@ class MaintenanceOverviewService
     /**
      * Platform-wide maintenance analytics for the Super Admin Analytics page:
      * resolution volume/speed and open-work breakdowns. `date_from`/`date_to`
-     * (optional) scope the resolved-work figures to `resolved_at` so "resolved
-     * this period" and "average resolution time this period" move together;
-     * the open-work snapshot (by priority/category) is always as-of-now, same
-     * as summary() above, since there is no meaningful "open as of a past
-     * date" without event-sourcing the status column.
+     * (optional) scope the resolved-work figures to `resolved_at` (and the
+     * response-time figure to `acknowledged_at`) so "resolved this period",
+     * "average resolution time this period", and "average response time this
+     * period" all move together; the open-work snapshot (by priority/category)
+     * is always as-of-now, same as summary() above, since there is no
+     * meaningful "open as of a past date" without event-sourcing the status
+     * column.
      *
      * @param  array{date_from?:string,date_to?:string}  $filters
      */
@@ -108,7 +112,15 @@ class MaintenanceOverviewService
             ->map(fn (MaintenanceRequest $r) => $r->submitted_at->floatDiffInDays($r->resolved_at));
         $averageResolutionDays = $resolutionDays->isNotEmpty() ? round($resolutionDays->avg(), 2) : 0.0;
 
-        $responded = MaintenanceRequest::query()->whereNotNull('acknowledged_at')->whereNotNull('submitted_at')->get();
+        $respondedQuery = MaintenanceRequest::query()->whereNotNull('acknowledged_at')->whereNotNull('submitted_at');
+        if (! empty($filters['date_from'])) {
+            $respondedQuery->where('acknowledged_at', '>=', $filters['date_from']);
+        }
+        if (! empty($filters['date_to'])) {
+            $respondedQuery->where('acknowledged_at', '<=', $filters['date_to']);
+        }
+
+        $responded = $respondedQuery->get();
         $responseHours = $responded->map(fn (MaintenanceRequest $r) => $r->submitted_at->floatDiffInHours($r->acknowledged_at));
         $averageResponseHours = $responseHours->isNotEmpty() ? round($responseHours->avg(), 2) : 0.0;
 
@@ -140,6 +152,125 @@ class MaintenanceOverviewService
             'by_priority' => $byPriority,
             'by_category' => $byCategory,
             'resolution_trend_by_month' => $resolutionTrend->toArray(),
+        ];
+    }
+
+    /**
+     * Full case detail for the admin detail page — everything rowSummary()
+     * has, plus the fields only the single-case view needs (description,
+     * cost breakdown, timeline, media, and admin-only notes).
+     *
+     * @return array<string, mixed>
+     */
+    public function detail(MaintenanceRequest $r): array
+    {
+        $r->loadMissing(['tenant', 'landlord', 'property', 'unit', 'contract', 'handlingAdmin', 'events.actor', 'media', 'adminNotes.admin']);
+
+        return array_merge($this->rowSummary($r), [
+            'description' => $r->description,
+            'category' => $r->category?->value,
+            'assignee_name' => $r->assignee_name,
+            'assignee_phone' => $r->assignee_phone,
+            'assignee_type' => $r->assignee_type?->value,
+            'appointment_at' => $r->appointment_at?->toIso8601String(),
+            'resolution_notes' => $r->resolution_notes,
+            'labor_cost_cents' => $r->labor_cost_cents,
+            'parts_cost_cents' => $r->parts_cost_cents,
+            'total_cost_cents' => $r->total_cost_cents,
+            'invoice_reference' => $r->invoice_reference,
+            'cost_notes' => $r->cost_notes,
+            'cost_paid' => $r->cost_paid,
+            'acknowledged_at' => $r->acknowledged_at?->toIso8601String(),
+            'assigned_at' => $r->assigned_at?->toIso8601String(),
+            'resolved_at' => $r->resolved_at?->toIso8601String(),
+            'closed_at' => $r->closed_at?->toIso8601String(),
+            'safety_flags' => $r->safety_flags,
+            'events' => $r->events->map(fn (\App\Models\MaintenanceEvent $e) => [
+                'id' => $e->id,
+                'event' => $e->event,
+                'description' => $e->description,
+                'actor_type' => $e->actor_type,
+                'actor_name' => $e->actor?->full_name ?? $e->actor?->name,
+                'created_at' => $e->created_at?->toIso8601String(),
+            ])->values(),
+            'media' => $r->media->map(fn ($m) => [
+                'id' => $m->id,
+                'caption' => $m->caption,
+                'created_at' => $m->created_at?->toIso8601String(),
+            ])->values(),
+            'admin_notes' => $r->adminNotes->map(fn (\App\Models\MaintenanceAdminNote $n) => [
+                'id' => $n->id,
+                'body' => $n->body,
+                'admin_id' => $n->admin_id,
+                'admin_name' => $n->admin?->name,
+                'created_at' => $n->created_at?->toIso8601String(),
+            ])->values(),
+        ]);
+    }
+
+    /**
+     * Platform-wide oversight aggregates — restricted to super admins by the
+     * controller (a materially different privilege tier than the
+     * manage_maintenance capability, same reasoning as manage_access's
+     * team-management actions).
+     *
+     * @return array<string, mixed>
+     */
+    public function oversight(): array
+    {
+        $overdueByLandlord = $this->overdueBase()
+            ->with('landlord')
+            ->get()
+            ->groupBy('landlord_id')
+            ->filter(fn ($group) => $group->count() > 1)
+            ->map(fn ($group) => [
+                'landlord_id' => $group->first()->landlord_id,
+                'landlord_name' => $group->first()->landlord?->full_name,
+                'overdue_count' => $group->count(),
+            ])
+            ->sortByDesc('overdue_count')
+            ->values();
+
+        $adminCaseload = $this->openBase()
+            ->whereNotNull('handling_admin_id')
+            ->with('handlingAdmin')
+            ->get()
+            ->groupBy('handling_admin_id')
+            ->map(fn ($group) => [
+                'admin_id' => $group->first()->handling_admin_id,
+                'admin_name' => $group->first()->handlingAdmin?->name,
+                'open_case_count' => $group->count(),
+            ])
+            ->sortByDesc('open_case_count')
+            ->values();
+
+        $unresolvedSafetyFlags = $this->openBase()
+            ->with(['tenant', 'landlord', 'property', 'unit', 'handlingAdmin'])
+            ->get()
+            ->filter(fn (MaintenanceRequest $r) => $r->has_severe_safety_flag)
+            ->map(fn (MaintenanceRequest $r) => $this->rowSummary($r))
+            ->values();
+
+        $recurringProperties = $this->openBase()
+            ->whereNotNull('property_id')
+            ->with('property')
+            ->get()
+            ->groupBy('property_id')
+            ->filter(fn ($group) => $group->count() > 1)
+            ->map(fn ($group) => [
+                'property_id' => $group->first()->property_id,
+                'property_name' => $group->first()->property?->name,
+                'open_case_count' => $group->count(),
+            ])
+            ->sortByDesc('open_case_count')
+            ->values();
+
+        return [
+            'open_platform_wide' => $this->openBase()->count(),
+            'unresolved_safety_flags' => $unresolvedSafetyFlags,
+            'landlords_with_repeat_overdue' => $overdueByLandlord,
+            'admin_caseload' => $adminCaseload,
+            'properties_with_recurring_issues' => $recurringProperties,
         ];
     }
 
@@ -207,6 +338,9 @@ class MaintenanceOverviewService
             'expected_completion_date' => $r->expected_completion_date?->toDateString(),
             'is_overdue' => $isOverdue,
             'has_severe_safety_flag' => $r->has_severe_safety_flag,
+            'handling_admin' => $r->handlingAdmin ? ['id' => $r->handlingAdmin->id, 'name' => $r->handlingAdmin->name] : null,
+            'escalated_at' => $r->escalated_at?->toIso8601String(),
+            'escalation_reason' => $r->escalation_reason,
         ];
     }
 }
