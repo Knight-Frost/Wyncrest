@@ -4,7 +4,7 @@ namespace App\Console\Commands;
 
 use App\Enums\ContractStatus;
 use App\Models\Contract;
-use App\Services\AuditService;
+use App\Services\Contracts\ContractLifecycleService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 
@@ -23,7 +23,7 @@ class MarkExpiredContractsCommand extends Command
 
     protected $description = 'Mark active contracts past their end date as expired';
 
-    public function handle(AuditService $auditService): int
+    public function handle(ContractLifecycleService $lifecycle): int
     {
         $expired = Contract::where('status', ContractStatus::ACTIVE)
             ->whereNotNull('end_date')
@@ -31,15 +31,7 @@ class MarkExpiredContractsCommand extends Command
             ->get();
 
         foreach ($expired as $contract) {
-            $contract->update(['status' => ContractStatus::EXPIRED]);
-
-            $auditService->log(
-                actor: null, // Scheduled system action
-                action: 'contract_expired',
-                subject: $contract,
-                description: "Contract {$contract->id} reached its end date ({$contract->end_date->format('Y-m-d')}) and was marked expired",
-                severity: 'info'
-            );
+            $lifecycle->expire($contract);
         }
 
         $this->info("Marked {$expired->count()} contract(s) as expired.");

@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Landlord;
 
 use App\Enums\ContractStatus;
 use App\Enums\NotificationType;
-use App\Enums\TerminatedBy;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AddContractNoteRequest;
 use App\Http\Requests\RenewContractRequest;
@@ -19,6 +18,7 @@ use App\Models\Listing;
 use App\Models\Message;
 use App\Models\User;
 use App\Services\AuditService;
+use App\Services\Contracts\ContractLifecycleService;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,13 +26,16 @@ use Illuminate\Http\Request;
 /**
  * LandlordContractController
  *
- * Handles landlord contract operations.
+ * Handles landlord contract operations. Contract status transitions (send,
+ * terminate) are delegated to the ContractLifecycleService engine; renewal,
+ * messaging and notes remain here as they are not status transitions.
  */
 class LandlordContractController extends Controller
 {
     public function __construct(
         protected AuditService $auditService,
-        protected NotificationService $notificationService
+        protected NotificationService $notificationService,
+        protected ContractLifecycleService $lifecycle,
     ) {}
 
     /**
@@ -115,32 +118,7 @@ class LandlordContractController extends Controller
     {
         $this->authorize('send', $contract);
 
-        $contract->update([
-            'status' => ContractStatus::PENDING_TENANT,
-        ]);
-
-        // Audit log
-        $this->auditService->log(
-            actor: $request->user(),
-            action: 'contract_sent',
-            subject: $contract,
-            description: 'Sent contract to tenant for acceptance'
-        );
-
-        // Notify the tenant that a lease is ready to sign
-        $eventId = "contract-sent:{$contract->id}";
-        if (! $this->notificationService->exists($contract->tenant, $eventId)) {
-            $this->notificationService->create(
-                user: $contract->tenant,
-                type: NotificationType::CONTRACT_SENT,
-                title: 'New lease ready to sign',
-                message: "A lease for \"{$contract->listing->title}\" is ready for your review and signature.",
-                data: [
-                    'event_id' => $eventId,
-                    'contract_id' => $contract->id,
-                ]
-            );
-        }
+        $this->lifecycle->send($contract, $request->user());
 
         return response()->json([
             'message' => 'Contract sent to tenant',
@@ -157,38 +135,7 @@ class LandlordContractController extends Controller
         // but we repeat it here for defense-in-depth visibility.
         $this->authorize('terminate', $contract);
 
-        $contract->update([
-            'status' => ContractStatus::TERMINATED,
-            'terminated_by' => TerminatedBy::LANDLORD,
-            'termination_reason' => $request->reason,
-        ]);
-
-        // Audit log
-        $this->auditService->log(
-            actor: $request->user(),
-            action: 'contract_terminated',
-            subject: $contract,
-            description: 'Landlord terminated contract',
-            severity: 'warning'
-        );
-
-        // Notify the tenant that the landlord terminated
-        $landlord = $request->user();
-        $eventId = "contract-terminated:{$contract->id}:tenant";
-        if (! $this->notificationService->exists($contract->tenant, $eventId)) {
-            $this->notificationService->create(
-                user: $contract->tenant,
-                type: NotificationType::CONTRACT_TERMINATED,
-                title: 'Contract Terminated',
-                message: "{$landlord->full_name} has terminated your contract for \"{$contract->listing->title}\". Reason: {$request->reason}",
-                data: [
-                    'event_id' => $eventId,
-                    'contract_id' => $contract->id,
-                    'terminated_by' => 'landlord',
-                    'reason' => $request->reason,
-                ]
-            );
-        }
+        $this->lifecycle->terminateByLandlord($contract, $request->user(), $request->reason);
 
         return response()->json([
             'message' => 'Contract terminated',

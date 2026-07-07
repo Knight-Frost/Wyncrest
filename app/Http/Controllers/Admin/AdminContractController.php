@@ -2,16 +2,12 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Enums\ContractStatus;
-use App\Enums\NotificationType;
-use App\Enums\TerminatedBy;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AdminTerminateContractRequest;
 use App\Models\Contract;
 use App\Models\ContractNote;
-use App\Services\AuditService;
 use App\Services\ContractCaseFileService;
-use App\Services\NotificationService;
+use App\Services\Contracts\ContractLifecycleService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -27,9 +23,8 @@ use Illuminate\Http\Request;
 class AdminContractController extends Controller
 {
     public function __construct(
-        protected AuditService $auditService,
-        protected NotificationService $notificationService,
         protected ContractCaseFileService $caseFileService,
+        protected ContractLifecycleService $lifecycle,
     ) {}
 
     /**
@@ -156,56 +151,7 @@ class AdminContractController extends Controller
             ], 422);
         }
 
-        $contract->update([
-            'status' => ContractStatus::TERMINATED,
-            'terminated_by' => TerminatedBy::ADMIN,
-            'termination_reason' => $request->reason,
-            'admin_id' => $request->user()->id,
-        ]);
-
-        // Audit log (critical - admin forced termination)
-        $this->auditService->log(
-            actor: $request->user(),
-            action: 'contract_force_terminated',
-            subject: $contract,
-            description: 'Admin force terminated contract',
-            severity: 'critical'
-        );
-
-        // Notify both parties of admin-forced termination
-        $reason = $request->reason;
-
-        $tenantEventId = "contract-terminated:{$contract->id}:tenant";
-        if (! $this->notificationService->exists($contract->tenant, $tenantEventId)) {
-            $this->notificationService->create(
-                user: $contract->tenant,
-                type: NotificationType::CONTRACT_TERMINATED,
-                title: 'Contract Terminated',
-                message: "Your contract for \"{$contract->listing->title}\" has been terminated by the platform. Reason: {$reason}",
-                data: [
-                    'event_id' => $tenantEventId,
-                    'contract_id' => $contract->id,
-                    'terminated_by' => 'admin',
-                    'reason' => $reason,
-                ]
-            );
-        }
-
-        $landlordEventId = "contract-terminated:{$contract->id}:landlord";
-        if (! $this->notificationService->exists($contract->landlord, $landlordEventId)) {
-            $this->notificationService->create(
-                user: $contract->landlord,
-                type: NotificationType::CONTRACT_TERMINATED,
-                title: 'Contract Terminated',
-                message: "The contract for \"{$contract->listing->title}\" has been terminated by the platform. Reason: {$reason}",
-                data: [
-                    'event_id' => $landlordEventId,
-                    'contract_id' => $contract->id,
-                    'terminated_by' => 'admin',
-                    'reason' => $reason,
-                ]
-            );
-        }
+        $this->lifecycle->forceTerminateByAdmin($contract, $request->user(), $request->reason);
 
         return response()->json([
             'message' => 'Contract terminated by admin',
