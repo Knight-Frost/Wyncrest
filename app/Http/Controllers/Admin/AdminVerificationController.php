@@ -155,6 +155,8 @@ class AdminVerificationController extends Controller
      */
     public function downloadDocument(Request $request, Document $document): StreamedResponse|JsonResponse
     {
+        abort_unless($document->related_type === VerificationRequest::class, 403, 'This document is not part of a verification review.');
+
         if (! Storage::disk($document->disk)->exists($document->stored_path)) {
             return response()->json(['message' => 'File not found on disk.'], 404);
         }

@@ -425,6 +425,12 @@ class VerificationTest extends TestCase
         \Illuminate\Support\Facades\Storage::fake('local');
         \Illuminate\Support\Facades\Storage::disk('local')->put('docs/id.pdf', 'fake-pdf-bytes');
 
+        $verificationRequest = VerificationRequest::create([
+            'user_id' => $this->tenant->id,
+            'status' => 'pending',
+            'submitted_at' => now(),
+        ]);
+
         $doc = Document::create([
             'owner_user_id' => $this->tenant->id,
             'uploaded_by_id' => $this->tenant->id,
@@ -434,6 +440,10 @@ class VerificationTest extends TestCase
             'disk' => 'local',
             'mime_type' => 'application/pdf',
             'size_bytes' => 14,
+            // Only documents stamped to a verification context are
+            // downloadable via this endpoint (see AdminVerificationDocumentAccessTest).
+            'related_type' => VerificationRequest::class,
+            'related_id' => $verificationRequest->id,
         ]);
 
         $this->actingAs($this->admin, 'admin');
