@@ -141,28 +141,35 @@ class LedgerService
             throw new \InvalidArgumentException('Late fees can only be applied to overdue entries');
         }
 
-        // Check if late fee already exists for this rent entry
-        $existingLateFee = LedgerEntry::where('related_rent_entry_id', $rentEntry->id)
-            ->where('type', LedgerType::LATE_FEE)
-            ->first();
+        // Serialize concurrent callers on the same rent entry so a double-click
+        // (or a race between two admins) cannot slip past the existence check
+        // and create two late fees for the same rent entry.
+        $lateFeeEntry = DB::transaction(function () use ($rentEntry, $lateFeeAmountCents) {
+            LedgerEntry::whereKey($rentEntry->id)->lockForUpdate()->first();
 
-        if ($existingLateFee) {
-            throw new \InvalidArgumentException('Late fee already exists for this rent entry');
-        }
+            $existingLateFee = LedgerEntry::where('related_rent_entry_id', $rentEntry->id)
+                ->where('type', LedgerType::LATE_FEE)
+                ->lockForUpdate()
+                ->first();
 
-        $lateFeeEntry = LedgerEntry::create([
-            'contract_id' => $rentEntry->contract_id,
-            'tenant_id' => $rentEntry->tenant_id,
-            'landlord_id' => $rentEntry->landlord_id,
-            'type' => LedgerType::LATE_FEE,
-            'amount_cents' => $lateFeeAmountCents,
-            'currency' => $rentEntry->currency,
-            'billing_period_start' => $rentEntry->billing_period_start,
-            'billing_period_end' => $rentEntry->billing_period_end,
-            'due_date' => now(), // Late fee is due immediately
-            'status' => LedgerStatus::PENDING,
-            'related_rent_entry_id' => $rentEntry->id,
-        ]);
+            if ($existingLateFee) {
+                throw new \InvalidArgumentException('Late fee already exists for this rent entry');
+            }
+
+            return LedgerEntry::create([
+                'contract_id' => $rentEntry->contract_id,
+                'tenant_id' => $rentEntry->tenant_id,
+                'landlord_id' => $rentEntry->landlord_id,
+                'type' => LedgerType::LATE_FEE,
+                'amount_cents' => $lateFeeAmountCents,
+                'currency' => $rentEntry->currency,
+                'billing_period_start' => $rentEntry->billing_period_start,
+                'billing_period_end' => $rentEntry->billing_period_end,
+                'due_date' => now(), // Late fee is due immediately
+                'status' => LedgerStatus::PENDING,
+                'related_rent_entry_id' => $rentEntry->id,
+            ]);
+        });
 
         // Audit log (warning severity - financial penalty)
         $amount = number_format($lateFeeAmountCents / 100, 2);
