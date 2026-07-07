@@ -30,6 +30,8 @@ import {
   IconArchive, IconRenew, IconExport, IconCheck, IconPlus, IconEye,
 } from '@/pages/landlord/maintenance-ui';
 import { AuthedImage } from '@/components/media/AuthedImage';
+import { help } from '@/lib/helpText';
+import { InfoHint } from '@/components/ui/InfoHint';
 import './admin-maintenance.css';
 
 type TabKey = 'overview' | 'evidence' | 'timeline' | 'notes' | 'export';
@@ -127,10 +129,21 @@ export function AdminMaintenanceDetail() {
         <div className="dmain">
           <h2>{c.title}</h2>
           <div className="dtags">
-            {prio && <span className={`prio-flag ${PRIORITY_CLASS[prio]}`}>{prio === 'urgent' ? <IconWarn /> : <IconFlag />}{maintenancePriorityLabel[prio]} priority</span>}
+            {prio && (
+              <span className={`prio-flag ${PRIORITY_CLASS[prio]}`}>
+                {prio === 'urgent' ? <IconWarn /> : <IconFlag />}
+                {maintenancePriorityLabel[prio]} priority
+                <InfoHint text={help.maintenancePriority} label="About priority" />
+              </span>
+            )}
             {c.status && <span className={`badge ${STATUS_BADGE[c.status as keyof typeof STATUS_BADGE]}`}><span className="dot" />{maintenanceStatusLabel[c.status as keyof typeof maintenanceStatusLabel]}</span>}
             {cat && <span className="badge b-gray">{maintenanceCategoryLabel[cat]}</span>}
-            {c.is_overdue && <span className="badge b-red"><IconWarn />Overdue</span>}
+            {c.is_overdue && (
+              <span className="badge b-red">
+                <IconWarn />Overdue
+                <InfoHint text={help.maintenanceOverdue} label="About overdue" />
+              </span>
+            )}
           </div>
           <div className="dloc">{c.property ?? '—'} · {c.tenant?.name ?? '—'} · {c.landlord?.name ?? '—'}</div>
           <div className="drep">{c.submitted_at ? `Reported ${formatDateTime(c.submitted_at)}` : ''} · {c.age_days} {c.age_days === 1 ? 'day' : 'days'} open</div>
@@ -142,9 +155,11 @@ export function AdminMaintenanceDetail() {
               {c.escalated_at
                 ? <button className="btn btn-g sm" disabled={busy} onClick={clearEscalation}><IconCheck /> Clear escalation</button>
                 : <button className="btn btn-g sm" disabled={busy} onClick={() => setReasonPrompt('escalate')}><IconWarn /> Escalate</button>}
+              <InfoHint text={help.escalated} label="About escalation" />
               {isOpen(c)
                 ? <button className="btn btn-d sm" disabled={busy} onClick={() => setReasonPrompt('override-close')}><IconArchive /> Override close</button>
                 : <button className="btn btn-g sm" disabled={busy} onClick={() => setReasonPrompt('override-reopen')}><IconRenew /> Override reopen</button>}
+              {isOpen(c) && <InfoHint text={help.overrideClose} label="About override close" />}
             </div>
           </div>
         )}
@@ -313,7 +328,7 @@ function TabNotes({ c, canManage, caseId, onAdded }: { c: CaseDetail; canManage:
 
   return (
     <div className="panel glass" style={{ maxWidth: 760 }}>
-      <div className="ph"><h3>Admin notes</h3></div>
+      <div className="ph"><h3>Admin notes <InfoHint text={help.internalNote} label="About admin notes" /></h3></div>
       <div className="notice info" style={{ marginBottom: 14 }}><IconEye /><div className="nt">Internal only — never shown to the tenant or landlord.</div></div>
       {c.admin_notes.length === 0 ? (
         <p className="prose" style={{ fontSize: 13 }}>No internal notes yet.</p>
@@ -363,14 +378,14 @@ function TabExport({ caseId, canExport }: { caseId: string; canExport: boolean }
 
   return (
     <div className="panel glass" style={{ maxWidth: 560 }}>
-      <div className="ph"><h3>Export this case</h3></div>
+      <div className="ph"><h3>Export this case <InfoHint text={help.maintenanceExport} label="About this export" /></h3></div>
       <p className="prose" style={{ marginBottom: 14 }}>Generate a CSV row for this case with a real SHA-256 checksum of the exported bytes.</p>
       <button className="btn btn-p" onClick={generate}><IconExport /> Generate CSV</button>
       {cert && (
         <div className="cert">
           <div className="ct"><IconCheck /> Export certificate</div>
           <div className="crow"><span className="k">Rows</span><span className="v">{cert.count}</span></div>
-          <div className="crow"><span className="k">Checksum</span><span className="v cksum">{cert.checksum}</span></div>
+          <div className="crow"><span className="k">Checksum <InfoHint text={help.exportChecksum} label="About the checksum" /></span><span className="v cksum">{cert.checksum}</span></div>
         </div>
       )}
     </div>

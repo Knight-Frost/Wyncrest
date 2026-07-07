@@ -26,6 +26,8 @@ import {
   CATEGORY_ICON, CATEGORY_TINT, CATEGORY_COLOR, PRIORITY_CLASS, STATUS_BADGE, isOpen,
 } from './maintenance-helpers';
 import { triagePriority } from './maintenance-priority';
+import { help } from '@/lib/helpText';
+import { InfoHint } from '@/components/ui/InfoHint';
 import {
   IconSearch, IconChevRight, IconChevDown, IconWrench, IconWarn, IconFlag, IconShield,
   IconInfo, IconActivity, IconUser, IconLock,
@@ -119,14 +121,19 @@ export function AdminMaintenanceQueue() {
         <section className="cards">
           <Card cls="info" k="Open" v={summary.open} n="active, not yet resolved" />
           <Card cls={summary.urgent > 0 ? 'bad' : 'good'} k="Urgent" v={summary.urgent} n="emergency or high priority, open" />
-          <Card cls={summary.overdue > 0 ? 'bad' : 'good'} k="Overdue" v={summary.overdue} n="past the landlord's own estimate" />
+          <Card cls={summary.overdue > 0 ? 'bad' : 'good'} k="Overdue" v={summary.overdue} n="past the landlord's own estimate" help={help.maintenanceOverdue} />
           <Card cls={summary.waiting > 0 ? 'warn' : 'good'} k="Waiting" v={summary.waiting} n="stalled on a response or visit" />
         </section>
       )}
 
       <div className="tabs glass-2">
         {tabsDef.map((t) => (
-          <button key={t.key} className={tab === t.key ? 'on' : ''} onClick={() => setTab(t.key)}>{t.label}</button>
+          <button key={t.key} className={tab === t.key ? 'on' : ''} onClick={() => setTab(t.key)}>
+            {t.label}
+            {t.key === 'escalated' && <InfoHint text={help.escalated} label="About escalated" />}
+            {t.key === 'unassigned' && <InfoHint text={help.unassigned} label="About unassigned" />}
+            {t.key === 'overdue' && <InfoHint text={help.maintenanceOverdue} label="About overdue" />}
+          </button>
         ))}
         <button className={tab === 'reports' ? 'on' : ''} onClick={() => setTab('reports')}><IconActivity /> Reports</button>
         {superAdmin && (
@@ -147,6 +154,7 @@ export function AdminMaintenanceQueue() {
             </div>
             <Sel label="Filter by category" value={category} onChange={(v) => setCategory(v as CategoryFilter)} options={[['all', 'All categories'], ...(Object.keys(maintenanceCategoryLabel) as MaintenanceCategory[]).map((c): [string, string] => [c, maintenanceCategoryLabel[c]])]} />
             <Sel label="Filter by priority" value={priority} onChange={(v) => setPriority(v as PriorityFilter)} options={[['all', 'All priorities'], ...(Object.keys(maintenancePriorityLabel) as MaintenancePriority[]).map((p): [string, string] => [p, maintenancePriorityLabel[p]])]} />
+            <InfoHint text={help.maintenancePriority} label="About priority" />
           </div>
 
           {triaged.length === 0 ? (
@@ -223,11 +231,14 @@ export function AdminMaintenanceQueue() {
   );
 }
 
-function Card({ cls, k, v, n }: { cls: string; k: string; v: number; n: string }) {
+function Card({ cls, k, v, n, help: helpText }: { cls: string; k: string; v: number; n: string; help?: string }) {
   return (
     <div className={`card glass-2 ${cls}`}>
       <span className="edge" />
-      <div className="k">{k}</div>
+      <div className="k">
+        {k}
+        {helpText && <InfoHint text={helpText} label={`About ${k}`} />}
+      </div>
       <div className="v">{v}</div>
       <div className="n">{n}</div>
     </div>
@@ -290,7 +301,7 @@ function OversightPanel({
     <>
       <section className="cards" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
         <Card cls="info" k="Open platform-wide" v={data.open_platform_wide} n="across every landlord and property" />
-        <Card cls={data.unresolved_safety_flags.length > 0 ? 'bad' : 'good'} k="Unresolved safety flags" v={data.unresolved_safety_flags.length} n="open cases with a severe flag" />
+        <Card cls={data.unresolved_safety_flags.length > 0 ? 'bad' : 'good'} k="Unresolved safety flags" v={data.unresolved_safety_flags.length} n="open cases with a severe flag" help={help.safetyFlag} />
         <Card cls={data.landlords_with_repeat_overdue.length > 0 ? 'warn' : 'good'} k="Landlords with repeat overdue" v={data.landlords_with_repeat_overdue.length} n="more than one overdue case" />
       </section>
 

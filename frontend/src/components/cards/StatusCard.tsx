@@ -13,7 +13,8 @@ interface TrendInfo {
 }
 
 interface StatusCardProps {
-  label: string;
+  /** Usually plain text; may include inline elements (e.g. an InfoHint) after the text. */
+  label: React.ReactNode;
   value: React.ReactNode;
   sub?: React.ReactNode;
   icon?: React.ReactNode;
@@ -59,11 +60,14 @@ export function StatusCard({
       className={cn('flex h-full w-full flex-col p-5 text-left', className)}
       onClick={onClick}
       {...(interactive
-        ? { type: 'button' as const, 'aria-label': label }
+        ? {
+            type: 'button' as const,
+            'aria-label': typeof label === 'string' ? label : undefined,
+          }
         : null)}
     >
       <div className="flex items-start justify-between gap-3">
-        <p className="font-mono text-[0.7rem] font-medium uppercase tracking-[0.13em] text-ink-500">
+        <p className="flex items-center gap-1 font-mono text-[0.7rem] font-medium uppercase tracking-[0.13em] text-ink-500">
           {label}
         </p>
         {icon && <IconTile icon={icon} role={role} size="md" />}

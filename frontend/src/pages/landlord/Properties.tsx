@@ -5,6 +5,8 @@ import { landlordApi } from '@/lib/endpoints';
 import type { Property, PropertyType } from '@/lib/types';
 import { humanize } from '@/lib/format';
 import { ErrorState, LoadingState } from '@/components/ui/states';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help } from '@/lib/helpText';
 import { PROPERTY_TYPES } from './property-constants';
 import { IconBuilding, IconPlus, IconSearch, IconWarn, CoverGlyph } from './properties-ui';
 import { gradientFor, propertyStatus } from './properties-helpers';
@@ -167,10 +169,10 @@ export function Properties() {
       <div className="sumcards">
         <SummaryCard label="Total properties" dot="var(--wp-petrol-2)" value={totals.props} sub={`${totals.units} total units`} />
         <SummaryCard label="Total units" dot="var(--wp-slate)" value={totals.units} sub="across portfolio" />
-        <SummaryCard label="Listed units" dot="var(--wp-green)" value={totals.listed} sub="available to tenants" />
-        <SummaryCard label="Occupied" dot="var(--wp-green)" value={totals.occ} sub="active contracts" cls="occ" />
+        <SummaryCard label="Listed units" dot="var(--wp-green)" value={totals.listed} sub="available to tenants" help={help.listingActive} />
+        <SummaryCard label="Occupied" dot="var(--wp-green)" value={totals.occ} sub="active contracts" cls="occ" help={help.occupancy} />
         <SummaryCard label="Pending review" dot="var(--wp-amber)" value={totals.pending} sub="awaiting admin" />
-        <SummaryCard label="Needs attention" dot="var(--wp-amber)" value={totals.att} sub="properties to review" cls="att" />
+        <SummaryCard label="Needs attention" dot="var(--wp-amber)" value={totals.att} sub="properties to review" cls="att" help={help.needsAttention} />
       </div>
 
       {/* Toolbar */}
@@ -242,10 +244,14 @@ export function Properties() {
    SUBCOMPONENTS
 ────────────────────────────────────────────────────────────────────────── */
 
-function SummaryCard({ label, dot, value, sub, cls }: { label: string; dot: string; value: number; sub: string; cls?: string }) {
+function SummaryCard({ label, dot, value, sub, cls, help: helpText }: { label: string; dot: string; value: number; sub: string; cls?: string; help?: string }) {
   return (
     <div className={`scard glass ${cls ?? ''}`}>
-      <div className="sl"><i style={{ background: dot }} />{label}</div>
+      <div className="sl">
+        <i style={{ background: dot }} />
+        {label}
+        {helpText && <InfoHint text={helpText} label={`About ${label}`} />}
+      </div>
       <div className="sv">{value}</div>
       <div className="ss">{sub}</div>
     </div>

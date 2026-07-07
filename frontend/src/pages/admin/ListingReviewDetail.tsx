@@ -6,11 +6,34 @@ import { normalizeError } from '@/lib/api';
 import { formatCedisDecimal, formatDate, formatDateTime, humanize } from '@/lib/format';
 import { LoadingState, ErrorState } from '@/components/ui/states';
 import { useToast } from '@/components/ui/toast';
+import { help } from '@/lib/helpText';
+import { InfoHint } from '@/components/ui/InfoHint';
 import type {
   ChecklistStatus,
   ListingReviewDetail as ReviewDetail,
   ReviewChecklistItem,
+  ListingStatus,
 } from '@/lib/types';
+
+/** Maps a listing's lifecycle status to its help-tooltip copy. */
+function listingStatusHelp(status: ListingStatus): string | undefined {
+  switch (status) {
+    case 'draft':
+      return help.listingDraft;
+    case 'pending_review':
+      return help.listingPending;
+    case 'active':
+      return help.listingActive;
+    case 'rejected':
+      return help.listingRejected;
+    case 'inactive':
+      return help.listingInactive;
+    case 'archived':
+      return help.listingArchived;
+    default:
+      return undefined;
+  }
+}
 import './listing-review.css';
 import {
   WIconBack,
@@ -293,7 +316,12 @@ export function ListingReviewDetail() {
         <span className="sep">·</span>
         <span>Listing #{d.id}</span>
         <span className="sep">/</span>
-        <span>{d.status_label}</span>
+        <span>
+          {d.status_label}
+          {listingStatusHelp(d.status) && (
+            <InfoHint text={listingStatusHelp(d.status)!} label={`About ${d.status_label}`} />
+          )}
+        </span>
       </div>
 
       {/* Hero */}

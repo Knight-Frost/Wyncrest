@@ -16,6 +16,8 @@ import type {
 import { DetailDrawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { LoadingState, ErrorState, ForbiddenState } from '@/components/ui/states';
+import { help } from '@/lib/helpText';
+import { InfoHint } from '@/components/ui/InfoHint';
 import './manage-access.css';
 
 /* ---- small helpers ------------------------------------------------------- */
@@ -147,7 +149,8 @@ export function ManageAccessPage() {
           <div>
             <span className="ph-eyebrow">Access control</span>
             <h1 className="ph-title">
-              Users &amp; <span className="it">permissions.</span>
+              Users &amp; <span className="it">permissions.</span>{' '}
+              <InfoHint text={help.manageAccess} label="About managing access" />
             </h1>
             <p className="ph-sub">
               Who&rsquo;s on Wyncrest, what each role can do, and where a single admin needs a
@@ -309,7 +312,9 @@ function Matrix({ roles }: { roles: ReturnType<typeof useApi<AccessRolesMatrix>>
     <section className="glass">
       <div className="panel-head">
         <div>
-          <h2>Roles &amp; permissions</h2>
+          <h2>
+            Roles &amp; permissions <InfoHint text={help.capability} label="About roles and permissions" />
+          </h2>
           <div className="ph2-sub">What each role can do · applies to all members of that role</div>
         </div>
       </div>
@@ -497,7 +502,9 @@ function AdminDetailDrawer({
         <div className="dl">Profile</div>
         <div className="kvs">
           <div className="kv">
-            <div className="k">Tier</div>
+            <div className="k">
+              Tier <InfoHint text={admin.is_super_admin ? help.superAdmin : help.scopedAdmin} label="About this tier" />
+            </div>
             <div className="v">{admin.is_super_admin ? 'Super Admin (full authority)' : 'Regular admin'}</div>
           </div>
           <div className="kv">

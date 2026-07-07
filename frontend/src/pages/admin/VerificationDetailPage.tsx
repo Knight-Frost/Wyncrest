@@ -25,6 +25,27 @@ import { useToast } from '@/components/ui/toast';
 import { ErrorState, LoadingState } from '@/components/ui/states';
 import { DocumentViewer } from './verification/DocumentViewer';
 import { verificationStatusLabel, checklistResultLabel } from './verification/verificationVisuals';
+import { help } from '@/lib/helpText';
+import { InfoHint } from '@/components/ui/InfoHint';
+import type { VerificationRequestStatus } from '@/lib/types';
+
+/** Maps a verification request status to its help-tooltip copy. */
+function verificationStatusHelp(status: VerificationRequestStatus): string | undefined {
+  switch (status) {
+    case 'pending':
+      return help.verifPending;
+    case 'under_review':
+      return help.verifUnderReview;
+    case 'approved':
+      return help.verifApproved;
+    case 'rejected':
+      return help.verifRejected;
+    case 'needs_more_information':
+      return help.verifNeedsInfo;
+    default:
+      return undefined;
+  }
+}
 import {
   WVIconBack,
   WVIconCheck,
@@ -308,6 +329,9 @@ export function VerificationDetailPage() {
               <span className="sd" />
               {verificationStatusLabel(vr.status)}
             </span>
+            {verificationStatusHelp(vr.status) && (
+              <InfoHint text={verificationStatusHelp(vr.status)!} label={`About ${verificationStatusLabel(vr.status)}`} />
+            )}
           </span>
           <span className="cf">
             <b>{vr.documents.length}</b> document{vr.documents.length === 1 ? '' : 's'}

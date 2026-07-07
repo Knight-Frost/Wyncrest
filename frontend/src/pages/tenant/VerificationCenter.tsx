@@ -48,6 +48,8 @@ import type {
   DocumentType,
   ApiError,
 } from '@/lib/types';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help } from '@/lib/helpText';
 import './verification.css';
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
@@ -397,15 +399,21 @@ function TimelineSection({ latest }: { latest: VerificationRequest | null }) {
       <h3 className="vfy-section-title">What happens next</h3>
       <div className="vfy-tl">
         <div className="vfy-tl-item is-done">
-          <div className="vfy-tl-e">Documents submitted</div>
+          <div className="vfy-tl-e">
+            Documents submitted <InfoHint text={help.verifPending} label="About documents submitted" />
+          </div>
           <div className="vfy-tl-m">{latest?.submitted_at ? formatDate(latest.submitted_at) : '—'}</div>
         </div>
         <div className="vfy-tl-item is-current">
-          <div className="vfy-tl-e">Admin review</div>
+          <div className="vfy-tl-e">
+            Admin review <InfoHint text={help.verifUnderReview} label="About admin review" />
+          </div>
           <div className="vfy-tl-m">In progress</div>
         </div>
         <div className="vfy-tl-item is-pending">
-          <div className="vfy-tl-e">Decision</div>
+          <div className="vfy-tl-e">
+            Decision <InfoHint text={help.verifApproved} label="About decision" />
+          </div>
           <div className="vfy-tl-m">You'll be notified</div>
         </div>
       </div>
@@ -457,7 +465,8 @@ function DocumentsSection({
     <div id="vfy-documents" className="vfy-section vfy-glass">
       <div>
         <h3 className="vfy-section-title">
-          Identity document <span className="vfy-section-tag">required</span>
+          Identity document <span className="vfy-section-tag">required</span>{' '}
+          <InfoHint text={help.documentUpload} label="About uploading documents" />
         </h3>
         <p className="vfy-section-desc">
           A government-issued ID — Ghana Card, passport, or driver's licence. If your ID has two sides,
@@ -623,7 +632,10 @@ export function VerificationCenter() {
         <div>
           <span className="vfy-eyebrow">Account · Security</span>
           <h1 className="vfy-title">Identity <em>verification.</em></h1>
-          <p className="vfy-sub">A quick, secure check that confirms you are who you say you are.</p>
+          <p className="vfy-sub">
+            A quick, secure check that confirms you are who you say you are.{' '}
+            <InfoHint text={help.verifWhyTenant} label="Why verification is required" />
+          </p>
         </div>
         {status && !statusLoading && (
           <SemanticBadge role={statusBadgeRole(vs)}>

@@ -33,6 +33,8 @@ import {
   IconHeart,
   IconDoc,
 } from '@/components/ui/icons';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help } from '@/lib/helpText';
 import './tenant-dashboard.css';
 
 /* ── imagery ─────────────────────────────────────────────────────────────── */
@@ -374,6 +376,7 @@ function PaymentSummaryRow({
       {/* Level 3 Command Card — the featured item */}
       <CommandCard
         label="Outstanding balance"
+        help={help.outstandingBalance}
         value={formatCents(balanceCents)}
         sub={balanceSub}
         icon={<IconWallet size={18} />}
@@ -383,7 +386,7 @@ function PaymentSummaryRow({
 
       {/* Level 2 Status Card — next payment */}
       <StatusCard
-        label="Next payment"
+        label={<>Next payment <InfoHint text={help.nextPayment} label="About next payment" /></>}
         value={nextDue ? formatCents(nextDue.amount_cents) : '—'}
         sub={nextDueSub}
         icon={<IconCalendar size={18} />}
@@ -393,7 +396,7 @@ function PaymentSummaryRow({
 
       {/* Level 2 Status Card — payment health */}
       <StatusCard
-        label="Payment standing"
+        label={<>Payment standing <InfoHint text={help.paymentStanding} label="About payment standing" /></>}
         value={healthLabel}
         sub={hasHistory ? `Based on ledger activity` : 'No payments recorded yet'}
         icon={<IconShield size={18} />}
@@ -405,7 +408,7 @@ function PaymentSummaryRow({
           The backend only exposes unpaid (outstanding) balance. We show an honest
           "View history" prompt rather than fabricate a figure. */}
       <StatusCard
-        label="Lifetime paid"
+        label={<>Lifetime paid <InfoHint text={help.lifetimePaid} label="About lifetime paid" /></>}
         value="—"
         sub="View your full payment history"
         icon={<IconCheck size={18} />}

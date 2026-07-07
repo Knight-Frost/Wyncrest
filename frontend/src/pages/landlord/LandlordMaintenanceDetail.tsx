@@ -9,6 +9,8 @@ import { useApi } from '@/hooks/useApi';
 import { landlordApi } from '@/lib/endpoints';
 import { useToast } from '@/components/ui/toast';
 import { ErrorState, LoadingState } from '@/components/ui/states';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help } from '@/lib/helpText';
 import { formatCents, formatDate, formatDateTime } from '@/lib/format';
 import type { MaintenanceMessage, MaintenanceRequest } from '@/lib/types';
 import {
@@ -25,6 +27,13 @@ import { AssignVendorModal, UpdateStatusModal, ResolveModal, CloseModal, ReopenM
 import { AuthedImage } from '@/components/media/AuthedImage';
 import { areaLabel, onsetLabel, accessLabel, visitLabel, safetyLabel } from '@/pages/tenant/maintenanceIntake';
 import './maintenance.css';
+
+/** Only statuses with verified helpText copy get a tooltip; others render without one. */
+const STATUS_HELP: Partial<Record<MaintenanceRequest['status'], string>> = {
+  acknowledged: help.acknowledged,
+  assigned: help.assigned,
+  resolved: help.maintenanceResolved,
+};
 
 type TabKey = 'overview' | 'location' | 'tenant' | 'media' | 'assignment' | 'messages' | 'costs' | 'activity';
 
@@ -109,7 +118,12 @@ export function LandlordMaintenanceDetail() {
 
       <div className="qs">
         <Qsc k="Priority" ic={<IconFlag />} v={<span className={`prio-flag ${PRIORITY_CLASS[request.priority]}`} style={{ fontSize: 11 }}>{maintenancePriorityLabel[request.priority]}</span>} />
-        <Qsc k="Status" ic={<IconRenew />} v={<span className={`badge ${STATUS_BADGE[request.status]}`} style={{ fontSize: 11 }}>{maintenanceStatusLabel[request.status]}</span>} />
+        <Qsc
+          k="Status"
+          ic={<IconRenew />}
+          v={<span className={`badge ${STATUS_BADGE[request.status]}`} style={{ fontSize: 11 }}>{maintenanceStatusLabel[request.status]}</span>}
+          help={STATUS_HELP[request.status]}
+        />
         <Qsc k="Reported" ic={<IconCal />} v={formatDate(request.submitted_at ?? request.created_at)} data />
         <Qsc k="Category" ic={<Icon />} v={maintenanceCategoryLabel[request.category]} />
         <Qsc k="Assigned to" ic={<IconHandshake />} v={request.assignee_name ?? 'Unassigned'} />
@@ -182,10 +196,14 @@ function headerActions(r: MaintenanceRequest, setAction: (a: Action) => void): R
   return null;
 }
 
-function Qsc({ k, ic, v, data }: { k: string; ic: React.ReactNode; v: React.ReactNode; data?: boolean }) {
+function Qsc({ k, ic, v, data, help: helpText }: { k: string; ic: React.ReactNode; v: React.ReactNode; data?: boolean; help?: string }) {
   return (
     <div className="qsc glass-2">
-      <div className="qk">{ic}{k}</div>
+      <div className="qk">
+        {ic}
+        {k}
+        {helpText && <InfoHint text={helpText} label={`About ${k}`} />}
+      </div>
       <div className={`qv${data ? ' data' : ''}`}>{v}</div>
     </div>
   );
@@ -221,7 +239,11 @@ function TabOverview({ request }: { request: MaintenanceRequest }) {
         <Row k="Issue" v={request.title} />
         <Row k="Category" v={maintenanceCategoryLabel[request.category]} />
         <Row k="Priority" v={<span className={`prio-flag ${PRIORITY_CLASS[request.priority]}`} style={{ fontSize: 11 }}>{maintenancePriorityLabel[request.priority]}</span>} />
-        <Row k="Status" v={<span className={`badge ${STATUS_BADGE[request.status]}`}>{maintenanceStatusLabel[request.status]}</span>} />
+        <Row
+          k="Status"
+          v={<span className={`badge ${STATUS_BADGE[request.status]}`}>{maintenanceStatusLabel[request.status]}</span>}
+          help={STATUS_HELP[request.status]}
+        />
         <Row k="Reported by" v={`${request.reported_by === 'landlord' ? 'You' : 'Tenant'} · ${request.tenant?.full_name ?? '—'}`} />
         <Row k="Reported" v={formatDateTime(request.submitted_at ?? request.created_at)} />
         {request.onset && <Row k="Issue started" v={onsetLabel[request.onset]} />}
@@ -487,7 +509,13 @@ function TabCosts({ request, onReload }: { request: MaintenanceRequest; onReload
         <div className="costrow"><span className="ck">Labour</span><span className="cv">{formatCents(request.labor_cost_cents ?? 0)}</span></div>
         <div className="costrow"><span className="ck">Parts</span><span className="cv">{formatCents(request.parts_cost_cents ?? 0)}</span></div>
         {request.cost_notes && <div className="costrow"><span className="ck">Note</span><span className="cv" style={{ fontWeight: 400, color: 'var(--wm-slate)', maxWidth: '60%', textAlign: 'right' }}>{request.cost_notes}</span></div>}
-        <div className="costtotal"><span className="k">Total repair cost</span><span className="v">{formatCents(totalCost(request))}</span></div>
+        <div className="costtotal">
+          <span className="k inline-flex items-center gap-1">
+            Total repair cost
+            <InfoHint text={help.repairCost} label="About total repair cost" />
+          </span>
+          <span className="v">{formatCents(totalCost(request))}</span>
+        </div>
         {request.invoice_reference && (
           <div className="receipt"><div className="ri"><IconDoc /></div><div style={{ flex: 1 }}><div style={{ fontWeight: 600, fontSize: 13.5 }}>Invoice</div><div style={{ fontSize: 12, color: 'var(--wm-slate)' }}>{request.invoice_reference}</div></div><IconReceipt /></div>
         )}
@@ -529,10 +557,13 @@ function TabActivity({ request }: { request: MaintenanceRequest }) {
   );
 }
 
-function Row({ k, v }: { k: string; v: React.ReactNode }) {
+function Row({ k, v, help: helpText }: { k: string; v: React.ReactNode; help?: string }) {
   return (
     <div className="kv-row">
-      <span className="k">{k}</span>
+      <span className="k inline-flex items-center gap-1">
+        {k}
+        {helpText && <InfoHint text={helpText} label={`About ${k}`} />}
+      </span>
       <span className="v">{v === null || v === undefined || v === '' ? '—' : v}</span>
     </div>
   );

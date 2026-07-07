@@ -29,6 +29,8 @@ import {
   getMaintenanceVariant,
 } from '@/components/cards';
 import { IconWrench } from '@/components/ui/icons';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help } from '@/lib/helpText';
 import './maintenance.css';
 
 /* ---- Category icons (lucide) -------------------------------------------- */
@@ -367,7 +369,7 @@ export function MaintenancePage() {
           />
           {/* Resolved: success */}
           <StatusCard
-            label="Resolved"
+            label={<>Resolved <InfoHint text={help.maintenanceResolved} label="About resolved" /></>}
             value={stats.resolved}
             sub="completed"
             icon={<CircleCheck size={20} />}

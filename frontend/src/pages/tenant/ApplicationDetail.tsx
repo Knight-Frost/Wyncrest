@@ -24,6 +24,8 @@ import {
   IconClock,
   IconDoc,
 } from '@/components/ui/icons';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help, type HelpKey } from '@/lib/helpText';
 import type {
   Application,
   ApplicationRequestItem,
@@ -43,6 +45,18 @@ import {
   APP_DOC_REQUIREMENTS,
 } from './applicationHelpers';
 import './applications.css';
+
+/* Maps an application's status to its verified help-copy entry (ApplicationStatus enum). */
+const STATUS_HELP_KEY: Record<Application['status'], HelpKey> = {
+  draft: 'appDraft',
+  submitted: 'appSubmitted',
+  in_review: 'appSubmitted',
+  landlord_review: 'appSubmitted',
+  needs_action: 'appNeedsAction',
+  approved: 'appApproved',
+  rejected: 'appRejected',
+  withdrawn: 'appWithdrawn',
+};
 
 /* ── Action box ──────────────────────────────────────────────────────────── */
 
@@ -289,6 +303,7 @@ export function ApplicationDetail() {
         <div className="wapp-dh-addr">{homeAddress(app) || '—'}</div>
         <div className="wapp-dh-meta">
           <span className={`wapp-pill ${STATUS_ROLE[app.status]}`}><span className="sd" />{STATUS_LABEL[app.status]}</span>
+          <InfoHint text={help[STATUS_HELP_KEY[app.status]]} label={`About ${STATUS_LABEL[app.status]}`} />
           {rentAmount(app) && <span>{formatCedisDecimal(rentAmount(app))}/mo</span>}
           <span>{app.submitted_at ? `Submitted ${formatDate(app.submitted_at)}` : `Started ${formatDate(app.created_at)}`}</span>
         </div>
@@ -403,7 +418,11 @@ export function ApplicationDetail() {
 
       {/* Timeline */}
       <section className="wapp-glass wapp-sec">
-        <div className="wapp-sec-h">Timeline<span className="hint">What has happened so far</span></div>
+        <div className="wapp-sec-h">
+          Timeline
+          <InfoHint text={help.tenantVisibleActivity} label="About timeline" />
+          <span className="hint">What has happened so far</span>
+        </div>
         {(app.events ?? []).length === 0 ? (
           <div className="wapp-lockmsg">No activity yet.</div>
         ) : (

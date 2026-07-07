@@ -19,6 +19,8 @@ import { EmptyState, Skeleton } from '@/components/ui/states';
 import { StarRating } from '@/components/ui/StarRating';
 import { useToast } from '@/components/ui/toast';
 import { SectionHeader } from '@/components/cards';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help } from '@/lib/helpText';
 import type { Application, Contract, Listing, PropertyAmenity, ReviewEligibility, User } from '@/lib/types';
 import './listing-detail.css';
 
@@ -166,12 +168,25 @@ function FactRow({ icon, label, value }: { icon: React.ReactNode; label: string;
   );
 }
 
-function DetailTile({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
+function DetailTile({
+  icon,
+  label,
+  value,
+  help: helpText,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+  help?: string;
+}) {
   return (
     <div className="ld-tile">
       <span className="ld-tile-ico">{icon}</span>
       <div>
-        <div className="ld-tile-label">{label}</div>
+        <div className="ld-tile-label" style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+          {label}
+          {helpText && <InfoHint text={helpText} label={`About ${label}`} />}
+        </div>
         <div className="ld-tile-value">{value}</div>
       </div>
     </div>
@@ -617,7 +632,7 @@ export function ListingDetail() {
               <SectionHeader eyebrow="Details" title="Key details" />
               <div className="ld-tiles">
                 <DetailTile icon={<Banknote size={16} />} label="Monthly rent" value={formatDollars(unit.rent_amount)} />
-                <DetailTile icon={<ShieldCheck size={16} />} label="Security deposit" value={formatDollars(unit.security_deposit)} />
+                <DetailTile icon={<ShieldCheck size={16} />} label="Security deposit" value={formatDollars(unit.security_deposit)} help={help.securityDeposit} />
                 {furnishedTile && <DetailTile icon={<Sofa size={16} />} label="Furnishing" value={furnishedTile} />}
               </div>
             </section>

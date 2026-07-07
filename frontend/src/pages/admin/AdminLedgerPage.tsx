@@ -28,6 +28,8 @@ import {
   IconShield,
   IconRefresh,
 } from '@/components/ui/icons';
+import { help } from '@/lib/helpText';
+import { InfoHint } from '@/components/ui/InfoHint';
 import type { LedgerEntry, LedgerQueryParams, LedgerType, LedgerStatus } from '@/lib/types';
 import './ledger-case-file.css';
 
@@ -154,19 +156,22 @@ export function AdminLedgerPage() {
             Every entry is immutable and traceable to a tenant, contract, and property.
           </p>
         </div>
-        <button
-          type="button"
-          className="adl-ph-export"
-          onClick={() => adminApi.exportLedger(params)}
-          disabled={rows.length === 0}
-        >
-          <IconDownload size={15} /> Export
-        </button>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+          <button
+            type="button"
+            className="adl-ph-export"
+            onClick={() => adminApi.exportLedger(params)}
+            disabled={rows.length === 0}
+          >
+            <IconDownload size={15} /> Export
+          </button>
+          <InfoHint text={help.exportMatchesPage} label="About the export" />
+        </span>
       </header>
 
       <DataCardGrid cols={4}>
         <StatusCard
-          label="Collected"
+          label={<>Collected <InfoHint text={help.collected} label="About collected" /></>}
           value={loading ? '—' : formatCents(summary?.collected_cents ?? 0)}
           sub="successful payments"
           icon={<IconWallet size={18} />}
@@ -174,7 +179,7 @@ export function AdminLedgerPage() {
           loading={loading}
         />
         <StatusCard
-          label="Outstanding"
+          label={<>Outstanding <InfoHint text={help.outstandingBalance} label="About outstanding" /></>}
           value={loading ? '—' : formatCents(summary?.outstanding_cents ?? 0)}
           sub="unpaid across all contracts"
           icon={<IconClock size={18} />}
@@ -183,7 +188,7 @@ export function AdminLedgerPage() {
           onClick={() => setTab('charges')}
         />
         <StatusCard
-          label="Overdue"
+          label={<>Overdue <InfoHint text={help.overdue} label="About overdue" /></>}
           value={loading ? '—' : formatCents(summary?.overdue_cents ?? 0)}
           sub="past due date"
           icon={<IconAlertTriangle size={18} />}

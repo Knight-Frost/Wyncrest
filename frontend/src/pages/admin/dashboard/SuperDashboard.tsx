@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { formatCents, formatCentsCompact, timeAgo } from '@/lib/format';
 import { isSuperAdmin as userIsSuperAdmin, adminHasCapability, type CapabilitySubject } from '@/lib/permissions';
+import { help } from '@/lib/helpText';
+import { InfoHint } from '@/components/ui/InfoHint';
 import type {
   AdminDashboard,
   AdminMaintenanceCase,
@@ -162,13 +164,14 @@ function SecHead({ ix, title, hint, linkLabel, onLink }: { ix: string; title: st
   );
 }
 
-function StatCard({ icon, k, value, sub, onClick }: { icon: string; k: string; value: React.ReactNode; sub?: React.ReactNode; onClick?: () => void }) {
+function StatCard({ icon, k, value, sub, onClick, help: helpText }: { icon: string; k: string; value: React.ReactNode; sub?: React.ReactNode; onClick?: () => void; help?: string }) {
   const Tag = onClick ? 'button' : 'div';
   return (
     <Tag type={onClick ? 'button' : undefined} className="card stat" onClick={onClick}>
       <div className="k">
         <Icon name={icon} />
         {k}
+        {helpText && <InfoHint text={helpText} label={`About ${k}`} className="ml-0.5" />}
       </div>
       <div className="v">{value}</div>
       {sub != null && <div className="sub">{sub}</div>}
@@ -622,10 +625,10 @@ function FinancialSection({ a, navigate }: { a: PlatformAnalyticsOverview; navig
     <section className="sec">
       <SecHead ix="03" title="Financial overview" hint="Is money moving correctly?" linkLabel="Full ledger" onLink={() => navigate('/app/ledger')} />
       <div className="grid g4">
-        <StatCard icon="coins" k="Rent billed" value={formatCents(f.rent_charged_cents)} sub={<>{num(f.entry_count)} entries this period</>} />
-        <StatCard icon="check" k="Rent collected" value={formatCents(f.collected_cents)} sub={<>{pct(f.collection_rate_percentage)} collection rate</>} />
-        <StatCard icon="flame" k="Outstanding" value={formatCents(f.outstanding_cents)} sub={<>{formatCents(f.overdue_cents)} overdue</>} onClick={() => navigate('/app/ledger')} />
-        <StatCard icon="clock" k="Late fees" value={formatCents(f.fees_charged_cents)} sub="charged on late rent" />
+        <StatCard icon="coins" k="Rent billed" value={formatCents(f.rent_charged_cents)} sub={<>{num(f.entry_count)} entries this period</>} help={help.charged} />
+        <StatCard icon="check" k="Rent collected" value={formatCents(f.collected_cents)} sub={<>{pct(f.collection_rate_percentage)} collection rate</>} help={help.collected} />
+        <StatCard icon="flame" k="Outstanding" value={formatCents(f.outstanding_cents)} sub={<>{formatCents(f.overdue_cents)} overdue</>} onClick={() => navigate('/app/ledger')} help={help.outstandingBalance} />
+        <StatCard icon="clock" k="Late fees" value={formatCents(f.fees_charged_cents)} sub="charged on late rent" help={help.lateFee} />
       </div>
       <div className="grid g2" style={{ marginTop: '0.85rem' }}>
         <ChartCard
@@ -670,7 +673,7 @@ function LedgerSection({ a, navigate }: { a: PlatformAnalyticsOverview; navigate
       <SecHead ix="04" title="Ledger integrity" hint="Can every payment be traced?" />
       <div className="grid g3">
         <StatCard icon="gauge" k="Total ledger entries" value={num(a.financial.entry_count)} sub="financial records this period" />
-        <StatCard icon="alert" k="Integrity issues" value={num(li.issue_count)} sub="need review" onClick={() => navigate('/app/ledger')} />
+        <StatCard icon="alert" k="Integrity issues" value={num(li.issue_count)} sub="need review" onClick={() => navigate('/app/ledger')} help={help.ledgerIntegrity} />
         <div className="card stat">
           <div className="k">
             <Icon name="shield" />
@@ -740,6 +743,7 @@ function VerificationSection({ d, a, navigate, canVerif }: { d: AdminDashboard; 
           value={num(a ? a.verifications.overdue_count : 0)}
           sub="past review target"
           onClick={canVerif ? () => navigate('/app/verifications') : undefined}
+          help={help.verifOverdue}
         />
       </div>
       <div style={{ marginTop: '0.85rem' }}>
@@ -779,9 +783,9 @@ function AdminAccessSection({ a, navigate }: { a: PlatformAnalyticsOverview; nav
       <SecHead ix="06" title="Admin access & permissions" hint="Super admin only — do admins have the right access?" linkLabel="Manage access" onLink={() => navigate('/app/manage-access')} />
       <div className="grid g4">
         <StatCard icon="users" k="Total admins" value={num(adm.total)} sub={<>{adm.super_admins} super · {Math.max(0, adm.total - adm.super_admins)} scoped</>} onClick={() => navigate('/app/manage-access')} />
-        <StatCard icon="key" k="Permission changes" value={num(act.permission_changes_period)} sub="this period" onClick={() => navigate('/app/audit')} />
-        <StatCard icon="ban" k="Restricted attempts" value={num(act.failed_access_attempts_period)} sub="blocked access this period" onClick={() => navigate('/app/audit')} />
-        <StatCard icon="shield" k="Sensitive actions" value={num(act.sensitive_actions_period)} sub="perm & ledger changes" onClick={() => navigate('/app/audit')} />
+        <StatCard icon="key" k="Permission changes" value={num(act.permission_changes_period)} sub="this period" onClick={() => navigate('/app/audit')} help={help.capability} />
+        <StatCard icon="ban" k="Restricted attempts" value={num(act.failed_access_attempts_period)} sub="blocked access this period" onClick={() => navigate('/app/audit')} help={help.restrictedAttempts} />
+        <StatCard icon="shield" k="Sensitive actions" value={num(act.sensitive_actions_period)} sub="perm & ledger changes" onClick={() => navigate('/app/audit')} help={help.auditLog} />
       </div>
       <div style={{ marginTop: '0.85rem' }}>
         <DataTable
@@ -997,7 +1001,7 @@ function ContractsSection({ d, a, navigate }: { d: AdminDashboard; a: PlatformAn
       <SecHead ix="10" title="Contracts & leases" hint="What agreements are active" linkLabel="All contracts" onLink={() => navigate('/app/contracts')} />
       <div className="grid g4">
         <StatCard icon="contract" k="Active contracts" value={num(a.overview.active_contracts)} sub="in force" onClick={() => navigate('/app/contracts')} />
-        <StatCard icon="clock" k="Expiring soon" value={num(a.overview.contracts_ending_within_30_days)} sub="ending within 30 days" />
+        <StatCard icon="clock" k="Expiring soon" value={num(a.overview.contracts_ending_within_30_days)} sub="ending within 30 days" help={help.leasesExpiring} />
         <StatCard icon="flame" k="With balance" value={num(a.overview.tenants_with_outstanding_balance)} sub="tenants owing money" onClick={() => navigate('/app/ledger')} />
         <StatCard icon="ban" k="Terminated" value={num(c.terminated_contracts)} sub={<>{num(c.expired_contracts)} expired</>} />
       </div>
@@ -1130,9 +1134,9 @@ function AuditSection({ a, navigate }: { a: PlatformAnalyticsOverview; navigate:
       <SecHead ix="13" title="Audit & security activity" hint="Who did what, when, and to whom" linkLabel="Audit log" onLink={() => navigate('/app/audit')} />
       <div className="grid g4">
         <StatCard icon="audit" k="Logins (24h)" value={num(act.logins_24h)} sub="admin sessions" />
-        <StatCard icon="shield" k="Sensitive actions" value={num(act.sensitive_actions_period)} sub="this period" onClick={() => navigate('/app/audit')} />
-        <StatCard icon="key" k="Permission changes" value={num(act.permission_changes_period)} sub="this period" onClick={() => navigate('/app/manage-access')} />
-        <StatCard icon="ban" k="Restricted attempts" value={num(act.failed_access_attempts_period)} sub="blocked access" onClick={() => navigate('/app/audit')} />
+        <StatCard icon="shield" k="Sensitive actions" value={num(act.sensitive_actions_period)} sub="this period" onClick={() => navigate('/app/audit')} help={help.auditLog} />
+        <StatCard icon="key" k="Permission changes" value={num(act.permission_changes_period)} sub="this period" onClick={() => navigate('/app/manage-access')} help={help.capability} />
+        <StatCard icon="ban" k="Restricted attempts" value={num(act.failed_access_attempts_period)} sub="blocked access" onClick={() => navigate('/app/audit')} help={help.restrictedAttempts} />
       </div>
       <div style={{ marginTop: '0.85rem' }}>
         <DataTable

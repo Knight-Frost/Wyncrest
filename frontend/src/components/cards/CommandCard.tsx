@@ -1,5 +1,6 @@
 import { cn } from '@/lib/cn';
 import { Skeleton } from '@/components/ui/states';
+import { InfoHint } from '@/components/ui/InfoHint';
 import { commandFill, type SemanticRole } from './variants';
 import { IconTile } from './IconTile';
 
@@ -15,6 +16,8 @@ interface CommandCardProps {
   role?: SemanticRole;
   /** Optional status dot color overlay on the sub-line. */
   dot?: boolean;
+  /** Short plain-language explanation shown in a help tooltip beside the label. */
+  help?: string;
   loading?: boolean;
   onClick?: () => void;
   className?: string;
@@ -32,6 +35,7 @@ export function CommandCard({
   icon,
   role = 'neutral',
   dot = true,
+  help,
   loading,
   onClick,
   className,
@@ -65,10 +69,17 @@ export function CommandCard({
 
       <div className="relative flex items-start justify-between gap-3">
         <p
-          className="font-mono text-xs uppercase tracking-[0.16em]"
+          className="flex items-center gap-1 font-mono text-xs uppercase tracking-[0.16em]"
           style={{ color: 'var(--nexus-cmd-sub)' }}
         >
           {label}
+          {help && (
+            <InfoHint
+              text={help}
+              label={`About ${label}`}
+              className="normal-case tracking-normal !text-current opacity-80 hover:opacity-100"
+            />
+          )}
         </p>
         {icon && <IconTile icon={icon} role={role} onCommand size="sm" />}
       </div>

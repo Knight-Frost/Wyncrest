@@ -29,6 +29,7 @@ import { landlordApi } from '@/lib/endpoints';
 import type { PortfolioAnalytics } from '@/lib/endpoints';
 import type { Property } from '@/lib/types';
 import { formatCents, formatCentsCompact, humanize } from '@/lib/format';
+import { help } from '@/lib/helpText';
 import { useToast } from '@/components/ui/toast';
 import { LoadingState, ErrorState, ForbiddenState, EmptyState } from '@/components/ui/states';
 import {
@@ -196,7 +197,7 @@ export function LandlordAnalytics() {
       {header}
 
       <div className="filters glass-2">
-        <span className="fl"><IconFilter /> Filtered by</span>
+        <span className="fl"><IconFilter /> Filtered by <Tip text={help.dateRange} /></span>
         <div className="sel">
           <select value={range} onChange={(e) => setRange(e.target.value as Range)}>
             {(Object.keys(RANGE_LABEL) as Range[]).map((k) => (

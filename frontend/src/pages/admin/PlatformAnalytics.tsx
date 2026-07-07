@@ -13,6 +13,8 @@ import {
   IconDownload,
 } from '@/components/ui/icons';
 import { BarChart, DualBarChart, LineChart, DonutChart, HBarList } from './pa-charts';
+import { help } from '@/lib/helpText';
+import { InfoHint } from '@/components/ui/InfoHint';
 import type {
   PlatformAnalyticsOverview,
   PlatformAnalyticsResponse,
@@ -96,18 +98,23 @@ function StatCard({
   value,
   exp,
   onClick,
+  help: helpText,
 }: {
   edge: 'pet' | 'ox' | 'gr' | 'am' | 'sl';
   label: string;
   value: React.ReactNode;
   exp?: React.ReactNode;
   onClick?: () => void;
+  help?: string;
 }) {
   const Tag = onClick ? 'button' : 'div';
   return (
     <Tag type={onClick ? 'button' : undefined} className={`pa-stat e-${edge}`} onClick={onClick}>
       <span className="pa-edge" />
-      <div className="pa-lab">{label}</div>
+      <div className="pa-lab">
+        {label}
+        {helpText && <InfoHint text={helpText} label={`About ${label}`} />}
+      </div>
       <div className="pa-val">{value}</div>
       {exp && <div className="pa-exp">{exp}</div>}
     </Tag>
@@ -248,6 +255,7 @@ export function PlatformAnalytics() {
                   </button>
                 ))}
               </div>
+              <InfoHint text={help.dateRange} label="About the date range" />
               <button className="btn" type="button" onClick={req.reload}>
                 <IconRefresh size={14} /> Refresh
               </button>
@@ -325,6 +333,7 @@ export function PlatformAnalytics() {
                 value={formatCents(a.overview.outstanding_cents)}
                 onClick={() => navigate('/app/ledger')}
                 exp={<>Owed across <b>{a.overview.tenants_with_outstanding_balance}</b> tenants. <b>{formatCents(a.overview.overdue_cents)}</b> past due.</>}
+                help={help.outstandingBalance}
               />
             </div>
           </section>
@@ -347,12 +356,12 @@ export function PlatformAnalytics() {
           <section className="pa-section">
             <SecHead num="04" title="Financial analytics" sub="The financial health of the entire platform." />
             <div className="pa-grid pa-g3" style={{ marginBottom: '0.9rem' }}>
-              <StatCard edge="pet" label="Rent billed" value={formatCents(a.financial.rent_charged_cents)} exp={<>{a.financial.entry_count} ledger entries this period.</>} />
-              <StatCard edge="gr" label="Rent collected" value={formatCents(a.financial.collected_cents)} exp={<>{pct(a.financial.collection_rate_percentage)} collection rate.</>} />
-              <StatCard edge="ox" label="Outstanding balance" value={formatCents(a.financial.outstanding_cents)} onClick={() => navigate('/app/ledger')} exp={<>{formatCents(a.financial.due_soon_cents)} not yet due.</>} />
-              <StatCard edge="ox" label="Overdue balance" value={formatCents(a.financial.overdue_cents)} onClick={() => navigate('/app/ledger')} exp="Past the due date." />
-              <StatCard edge="am" label="Late fees generated" value={formatCents(a.financial.fees_charged_cents)} exp="Charged on late rent this period." />
-              <StatCard edge="sl" label="Net collection rate" value={pct(a.financial.collection_rate_percentage)} exp={<>{formatCents(a.financial.collected_cents)} of {formatCents(a.financial.rent_charged_cents)} billed.</>} />
+              <StatCard edge="pet" label="Rent billed" value={formatCents(a.financial.rent_charged_cents)} exp={<>{a.financial.entry_count} ledger entries this period.</>} help={help.charged} />
+              <StatCard edge="gr" label="Rent collected" value={formatCents(a.financial.collected_cents)} exp={<>{pct(a.financial.collection_rate_percentage)} collection rate.</>} help={help.collected} />
+              <StatCard edge="ox" label="Outstanding balance" value={formatCents(a.financial.outstanding_cents)} onClick={() => navigate('/app/ledger')} exp={<>{formatCents(a.financial.due_soon_cents)} not yet due.</>} help={help.outstandingBalance} />
+              <StatCard edge="ox" label="Overdue balance" value={formatCents(a.financial.overdue_cents)} onClick={() => navigate('/app/ledger')} exp="Past the due date." help={help.overdue} />
+              <StatCard edge="am" label="Late fees generated" value={formatCents(a.financial.fees_charged_cents)} exp="Charged on late rent this period." help={help.lateFee} />
+              <StatCard edge="sl" label="Net collection rate" value={pct(a.financial.collection_rate_percentage)} exp={<>{formatCents(a.financial.collected_cents)} of {formatCents(a.financial.rent_charged_cents)} billed.</>} help={help.collectionRateNet} />
             </div>
             <div className="pa-two-col">
               <ChartCard title="Rent billed vs. collected" sub="6 months" legend={<><span className="pa-legend-row"><i style={{ background: 'var(--wpa-petrol-2)' }} />Billed</span><span className="pa-legend-row"><i style={{ background: 'var(--wpa-green)' }} />Collected</span></>}>
@@ -506,7 +515,7 @@ export function PlatformAnalytics() {
             <div className="pa-grid pa-g4" style={{ marginBottom: '0.9rem' }}>
               <StatCard edge="pet" label="Occupancy" value={pct(a.listings.occupancy.occupancy_rate_percentage)} exp={<>{a.listings.occupancy.occupied_units} of {a.listings.occupancy.total_units} units occupied.</>} />
               <StatCard edge="sl" label="Vacant units" value={num(a.listings.occupancy.vacant_units)} exp={<>Avg {a.listings.occupancy.average_vacancy_duration_days} days vacant.</>} />
-              <StatCard edge="gr" label="Listing → contract" value={pct(a.listings.listing_to_contract_conversion_rate)} exp="Conversion rate." />
+              <StatCard edge="gr" label="Listing → contract" value={pct(a.listings.listing_to_contract_conversion_rate)} exp="Conversion rate." help={help.listingFunnel} />
               <StatCard edge="am" label="Avg approval time" value={`${a.listings.average_approval_time_hours}h`} exp="Submitted to published." />
             </div>
             <ChartCard title="Listings by status">

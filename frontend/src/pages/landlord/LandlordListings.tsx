@@ -6,6 +6,8 @@ import { fieldErrors } from '@/lib/api';
 import type { ApiError, Listing, ListingStatus, MediaAsset } from '@/lib/types';
 import { humanize, storageUrl, timeAgo } from '@/lib/format';
 import { ErrorState, LoadingState } from '@/components/ui/states';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help } from '@/lib/helpText';
 import { Button } from '@/components/ui/Button';
 import { DetailDrawer } from '@/components/ui/Drawer';
 import { DestructiveConfirmDialog } from '@/components/ui/DestructiveConfirmDialog';
@@ -305,11 +307,11 @@ export function LandlordListings() {
       {/* Summary cards */}
       <div className="sumcards">
         <SCard label="Total listings" dot="var(--wp-petrol-2)" value={listings.length} sub="across your portfolio" />
-        <SCard label="Active" dot="var(--wp-green)" value={counts.active ?? 0} sub="visible to tenants" cls="occ" />
-        <SCard label="Pending review" dot="var(--wp-amber)" value={counts.pending_review ?? 0} sub="awaiting admin" />
-        <SCard label="Drafts" dot="var(--wp-slate)" value={counts.draft ?? 0} sub="not yet submitted" />
+        <SCard label="Active" dot="var(--wp-green)" value={counts.active ?? 0} sub="visible to tenants" cls="occ" help={help.listingActive} />
+        <SCard label="Pending review" dot="var(--wp-amber)" value={counts.pending_review ?? 0} sub="awaiting admin" help={help.listingPending} />
+        <SCard label="Drafts" dot="var(--wp-slate)" value={counts.draft ?? 0} sub="not yet submitted" help={help.listingDraft} />
         {(counts.rejected ?? 0) > 0 && (
-          <SCard label="Rejected" dot="var(--wp-oxblood)" value={counts.rejected ?? 0} sub="changes required" cls="att" />
+          <SCard label="Rejected" dot="var(--wp-oxblood)" value={counts.rejected ?? 0} sub="changes required" cls="att" help={help.listingRejected} />
         )}
       </div>
 
@@ -481,10 +483,14 @@ export function LandlordListings() {
    SUBCOMPONENTS
 ────────────────────────────────────────────────────────────────────────── */
 
-function SCard({ label, dot, value, sub, cls }: { label: string; dot: string; value: number; sub: string; cls?: string }) {
+function SCard({ label, dot, value, sub, cls, help: helpText }: { label: string; dot: string; value: number; sub: string; cls?: string; help?: string }) {
   return (
     <div className={`scard glass ${cls ?? ''}`}>
-      <div className="sl"><i style={{ background: dot }} />{label}</div>
+      <div className="sl">
+        <i style={{ background: dot }} />
+        {label}
+        {helpText && <InfoHint text={helpText} label={`About ${label}`} />}
+      </div>
       <div className="sv">{value}</div>
       <div className="ss">{sub}</div>
     </div>

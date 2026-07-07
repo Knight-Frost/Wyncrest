@@ -1,6 +1,7 @@
 import { cn } from '@/lib/cn';
 import { Skeleton } from './states';
 import { IconTrendingUp, IconTrendingDown } from './icons';
+import { InfoHint } from './InfoHint';
 
 type StatTone = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'money';
 
@@ -15,6 +16,8 @@ interface StatCardProps {
   subtext?: string;
   /** @deprecated use subtext */
   hint?: string;
+  /** Short plain-language explanation shown in a help tooltip beside the label. */
+  help?: string;
   icon?: React.ReactNode;
   tone?: StatTone;
   trend?: TrendInfo;
@@ -36,6 +39,7 @@ export function StatCard({
   value,
   subtext,
   hint,
+  help,
   icon,
   tone = 'default',
   trend,
@@ -55,7 +59,10 @@ export function StatCard({
     >
       {/* Top row */}
       <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-medium text-ink-500">{label}</p>
+        <p className="flex items-center gap-1 text-sm font-medium text-ink-500">
+          {label}
+          {help && <InfoHint text={help} label={`About ${label}`} />}
+        </p>
         {icon && (
           <span
             className={cn(

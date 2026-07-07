@@ -18,6 +18,8 @@ import { formatDate } from '@/lib/format';
 import { useToast } from '@/components/ui/toast';
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/states';
 import { SemanticBadge } from '@/components/cards';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help } from '@/lib/helpText';
 import {
   IconCheckCircle,
   IconClock,
@@ -76,6 +78,15 @@ const STATUS_COPY: Record<
     headline: 'Additional information required',
     sub: 'The review team needs more from you. Review the note below, upload updated documents, and resubmit.',
   },
+};
+
+/** Only statuses with verified helpText copy get a tooltip; "unverified" has none. */
+const STATUS_HELP: Partial<Record<VerificationStatus, string>> = {
+  pending: help.verifPending,
+  under_review: help.verifUnderReview,
+  verified: help.verifApproved,
+  rejected: help.verifRejected,
+  needs_more_information: help.verifNeedsInfo,
 };
 
 function statusRole(s: VerificationStatus | null): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
@@ -226,8 +237,12 @@ function StatusHero({ status }: { status: VerificationStatusResponse }) {
         <div className="lv-hero-top">
           <h2 className="lv-hero-title">{copy.headline}</h2>
           <SemanticBadge role={role}>{copy.label}</SemanticBadge>
+          {STATUS_HELP[vs] && <InfoHint text={STATUS_HELP[vs]} label={`About ${copy.label.toLowerCase()}`} />}
         </div>
-        <p className="lv-hero-sub">{copy.sub}</p>
+        <p className="lv-hero-sub">
+          {copy.sub}
+          {vs === 'unverified' && <InfoHint text={help.verifWhyLandlord} label="Why verification is required" className="ml-1" />}
+        </p>
         {status.latest_request?.decision_reason && (vs === 'rejected' || vs === 'needs_more_information') && (
           <div className="lv-reason">
             <span className="lv-reason-label">Reviewer note:</span>
@@ -366,7 +381,10 @@ export function LandlordVerification() {
 
           {/* Documents section */}
           <div className="lv-section">
-            <h3 className="lv-section-title">Identity documents</h3>
+            <h3 className="lv-section-title">
+              Identity documents
+              <InfoHint text={help.documentUpload} label="About uploading documents" />
+            </h3>
             <p className="lv-section-desc">
               Upload a government-issued ID (passport, national ID, or driver's licence).
               Supported formats: PDF, JPG, PNG.

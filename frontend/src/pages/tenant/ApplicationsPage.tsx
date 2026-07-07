@@ -19,6 +19,8 @@ import {
   IconClock,
   IconCircleCheck,
 } from '@/components/ui/icons';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help } from '@/lib/helpText';
 import type { Application, ApplicationStatus } from '@/lib/types';
 import {
   STATUS_LABEL,
@@ -241,10 +243,10 @@ export function ApplicationsPage() {
 
       {/* Stat cards */}
       <section className="wapp-cards">
-        <StatCard label="Drafts" value={counts.drafts} color="var(--color-ink-400)" onClick={() => setTab('drafts')} />
-        <StatCard label="Submitted" value={counts.submitted} color="var(--color-info-500)" onClick={() => setTab('submitted')} />
-        <StatCard label="Needs action" value={counts.needs} color="var(--color-warning-500)" tone="warn" onClick={() => setTab('needs')} />
-        <StatCard label="Approved" value={counts.approved} color="var(--color-success-600)" tone="ok" onClick={() => setTab('approved')} />
+        <StatCard label="Drafts" help={help.appDraft} value={counts.drafts} color="var(--color-ink-400)" onClick={() => setTab('drafts')} />
+        <StatCard label="Submitted" help={help.appSubmitted} value={counts.submitted} color="var(--color-info-500)" onClick={() => setTab('submitted')} />
+        <StatCard label="Needs action" help={help.appNeedsAction} value={counts.needs} color="var(--color-warning-500)" tone="warn" onClick={() => setTab('needs')} />
+        <StatCard label="Approved" help={help.appApproved} value={counts.approved} color="var(--color-success-600)" tone="ok" onClick={() => setTab('approved')} />
       </section>
 
       {/* Needs-action banner */}
@@ -330,12 +332,14 @@ function Intro() {
 
 function StatCard({
   label,
+  help: helpText,
   value,
   color,
   tone,
   onClick,
 }: {
   label: string;
+  help?: string;
   value: number;
   color: string;
   tone?: 'warn' | 'ok';
@@ -343,7 +347,15 @@ function StatCard({
 }) {
   return (
     <button type="button" className={`wapp-glass wapp-card${tone ? ` ${tone}` : ''}`} onClick={onClick}>
-      <div className="wapp-card-l"><i style={{ background: color }} />{label}</div>
+      <div className="wapp-card-l">
+        <i style={{ background: color }} />
+        {label}
+        {helpText && (
+          <span onClick={(e) => e.stopPropagation()}>
+            <InfoHint text={helpText} label={`About ${label}`} />
+          </span>
+        )}
+      </div>
       <div className="wapp-card-v">{value}</div>
     </button>
   );

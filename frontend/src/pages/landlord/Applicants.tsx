@@ -5,6 +5,8 @@ import { landlordApi } from '@/lib/endpoints';
 import type { Application, ApplicationStatus } from '@/lib/types';
 import { formatDate, formatCedisDecimal } from '@/lib/format';
 import { Modal } from '@/components/ui/Modal';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help } from '@/lib/helpText';
 import { useToast } from '@/components/ui/toast';
 import {
   IconStar,
@@ -230,7 +232,11 @@ export function Applicants() {
           <div className="ss">need first review</div>
         </div>
         <div className="scard glass">
-          <div className="sl"><i style={{ background: 'var(--wla-petrol-2)' }} />Under review</div>
+          <div className="sl">
+            <i style={{ background: 'var(--wla-petrol-2)' }} />
+            Under review
+            <InfoHint text={help.appSubmitted} label="About under review" />
+          </div>
           <div className="sv">{kpi.review}</div>
           <div className="ss">in progress</div>
         </div>

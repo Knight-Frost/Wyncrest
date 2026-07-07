@@ -4,6 +4,8 @@ import { useApi } from '@/hooks/useApi';
 import { adminApi } from '@/lib/endpoints';
 import { formatDate } from '@/lib/format';
 import { ErrorState, Skeleton } from '@/components/ui/states';
+import { help } from '@/lib/helpText';
+import { InfoHint } from '@/components/ui/InfoHint';
 import type { AdminVerificationRequest, VerificationRequestStatus } from '@/lib/types';
 import './verification-review.css';
 import {
@@ -107,11 +109,11 @@ export function VerificationsPage() {
     URL.revokeObjectURL(a.href);
   }
 
-  const statCards: { key: TabKey; label: string; value: number | undefined; dot: string; detail: string }[] = [
-    { key: 'pending', label: 'Pending review', value: s?.pending, dot: 'var(--amber)', detail: 'waiting on a decision' },
-    { key: 'needs_more_information', label: 'Needs info', value: s?.needs_more_information, dot: 'var(--petrol-2)', detail: 'waiting on the user' },
-    { key: 'approved', label: 'Verified', value: s?.verified, dot: 'var(--green)', detail: 'identity confirmed' },
-    { key: 'rejected', label: 'Rejected', value: s?.rejected, dot: 'var(--oxblood)', detail: 'failed verification' },
+  const statCards: { key: TabKey; label: string; value: number | undefined; dot: string; detail: string; help: string }[] = [
+    { key: 'pending', label: 'Pending review', value: s?.pending, dot: 'var(--amber)', detail: 'waiting on a decision', help: help.verifPending },
+    { key: 'needs_more_information', label: 'Needs info', value: s?.needs_more_information, dot: 'var(--petrol-2)', detail: 'waiting on the user', help: help.verifNeedsInfo },
+    { key: 'approved', label: 'Verified', value: s?.verified, dot: 'var(--green)', detail: 'identity confirmed', help: help.verifApproved },
+    { key: 'rejected', label: 'Rejected', value: s?.rejected, dot: 'var(--oxblood)', detail: 'failed verification', help: help.verifRejected },
   ];
 
   return (
@@ -150,6 +152,7 @@ export function VerificationsPage() {
             <div className="k">
               <i style={{ background: c.dot }} />
               {c.label}
+              <InfoHint text={c.help} label={`About ${c.label}`} />
             </div>
             <div className="v">{summaryReq.loading ? '—' : c.value ?? 0}</div>
             <div className="d">{c.detail}</div>
@@ -160,7 +163,9 @@ export function VerificationsPage() {
       <section className="glass">
         <div className="panel-head">
           <div>
-            <h2>Verification requests</h2>
+            <h2>
+              Verification requests <InfoHint text={help.verificationQueue} label="About the verification queue" />
+            </h2>
             <div className="ph2-sub">
               {loading ? 'Loading…' : `${items.length} shown · ${total} in this view`}
             </div>

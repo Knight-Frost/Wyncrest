@@ -19,6 +19,8 @@ import { Button } from '@/components/ui/Button';
 import { DestructiveConfirmDialog } from '@/components/ui/DestructiveConfirmDialog';
 import { ErrorState, LoadingState } from '@/components/ui/states';
 import { IconArrowLeft, IconCheckCircle, IconInfo } from '@/components/ui/icons';
+import { help } from '@/lib/helpText';
+import { InfoHint } from '@/components/ui/InfoHint';
 import type { LedgerEntry, LedgerEntryCaseFile, LedgerType } from '@/lib/types';
 import './ledger-case-file.css';
 
@@ -130,7 +132,10 @@ export function AdminLedgerCaseFile() {
         <div className="adl-ch-top" style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
           <div>
             <span className="adl-ch-eyebrow">{entry.reference}</span>
-            <h1 className="adl-ch-title">{TYPE_LABEL[entry.type]}</h1>
+            <h1 className="adl-ch-title">
+              {TYPE_LABEL[entry.type]}
+              {entry.type === 'late_fee' && <InfoHint text={help.lateFee} label="About late fees" />}
+            </h1>
             <div className="adl-ch-facts">
               <SemanticBadge role={getLedgerVariant(entry.status)} status={entry.status} />
             </div>
@@ -146,9 +151,12 @@ export function AdminLedgerCaseFile() {
         </div>
         <div className="adl-ch-actions">
           {canWaive && (
-            <Button variant="danger" size="sm" onClick={() => setWaiveOpen(true)}>
-              Waive entry
-            </Button>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <Button variant="danger" size="sm" onClick={() => setWaiveOpen(true)}>
+                Waive entry
+              </Button>
+              <InfoHint text={help.waived} label="About waiving" />
+            </span>
           )}
           {canGenerateLateFee && (
             <Button variant="secondary" size="sm" onClick={() => setLateFeeOpen((v) => !v)}>

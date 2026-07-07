@@ -6,6 +6,7 @@
  * mockup's own approach.
  */
 import type { CSSProperties, ReactNode } from 'react';
+import { InfoHint } from '@/components/ui/InfoHint';
 
 type IconProps = { className?: string };
 
@@ -61,14 +62,13 @@ export const IconRefresh = (p: IconProps) => (
   <svg viewBox="0 0 24 24" className={p.className}><path d="M21 12a9 9 0 1 1-3-6.7M21 3v6h-6" /></svg>
 );
 
-/** Tooltip-on-hover wrapper matching the mockup's `.tip` info bubble. */
+/**
+ * Tooltip trigger matching the mockup's `.tip` info bubble. Delegates to the
+ * accessible InfoHint (keyboard focus + ARIA) instead of the old CSS
+ * hover-only implementation, without changing any call site's signature.
+ */
 export function Tip({ text }: { text: string }): ReactNode {
-  return (
-    <span className="tip">
-      <span className="ti"><IconInfo /></span>
-      <span className="tipbox">{text}</span>
-    </span>
-  );
+  return <InfoHint text={text} />;
 }
 
 export function Legend({ items }: { items: Array<{ label: string; color: string }> }): ReactNode {

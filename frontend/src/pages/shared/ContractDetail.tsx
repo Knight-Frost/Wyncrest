@@ -11,6 +11,8 @@ import { NexusCard } from '@/components/cards/NexusCard';
 import { SemanticBadge } from '@/components/cards/SemanticBadge';
 import { getContractVariant } from '@/components/cards/variants';
 import { Button } from '@/components/ui/Button';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help } from '@/lib/helpText';
 import { DestructiveConfirmDialog } from '@/components/ui/DestructiveConfirmDialog';
 import { ErrorState, LoadingState } from '@/components/ui/states';
 import {
@@ -23,6 +25,15 @@ import {
   IconLedger,
 } from '@/components/ui/icons';
 import type { Contract } from '@/lib/types';
+
+/** Plain-language explanation for each contract status, keyed to the backend enum. */
+const CONTRACT_STATUS_HELP: Record<string, string> = {
+  draft: help.contractDraft,
+  pending_tenant: help.contractPendingTenant,
+  active: help.contractActive,
+  terminated: help.contractTerminated,
+  expired: help.contractExpired,
+};
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -245,9 +256,17 @@ export function ContractDetail() {
         <NexusCard role="neutral" className="p-0 overflow-hidden">
           <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-ink-200">
             <h2 className="font-display text-lg font-semibold text-ink-950">Contract Details</h2>
-            <SemanticBadge role={getContractVariant(contract.status)}>
-              {humanize(contract.status)}
-            </SemanticBadge>
+            <span className="inline-flex items-center gap-1">
+              <SemanticBadge role={getContractVariant(contract.status)}>
+                {humanize(contract.status)}
+              </SemanticBadge>
+              {CONTRACT_STATUS_HELP[contract.status] && (
+                <InfoHint
+                  text={CONTRACT_STATUS_HELP[contract.status]}
+                  label={`About ${humanize(contract.status)} contracts`}
+                />
+              )}
+            </span>
           </div>
           <div className="px-6 py-2">
             <dl>

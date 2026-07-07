@@ -11,6 +11,8 @@ import { DestructiveConfirmDialog } from '@/components/ui/DestructiveConfirmDial
 import { Avatar } from '@/components/ui/Avatar';
 import { Spinner } from '@/components/ui/Spinner';
 import { ForbiddenState, ErrorState } from '@/components/ui/states';
+import { help } from '@/lib/helpText';
+import { InfoHint } from '@/components/ui/InfoHint';
 import {
   IconSearch,
   IconShield,
@@ -126,14 +128,14 @@ function UserDossier({
   const v = data.verification;
 
   /* identity document state */
-  const identity = ((): { cls: string; label: string } => {
-    if (v.identity_verified) return { cls: 'ok', label: 'Verified' };
+  const identity = ((): { cls: string; label: string; help?: string } => {
+    if (v.identity_verified) return { cls: 'ok', label: 'Verified', help: help.verifApproved };
     const req = v.latest_request;
     if (!req) return { cls: 'neutral', label: 'Not submitted' };
     if (req.status === 'pending' || req.status === 'under_review')
-      return { cls: 'pending', label: 'Pending review' };
-    if (req.status === 'needs_more_information') return { cls: 'pending', label: 'Needs info' };
-    if (req.status === 'rejected') return { cls: 'no', label: 'Rejected' };
+      return { cls: 'pending', label: 'Pending review', help: help.verifPending };
+    if (req.status === 'needs_more_information') return { cls: 'pending', label: 'Needs info', help: help.verifNeedsInfo };
+    if (req.status === 'rejected') return { cls: 'no', label: 'Rejected', help: help.verifRejected };
     return { cls: 'neutral', label: humanize(req.status) };
   })();
 
@@ -148,6 +150,7 @@ function UserDossier({
             <div className="vi"><IconShield size={16} /></div>
             <div className="vt">Identity document<small>Government-issued ID</small></div>
             <span className={`vstate ${identity.cls}`}>{identity.label}</span>
+            {identity.help && <InfoHint text={identity.help} label={`About ${identity.label}`} />}
           </div>
 
           <div className="vrow">

@@ -9,6 +9,8 @@ import { useApi } from '@/hooks/useApi';
 import { landlordApi } from '@/lib/endpoints';
 import { useToast } from '@/components/ui/toast';
 import { ErrorState, LoadingState } from '@/components/ui/states';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help } from '@/lib/helpText';
 import { formatDate, timeAgo } from '@/lib/format';
 import type { MaintenanceCategory, MaintenancePriority, MaintenanceRequest, MaintenanceStatus } from '@/lib/types';
 import {
@@ -162,7 +164,7 @@ export function LandlordMaintenance() {
 
       <section className="cards">
         <Card cls={kpi.open > 0 ? 'info' : 'good'} k="Open requests" v={kpi.open} n="not yet resolved" />
-        <Card cls={kpi.urgent > 0 ? 'bad' : 'good'} k="Urgent" v={kpi.urgent} n="need immediate attention" />
+        <Card cls={kpi.urgent > 0 ? 'bad' : 'good'} k="Urgent" v={kpi.urgent} n="need immediate attention" help={help.maintenancePriority} />
         <Card cls="warn" k="In progress" v={kpi.inProgress} n="being handled now" />
         <Card cls={kpi.waiting > 0 ? 'warn' : 'good'} k="Waiting" v={kpi.waiting} n="need response or a visit" />
         <Card cls="good" k="Resolved this month" v={kpi.resolvedThisMonth} n="completed this month" />
@@ -291,11 +293,14 @@ function CreateRequestModalHost({ onClose, onCreated }: {
   return <CreateRequestModal contracts={active} onClose={onClose} onCreated={onCreated} />;
 }
 
-function Card({ cls, k, v, n }: { cls: string; k: string; v: number; n: string }) {
+function Card({ cls, k, v, n, help: helpText }: { cls: string; k: string; v: number; n: string; help?: string }) {
   return (
     <div className={`card glass-2 ${cls}`}>
       <span className="edge" />
-      <div className="k">{k}</div>
+      <div className="k inline-flex items-center gap-1">
+        {k}
+        {helpText && <InfoHint text={helpText} label={`About ${k}`} />}
+      </div>
       <div className="v">{v}</div>
       <div className="n">{n}</div>
     </div>
@@ -427,12 +432,21 @@ function ExportPanel({ requests, properties, onClose }: { requests: MaintenanceR
         </div>
         {cert && (
           <div className="cert">
-            <div className="ct"><IconShield /> Export certificate</div>
+            <div className="ct">
+              <IconShield /> Export certificate
+              <InfoHint text={help.maintenanceExport} label="About the export certificate" />
+            </div>
             <div className="crow"><span className="k">Records</span><span className="v">{cert.count}</span></div>
             <div className="crow"><span className="k">Format</span><span className="v">CSV</span></div>
             <div className="crow"><span className="k">Generated at</span><span className="v">{formatDate(cert.at)}</span></div>
             <div className="crow"><span className="k">Integrity</span><span className="v"><span className="badge b-green"><IconEye />SHA-256 verified</span></span></div>
-            <div className="crow"><span className="k">Checksum</span><span className="v cksum">{cert.checksum}</span></div>
+            <div className="crow">
+              <span className="k inline-flex items-center gap-1">
+                Checksum
+                <InfoHint text={help.exportChecksum} label="About the checksum" />
+              </span>
+              <span className="v cksum">{cert.checksum}</span>
+            </div>
           </div>
         )}
       </div>

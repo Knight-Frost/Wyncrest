@@ -14,6 +14,8 @@ import { useNavigate } from 'react-router';
 import { useApi } from '@/hooks/useApi';
 import { landlordApi } from '@/lib/endpoints';
 import { ErrorState, LoadingState } from '@/components/ui/states';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help } from '@/lib/helpText';
 import { formatCents, formatDate, daysUntil } from '@/lib/format';
 import {
   IconSearch,
@@ -160,12 +162,18 @@ export function TenantManagement() {
           </div>
         </div>
         <div className={`stat glass-2 ${kpis.avgOnTimeRate >= 90 ? 'good' : kpis.avgOnTimeRate >= 75 ? '' : 'warn'}`}>
-          <div className="k">On-time rate</div>
+          <div className="k inline-flex items-center gap-1">
+            On-time rate
+            <InfoHint text={help.onTimeRate} label="About on-time rate" />
+          </div>
           <div className="v">{kpis.avgOnTimeRate}%</div>
           <div className="n">rolling, all tenants</div>
         </div>
         <div className={`stat glass-2 ${kpis.outstandingCents > 0 ? 'bad' : 'good'}`}>
-          <div className="k">Outstanding</div>
+          <div className="k inline-flex items-center gap-1">
+            Outstanding
+            <InfoHint text={help.outstandingBalance} label="About outstanding" />
+          </div>
           <div className="v" style={{ fontSize: 23 }}>
             {formatCents(kpis.outstandingCents)}
           </div>
@@ -174,7 +182,10 @@ export function TenantManagement() {
           </div>
         </div>
         <div className={`stat glass-2 ${kpis.endingSoonCount > 0 ? 'warn' : ''}`}>
-          <div className="k">Leases ending</div>
+          <div className="k inline-flex items-center gap-1">
+            Leases ending
+            <InfoHint text={help.leasesExpiring} label="About leases ending" />
+          </div>
           <div className="v">{kpis.endingSoonCount}</div>
           <div className="n">need a renewal call</div>
         </div>

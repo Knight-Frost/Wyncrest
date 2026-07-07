@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { adminHasCapability, type CapabilitySubject } from '@/lib/permissions';
 import { formatCedisDecimal, timeAgo } from '@/lib/format';
+import { help } from '@/lib/helpText';
+import { InfoHint } from '@/components/ui/InfoHint';
 import type { AdminDashboard, DashboardRentCase } from '@/lib/types';
 
 /* ============================================================================
@@ -173,11 +175,15 @@ export function RentRiskMonitor({ data }: { data: AdminDashboard }) {
       </div>
       <div className="rr-summary">
         <div>
-          <span className="mono-l">Outstanding</span>
+          <span className="mono-l">
+            Outstanding <InfoHint text={help.outstandingBalance} label="About outstanding" />
+          </span>
           <b>{formatCedisDecimal(m.summary.outstanding_cents / 100)}</b>
         </div>
         <div>
-          <span className="mono-l">Overdue</span>
+          <span className="mono-l">
+            Overdue <InfoHint text={help.overdue} label="About overdue" />
+          </span>
           <b className="down">{formatCedisDecimal(m.summary.overdue_cents / 100)}</b>
         </div>
         <div>

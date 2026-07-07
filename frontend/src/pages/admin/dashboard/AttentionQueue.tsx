@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router';
 import { adminHasCapability, type CapabilitySubject } from '@/lib/permissions';
 import { formatCedisDecimal } from '@/lib/format';
+import { help } from '@/lib/helpText';
+import { InfoHint } from '@/components/ui/InfoHint';
 import type { AdminDashboard } from '@/lib/types';
 
 /* ============================================================================
@@ -230,7 +232,10 @@ export function AttentionQueue({
   return (
     <section className="wadm-section">
       <div className="wadm-section-head">
-        <h2>Today&rsquo;s attention queue</h2>
+        <h2>
+          Today&rsquo;s attention queue{' '}
+          <InfoHint text={help.needsAttention} label="About the attention queue" />
+        </h2>
         <div className="ph-sub">What needs a decision right now</div>
       </div>
       <div className="aq-grid">{cards}</div>

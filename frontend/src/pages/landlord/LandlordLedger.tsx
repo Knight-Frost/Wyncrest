@@ -18,6 +18,8 @@ import type { LedgerEntry, LedgerBalanceRow } from '@/lib/types';
 import { formatCents } from '@/lib/format';
 import { useToast } from '@/components/ui/toast';
 import { LoadingState, ErrorState } from '@/components/ui/states';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help } from '@/lib/helpText';
 import {
   I,
   ENTRY,
@@ -155,10 +157,13 @@ export function LandlordLedger() {
     );
   }
 
-  const card = (cls: string, k: string, v: string, n: string) => (
+  const card = (cls: string, k: string, v: string, n: string, helpText?: string) => (
     <div className={`card glass-2 ${cls}`}>
       <span className="edge" />
-      <div className="k">{k}</div>
+      <div className="k">
+        {k}
+        {helpText && <InfoHint text={helpText} label={`About ${k}`} />}
+      </div>
       <div className="v">{v}</div>
       <div className="n">{n}</div>
     </div>
@@ -191,9 +196,9 @@ export function LandlordLedger() {
 
         {/* ---- summary cards ---- */}
         <section className="cards">
-          {card(summary.outstanding_cents > 0 ? 'bad' : 'good', 'Total outstanding', cedis0(summary.outstanding_cents), 'across active contracts')}
-          {card(summary.overdue_cents > 0 ? 'bad' : 'good', 'Overdue balance', cedis0(summary.overdue_cents), 'past the due date')}
-          {card('good', `Collected · ${summary.month_label.split(' ')[0]}`, cedis0(summary.collected_month_cents), 'payments received')}
+          {card(summary.outstanding_cents > 0 ? 'bad' : 'good', 'Total outstanding', cedis0(summary.outstanding_cents), 'across active contracts', help.outstandingBalance)}
+          {card(summary.overdue_cents > 0 ? 'bad' : 'good', 'Overdue balance', cedis0(summary.overdue_cents), 'past the due date', help.overdue)}
+          {card('good', `Collected · ${summary.month_label.split(' ')[0]}`, cedis0(summary.collected_month_cents), 'payments received', help.collected)}
           {card('info', `Charged · ${summary.month_label.split(' ')[0]}`, cedis0(summary.charged_month_cents), 'rent and fees posted')}
           {card(od > 0 ? 'warn' : 'good', 'Tenants overdue', String(od), od === 1 ? 'needs follow-up' : 'need follow-up')}
         </section>
@@ -280,6 +285,7 @@ export function LandlordLedger() {
               <button className="btn btn-p" onClick={runExport} disabled={exporting}>
                 {I.export} {exporting ? 'Generating…' : 'Generate CSV'}
               </button>
+              <InfoHint text={help.exportMatchesPage} label="About what the export contains" />
             </div>
           </div>
         </div>

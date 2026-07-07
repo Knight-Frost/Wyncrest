@@ -37,6 +37,8 @@ import {
   IconEye,
 } from '@/components/ui/icons';
 import type { TenantDocument, DocumentType, ApiError } from '@/lib/types';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help } from '@/lib/helpText';
 import './documents.css';
 
 /* ── Image icon (not in icons.tsx) ───────────────────────────────────────── */
@@ -549,7 +551,7 @@ export function DocumentsPage() {
             loading={loading}
           />
           <StatusCard
-            label="Verified"
+            label={<>Verified <InfoHint text={help.verifApproved} label="About verified" /></>}
             value={loading ? '—' : stats.verified}
             sub="Approved by admin"
             icon={<IconCheckCircle size={18} />}
@@ -557,7 +559,7 @@ export function DocumentsPage() {
             loading={loading}
           />
           <StatusCard
-            label="Pending review"
+            label={<>Pending review <InfoHint text={help.verifPending} label="About pending review" /></>}
             value={loading ? '—' : stats.pending}
             sub="Awaiting verification"
             icon={<IconClock size={18} />}

@@ -21,6 +21,8 @@ import {
 import { Donut, MiniLineChart } from '@/components/ui/charts';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help } from '@/lib/helpText';
 import {
   LoadingState,
   ErrorState,
@@ -245,7 +247,12 @@ function FinancialMetrics({
         {/* ── Collected this month ── */}
         <motion.div variants={staggerItem}>
           <StatusCard
-            label="Collected this month"
+            label={
+              <>
+                Collected this month
+                <InfoHint text={help.collected} label="About collected this month" />
+              </>
+            }
             value={formatCents(ledger.collected_this_month_cents)}
             sub={
               ledger.collected_this_month_cents > 0
@@ -281,11 +288,17 @@ function FinancialMetrics({
               sub={`${formatCents(ledger.overdue_cents)} overdue. Action needed.`}
               icon={<IconAlertTriangle size={18} />}
               role="danger"
+              help={help.outstandingBalance}
               className="h-full"
             />
           ) : (
             <StatusCard
-              label="Outstanding balance"
+              label={
+                <>
+                  Outstanding balance
+                  <InfoHint text={help.outstandingBalance} label="About outstanding balance" />
+                </>
+              }
               value={formatCents(ledger.outstanding_cents)}
               sub="No overdue rent"
               icon={<IconWallet size={18} />}
@@ -306,7 +319,12 @@ function FinancialMetrics({
         {/* ── Occupancy — Donut footer driven by real occupied/total ── */}
         <motion.div variants={staggerItem}>
           <StatusCard
-            label="Occupancy"
+            label={
+              <>
+                Occupancy
+                <InfoHint text={help.occupancy} label="About occupancy" />
+              </>
+            }
             value={`${portfolio.occupied_units} / ${portfolio.total_units}`}
             sub={
               portfolio.total_units > 0
@@ -341,7 +359,12 @@ function FinancialMetrics({
         {/* ── Active leases ── */}
         <motion.div variants={staggerItem}>
           <StatusCard
-            label="Active leases"
+            label={
+              <>
+                Active leases
+                <InfoHint text={help.activeLeases} label="About active leases" />
+              </>
+            }
             value={String(contracts.active)}
             sub={
               contracts.pending_tenant > 0
@@ -415,7 +438,12 @@ function NeedsAttention({
 
         <Link to="/app/contracts" className="block">
           <StatusCard
-            label="Leases expiring"
+            label={
+              <>
+                Leases expiring
+                <InfoHint text={help.leasesExpiring} label="About leases expiring" />
+              </>
+            }
             value={String(contracts.expiring_soon)}
             sub={
               contracts.expiring_soon > 0
@@ -799,7 +827,12 @@ function ListingsFunnel({ portfolio }: { portfolio: LandlordDashboardData['portf
         />
 
         <StatusCard
-          label="Draft listings"
+          label={
+            <>
+              Draft listings
+              <InfoHint text={help.listingDraft} label="About draft listings" />
+            </>
+          }
           value={String(portfolio.draft_listings)}
           sub={
             portfolio.draft_listings > 0

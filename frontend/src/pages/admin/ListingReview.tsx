@@ -4,6 +4,8 @@ import { useApi } from '@/hooks/useApi';
 import { adminApi } from '@/lib/endpoints';
 import { formatCedisDecimal, timeAgo } from '@/lib/format';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/states';
+import { help } from '@/lib/helpText';
+import { InfoHint } from '@/components/ui/InfoHint';
 import type { ListingReviewSummary, ListingReviewFlags } from '@/lib/types';
 import './listing-review.css';
 import {
@@ -213,6 +215,7 @@ function StatCard({
   detail,
   dot,
   onClick,
+  help: helpText,
 }: {
   tone: 'alert' | 'good' | 'plain';
   selected: boolean;
@@ -221,6 +224,7 @@ function StatCard({
   detail: string;
   dot: string;
   onClick: () => void;
+  help?: string;
 }) {
   return (
     <button
@@ -232,6 +236,7 @@ function StatCard({
       <div className="k">
         <i style={{ background: dot }} />
         {label}
+        {helpText && <InfoHint text={helpText} label={`About ${label}`} />}
       </div>
       <div className="v">{value}</div>
       <div className="d">{detail}</div>
@@ -351,6 +356,7 @@ export function ListingReview() {
           detail="in the queue"
           dot="var(--oxblood)"
           onClick={() => pickStat('awaiting')}
+          help={help.listingPending}
         />
         <StatCard
           tone="plain"
@@ -360,6 +366,7 @@ export function ListingReview() {
           detail="pending with warnings"
           dot="var(--amber)"
           onClick={() => pickStat('flagged')}
+          help={help.needsAttention}
         />
         <StatCard
           tone="good"
@@ -369,6 +376,7 @@ export function ListingReview() {
           detail="no issues found"
           dot="var(--green)"
           onClick={() => pickStat('ready')}
+          help={help.listingReadyToPublish}
         />
         <StatCard
           tone="plain"
@@ -378,6 +386,7 @@ export function ListingReview() {
           detail={`${counts?.approved_today ?? 0} today · live to tenants`}
           dot="var(--petrol-2)"
           onClick={() => pickStat('approved')}
+          help={help.listingActive}
         />
       </section>
 

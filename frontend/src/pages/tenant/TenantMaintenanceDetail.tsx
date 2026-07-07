@@ -19,7 +19,16 @@ import { formatDate, formatDateTime } from '@/lib/format';
 import { maintenanceCategoryLabel, maintenancePriorityLabel, maintenanceStatusLabel } from '@/lib/statusMaps';
 import type { MaintenanceMessage, MaintenanceRequest } from '@/lib/types';
 import { areaLabel, onsetLabel, accessLabel, visitLabel, contactLabel, safetyLabel } from './maintenanceIntake';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help, type HelpKey } from '@/lib/helpText';
 import './maintenance.css';
+
+/* Only statuses with a verified, accurate help-copy entry get a hint (MaintenanceStatus enum). */
+const STATUS_HELP_KEY: Partial<Record<MaintenanceRequest['status'], HelpKey>> = {
+  acknowledged: 'acknowledged',
+  assigned: 'assigned',
+  resolved: 'maintenanceResolved',
+};
 
 const NEXT_STEP: Record<string, string> = {
   open: 'Your landlord will review this and acknowledge it soon.',
@@ -76,6 +85,12 @@ export function TenantMaintenanceDetail() {
           <div className="mn-dtags">
             <span className={`mn-tag mn-tag--${request.priority}`}>{maintenancePriorityLabel[request.priority]}</span>
             <span className="mn-tag">{maintenanceStatusLabel[request.status]}</span>
+            {STATUS_HELP_KEY[request.status] && (
+              <InfoHint
+                text={help[STATUS_HELP_KEY[request.status] as HelpKey]}
+                label={`About ${maintenanceStatusLabel[request.status]}`}
+              />
+            )}
             <span className="mn-tag mn-tag--muted">{maintenanceCategoryLabel[request.category]}</span>
             <span className="mn-tag mn-tag--muted">MR-{String(request.id).padStart(4, '0')}</span>
           </div>
@@ -154,7 +169,10 @@ export function TenantMaintenanceDetail() {
 
       {/* Timeline */}
       <section className="mn-sec mn-card">
-        <div className="mn-sec-head"><h3 className="mn-sec-title">Activity</h3></div>
+        <div className="mn-sec-head">
+          <h3 className="mn-sec-title">Activity</h3>
+          <InfoHint text={help.tenantVisibleActivity} label="About activity" />
+        </div>
         <div className="mn-timeline">
           {(request.events ?? []).length === 0 ? (
             <p className="mn-hint">No activity yet.</p>

@@ -23,6 +23,8 @@ import {
   IconFlag,
 } from '@/components/ui/icons';
 import { GroupedBarChart, DonutChart, ReasonBars, StackedSplitBar, FilterableTable, WhoCell } from './analytics-charts';
+import { help } from '@/lib/helpText';
+import { InfoHint } from '@/components/ui/InfoHint';
 import type {
   AdminAnalyticsSummary,
   AdminAnalyticsResponse,
@@ -93,18 +95,21 @@ function StatCard({
   value,
   sub,
   onClick,
+  help: helpText,
 }: {
   icon?: React.ReactNode;
   label: string;
   value: React.ReactNode;
   sub?: React.ReactNode;
   onClick?: () => void;
+  help?: string;
 }) {
   const Tag = onClick ? 'button' : 'div';
   return (
     <Tag type={onClick ? 'button' : undefined} className={`card stat${onClick ? ' click' : ''}`} onClick={onClick}>
       <div className="k">
         {icon} {label}
+        {helpText && <InfoHint text={helpText} label={`About ${label}`} className="ml-0.5" />}
       </div>
       <div className="v">{value}</div>
       {sub && <div className="sub">{sub}</div>}
@@ -261,6 +266,7 @@ function Header({
             </button>
           ))}
         </div>
+        <InfoHint text={help.dateRange} label="About the date range" />
         <button className="btn" type="button" onClick={onRefresh}>
           <IconRefresh size={15} /> Refresh
         </button>
@@ -579,7 +585,7 @@ function ListingsView({ listings }: { listings: NonNullable<AdminAnalyticsSummar
     <>
       <div className="sec">
         <div className="grid g4">
-          <StatCard label="Pending review" value={num(listings.counts.pending)} sub="awaiting approval" />
+          <StatCard label="Pending review" value={num(listings.counts.pending)} sub="awaiting approval" help={help.listingPending} />
           <StatCard label="Approved" value={num(listings.counts.approved)} sub="all time" />
           <StatCard label="Rejected" value={num(listings.counts.rejected)} sub="all time" />
           <StatCard
@@ -639,9 +645,10 @@ function VerificationsView({ v }: { v: NonNullable<AdminAnalyticsSummary['module
                 {v.summary.pending_by_role.tenant} tenants · {v.summary.pending_by_role.landlord} landlords
               </>
             }
+            help={help.verifPending}
           />
-          <StatCard label="Overdue (72h+)" value={num(v.timing.overdue_count)} />
-          <StatCard label="Avg review time" value={`${v.timing.average_review_time_hours}h`} sub="per case" />
+          <StatCard label="Overdue (72h+)" value={num(v.timing.overdue_count)} help={help.verifOverdue} />
+          <StatCard label="Avg review time" value={`${v.timing.average_review_time_hours}h`} sub="per case" help={help.verifReviewTime} />
           <StatCard
             label="My decisions"
             value={num(totalDecisions)}
@@ -673,7 +680,7 @@ function VerificationsView({ v }: { v: NonNullable<AdminAnalyticsSummary['module
             <div style={{ display: 'flex', flexDirection: 'column', gap: '11px', marginTop: '14px' }}>
               <Row label="Approved" value={v.my_decisions.approved} />
               <Row label="Rejected" value={v.my_decisions.rejected} />
-              <Row label="Sent back" value={v.my_decisions.sent_back} />
+              <Row label="Sent back" value={v.my_decisions.sent_back} help={help.verifNeedsInfo} />
               <Row label="Verified (all time)" value={v.summary.verified} />
               <Row label="Missing documents" value={v.summary.missing_documents} />
             </div>
@@ -701,10 +708,13 @@ function VerificationsView({ v }: { v: NonNullable<AdminAnalyticsSummary['module
   );
 }
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
+function Row({ label, value, help: helpText }: { label: string; value: React.ReactNode; help?: string }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px' }}>
-      <span style={{ color: 'var(--muted)' }}>{label}</span>
+      <span style={{ color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+        {label}
+        {helpText && <InfoHint text={helpText} label={`About ${label}`} />}
+      </span>
       <b>{value}</b>
     </div>
   );

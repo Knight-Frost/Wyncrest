@@ -15,6 +15,8 @@ import {
 } from '@/components/cards';
 import { ErrorState, EmptyState, Skeleton } from '@/components/ui/states';
 import { Avatar } from '@/components/ui/Avatar';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help } from '@/lib/helpText';
 import type { Listing, TenantProfileResponse } from '@/lib/types';
 import './browse-listings.css';
 
@@ -337,7 +339,10 @@ export function BrowseListings() {
             {TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
           </Field>
           <label className="bz-field">
-            <span className="bz-field-label">Verification</span>
+            <span className="bz-field-label">
+              Verification
+              <InfoHint text={help.verifiedRentals} label="About verification" />
+            </span>
             <button type="button" className="bz-verif" onClick={() => set('verified_only', !draft.verified_only)}
               aria-pressed={draft.verified_only}>
               <span className={`bz-cb${draft.verified_only ? ' on' : ''}`} aria-hidden="true"><Check size={13} strokeWidth={3} /></span>

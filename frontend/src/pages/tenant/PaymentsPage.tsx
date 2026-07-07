@@ -39,6 +39,8 @@ import {
   IconArrowRight,
   IconHome,
 } from '@/components/ui/icons';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { help } from '@/lib/helpText';
 import './payments.css';
 
 /* Stripe.js is loaded once for the whole page (null when no publishable key). */
@@ -464,13 +466,19 @@ function SummaryCards({ model }: { model: PageModel }) {
   return (
     <section className="pm-cards">
       <article className={`pm-glass pm-card pm-card-bal ${serious ? 'is-over' : owed ? 'is-owed' : 'is-clear'}`}>
-        <div className="pm-card-label">Current balance</div>
+        <div className="pm-card-label">
+          Current balance
+          <InfoHint text={help.outstandingBalance} label="About current balance" />
+        </div>
         <div className="pm-card-value">{formatCents(model.outstandingCents)}</div>
         <div className="pm-card-sub">{balSub}</div>
       </article>
 
       <article className="pm-glass pm-card">
-        <div className="pm-card-label">Next due date</div>
+        <div className="pm-card-label">
+          Next due date
+          <InfoHint text={help.nextPayment} label="About next due date" />
+        </div>
         <div className="pm-card-value pm-card-value-sm">{nextLabel}</div>
         <div className="pm-card-sub">{nextSub}</div>
       </article>
@@ -486,7 +494,10 @@ function SummaryCards({ model }: { model: PageModel }) {
       </article>
 
       <article className="pm-glass pm-card">
-        <div className="pm-card-label">Payment status</div>
+        <div className="pm-card-label">
+          Payment status
+          <InfoHint text={help.paymentStatusSummary} label="About payment status" />
+        </div>
         <div className={`pm-statpill is-${status.tone}`}>
           <span className="pm-statpill-dot" />
           {status.label}
@@ -858,14 +869,15 @@ function BalanceBreakdown({ model }: { model: PageModel }) {
         <span className="pm-sec-hint">Your account at a glance</span>
       </div>
       <div className="pm-brk">
-        <Row label="Rent charged to date" value={formatCents(model.rentChargedCents)} />
-        <Row label="Fees charged" value={formatCents(model.feesChargedCents)} />
+        <Row label="Rent charged to date" value={formatCents(model.rentChargedCents)} help={help.charged} />
+        <Row label="Fees charged" value={formatCents(model.feesChargedCents)} help={help.charged} />
         <Row
           label="Payments received"
           value={model.collectedCents > 0 ? `– ${formatCents(model.collectedCents)}` : formatCents(0)}
           credit={model.collectedCents > 0}
+          help={help.collected}
         />
-        <Row label="Outstanding balance" value={formatCents(model.outstandingCents)} total />
+        <Row label="Outstanding balance" value={formatCents(model.outstandingCents)} total help={help.outstandingBalance} />
       </div>
     </section>
   );
@@ -876,15 +888,20 @@ function Row({
   value,
   credit,
   total,
+  help: helpText,
 }: {
   label: string;
   value: string;
   credit?: boolean;
   total?: boolean;
+  help?: string;
 }) {
   return (
     <div className={`pm-brk-row ${total ? 'is-total' : ''}`}>
-      <span className="pm-brk-label">{label}</span>
+      <span className="pm-brk-label" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+        {label}
+        {helpText && <InfoHint text={helpText} label={`About ${label}`} />}
+      </span>
       <span className={`pm-brk-value pm-mono ${credit ? 'is-credit' : ''}`}>{value}</span>
     </div>
   );
@@ -1053,7 +1070,12 @@ function LedgerTable({
                 <th>Description</th>
                 <th className="pm-r">Charge</th>
                 <th className="pm-r">Payment</th>
-                <th className="pm-r">Balance</th>
+                <th className="pm-r">
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                    Balance
+                    <InfoHint text={help.balance} label="About balance" />
+                  </span>
+                </th>
                 <th aria-label="Actions" />
               </tr>
             </thead>

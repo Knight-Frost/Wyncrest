@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Field';
 import { ErrorState } from '@/components/ui/states';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { help } from '@/lib/helpText';
+import { InfoHint } from '@/components/ui/InfoHint';
 import {
   IconShield,
   IconChevronLeft,
@@ -331,7 +333,11 @@ export function AuditLogs() {
           <div className="d">{stats?.events_today.sub ?? '—'}</div>
         </div>
         <div className="au-stat">
-          <div className="k"><span className="kd" style={{ background: 'var(--color-info-500)' }} />Total on record</div>
+          <div className="k">
+            <span className="kd" style={{ background: 'var(--color-info-500)' }} />
+            Total on record
+            <InfoHint text={help.auditLog} label="About total on record" />
+          </div>
           <div className="v">{(stats?.total_on_record.value ?? 0).toLocaleString()}</div>
           <div className="d">{stats?.total_on_record.sub ?? '—'}</div>
         </div>
@@ -339,6 +345,7 @@ export function AuditLogs() {
           <div className="k">
             <span className="kd" style={{ background: verify && !verify.is_valid ? 'var(--color-danger-500)' : 'var(--color-success-500)' }} />
             Chain integrity
+            <InfoHint text={help.chainIntegrity} label="About chain integrity" />
           </div>
           <div className={`v ${verify && !verify.is_valid ? 'bad' : 'ok'}`}>
             {verifyLoading && !verify ? '…' : `${integrityPct}%`}
