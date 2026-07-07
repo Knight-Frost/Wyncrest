@@ -37,9 +37,16 @@ return [
             'database' => env('DB_DATABASE', database_path('database.sqlite')),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
-            'busy_timeout' => null,
-            'journal_mode' => null,
-            'synchronous' => null,
+            // why: SQLite locks the whole file per write. Under concurrent requests
+            // (e.g. a page firing several XHRs, each bumping the rate-limit counter
+            // in the DB cache) a colliding writer otherwise fails instantly with
+            // "database is locked" -> a 500. A busy_timeout makes writers wait and
+            // retry for up to 5s instead. WAL journal mode (opt-in via env on file
+            // DBs) lets readers run concurrently with a writer, further cutting
+            // contention. Both are no-ops on the :memory: test DB.
+            'busy_timeout' => env('DB_BUSY_TIMEOUT', 5000),
+            'journal_mode' => env('DB_JOURNAL_MODE'),
+            'synchronous' => env('DB_SYNCHRONOUS'),
             'transaction_mode' => 'DEFERRED',
         ],
 
