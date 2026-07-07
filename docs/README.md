@@ -7,6 +7,7 @@ Start at the project root [`README.md`](../README.md) for the two-minute overvie
 | File | Purpose | Best reader |
 |---|---|---|
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | How the frontend, backend, and database fit together, and why | Developers, reviewers |
+| [`ENGINES.md`](ENGINES.md) | The nine backend "engines" that own Wyncrest's sensitive truth (ledger, payments, contracts, audit, …) | Developers, reviewers |
 | [`AUTHORIZATION.md`](AUTHORIZATION.md) | Roles, admin capabilities, and how access is enforced | Developers, reviewers, admins |
 | [`DATABASE.md`](DATABASE.md) | The main data areas and how they relate | Developers |
 | [`DEVELOPMENT.md`](DEVELOPMENT.md) | Local setup, running the app, common problems | Developers |
