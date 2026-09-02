@@ -59,3 +59,22 @@ jobs:
       - name: Run build
         working-directory: frontend
         run: npm run build
+
+  repo-hygiene:
+    name: Repo hygiene
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Fail the build if a real .env file was ever committed. .env holds
+      # secrets/config and must only exist locally (see .env.example for the
+      # template); this is a tripwire, not a scan of file contents.
+      - name: Env files must not be tracked
+        run: |
+          if git ls-files | grep -E '(^|/)\.env$'; then
+            echo "A .env file is tracked in git. Remove it and rotate any secrets it held."
+            exit 1
+          fi
+          echo "OK: no .env file tracked."

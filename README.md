@@ -1,14 +1,17 @@
 # Wyncrest
 
-Wyncrest is a full-stack rental property management platform. It gives tenants, landlords, and admins one shared, trustworthy system for finding homes, managing leases, tracking rent, and keeping a permanent record of what happened.
+Wyncrest is a rental operations system built around one guarantee: every rent charge, payment, and privileged action is written to a permanent record that cannot be quietly edited later.
+
+It is not a property-management dashboard with a ledger bolted on. The ledger and the audit log are the foundation everything else (listings, contracts, notifications) is built on top of.
 
 | Area | Status |
 |---|---|
-| Backend | Laravel 12, stable, 692 automated tests passing |
-| Frontend | React 18 + TypeScript, builds clean, lint clean |
+| Backend | Laravel 12, tests run via `php artisan test` (see verification block below) |
+| Frontend | React 18 + TypeScript, builds clean, lint clean, no automated test suite (see Known limitations) |
 | Database | SQLite for local development, MySQL and PostgreSQL supported |
 | Authentication | Token-based login, separate tenant/landlord and admin accounts |
-| Current state | Actively developed, running on a live demo deployment |
+| Live demo | <http://18.216.245.190> (HTTP only, no TLS. A single-instance showcase, not a production environment.) |
+| Current state | Actively developed. Runs locally via a one-command setup. |
 
 Maintainer: **Elton Sakyi**
 
@@ -25,7 +28,30 @@ Wyncrest manages a rental from the first listing to the last rent payment, in on
 
 Every rent charge, payment, and privileged action is written to a permanent record that cannot be quietly edited later. That record is what makes the platform trustworthy: a landlord, a tenant, or an auditor can always see exactly what happened and when.
 
-## Who uses Wyncrest
+## The problem this solves
+
+A rent dispute is usually an argument about what happened: did the tenant pay on time, did the landlord apply a late fee they weren't entitled to, did an admin waive a charge and for whom. Most systems store a single "balance" number that anyone with database access can edit, which means the dispute has no independent evidence to settle it.
+
+Wyncrest never stores a balance as an editable number. A balance is always the sum of an append-only list of entries, and every privileged action that touches the platform is written to a hash-chained audit log. The history is the evidence.
+
+## How the ledger stays honest
+
+Ledger entries are immutable at the policy layer: `LedgerEntryPolicy::update()` and `::delete()` both unconditionally return `false`, and `ledger_entries` has no `updated_at` column at all (the migration's own comment: "Ledger entries are IMMUTABLE. Corrections require compensating entries."). If a charge was wrong, Wyncrest never rewrites it; it adds a new, opposite-signed entry next to it, so the mistake and its correction stay visible together.
+
+```mermaid
+flowchart TD
+    A[Original entry recorded<br/>e.g. rent charge, positive amount] --> B{Turns out to be wrong}
+    B -->|Attempt to edit or delete| X[Blocked: policy returns false,<br/>no updated_at column exists]
+    B -->|Correct path| C[New compensating entry created<br/>opposite sign, same contract]
+    C --> D[Balance recalculated as the sum<br/>of every entry, original + correction]
+    D --> E[Both entries remain forever,<br/>full history stays visible]
+```
+
+All derived numbers (collected, outstanding, overdue, running balance) are computed in one place, `app/Services/Ledger/LedgerComputationEngine.php`, so the admin, landlord, and tenant views can never quietly disagree about what a tenant owes. Full detail: [`docs/LEDGER.md`](docs/LEDGER.md).
+
+Privileged actions get the same treatment a different way: every row in `audit_logs` is SHA-256 hash-chained to the row before it, anchored at a `GENESIS_HASH` for the first row. Editing any historical row breaks every hash after it, which `AuditLogService::verifyChain()` detects by recomputing the chain. A backfill migration re-canonicalised existing rows so the chain covers data older than the hash column itself.
+
+## Roles and authorization
 
 | Role | What they can do |
 |---|---|
@@ -34,7 +60,44 @@ Every rent charge, payment, and privileged action is written to a permanent reco
 | **Admin** | Moderate listings and reviews, verify identities, manage user accounts, view the audit log |
 | **Super admin** | Everything an admin can do, plus deciding which capabilities other admins are granted |
 
-Full detail on what each role can and cannot do: [`docs/AUTHORIZATION.md`](docs/AUTHORIZATION.md).
+Admin access is broken into 12 named capabilities (`app/Enums/AdminCapability.php`), enforced server-side by the `EnsureAdminCan` middleware on every admin route. A denied check is not a silent 403: the middleware writes its own `admin_access_denied` audit event, so an admin repeatedly reaching outside their grant leaves a trail. One capability, `MANAGE_SETTINGS`, is flagged in the enum as defined but not yet enforced by any route (`AdminCapability::isEnforced()`), rather than pretending it gates something it doesn't.
+
+```mermaid
+flowchart TD
+    A[Request hits an admin route] --> B{Authenticated Admin?}
+    B -->|No| C[401 Unauthenticated]
+    B -->|Yes| D{Super admin?}
+    D -->|Yes| G[Request proceeds]
+    D -->|No| E{Holds the required capability?}
+    E -->|Yes| G
+    E -->|No| F[403 response AND<br/>admin_access_denied written to audit log]
+```
+
+Full detail on what each role and capability can and cannot do: [`docs/AUTHORIZATION.md`](docs/AUTHORIZATION.md).
+
+## What went wrong, and how it was caught
+
+A full-codebase readiness audit in July 2026 swept all API routes, all frontend pages, and every notification and audit-log write site before treating the platform as ready for real use. It found and fixed, among other things:
+
+- **A payment double-charge bug.** A successful Stripe payment recorded the payment but left the original rent charge pending, so a paid charge could be marked overdue, hit with a late fee, and charged again. Fixed in `PaymentService::recordSuccessfulPayment`, now a locked transaction that verifies the exact amount and currency before marking the obligation paid.
+- **An IDOR in landlord analytics.** A landlord could pass another landlord's `property_id` into the analytics endpoints and read their revenue and contract data. Now ownership-checked and rejected with a 403.
+- **A cross-tenant analytics cache leak.** The cache key didn't include the requesting landlord's identity, so two landlords calling the endpoint with no filters could share one cache slot and see each other's numbers. The key now always includes the user.
+
+Finding your own IDOR and cache leak before anyone else does is the outcome an audit like this is supposed to produce. Full findings, including the security and data-integrity issues: [`WYNCREST_PRODUCTION_READINESS_REPORT.md`](WYNCREST_PRODUCTION_READINESS_REPORT.md).
+
+## Test verification
+
+Run on 2 September 2026 against `main` at `d40f3ae6`.
+
+| Check | Command | Result |
+|---|---|---|
+| Backend suite | `php artisan test` | **1,101 passed**, 4,507 assertions, 0 failed, 25.31s |
+| Frontend build | `npm run build` (frontend/) | Passed in 3.91s |
+| Lint | `npm run lint` (frontend/) | Passed, 0 errors, 2 react-refresh warnings |
+| CI | `.github/workflows/ci.yml` | Passing on `main` |
+
+The backend figure is the test runner's own output, not a count of methods in the source.
+There is no automated frontend test suite; see Known limitations.
 
 ## Features
 
@@ -63,21 +126,7 @@ flowchart LR
     Services --> Notify[Notifications]
 ```
 
-The frontend never decides what a user is allowed to do. It only asks the backend, and the backend enforces every rule. Full detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
-
-## A typical rental, start to finish
-
-```mermaid
-flowchart LR
-    A[Landlord creates a listing] --> B[Admin reviews and approves it]
-    B --> C[Tenant applies]
-    C --> D[Landlord accepts and sends a contract]
-    D --> E[Tenant accepts the contract]
-    E --> F[Ledger starts charging rent]
-    F --> G[Tenant pays through Stripe]
-    G --> H[Notifications go out to both sides]
-    G --> I[Audit log records the payment]
-```
+The frontend never decides what a user is allowed to do. It only asks the backend, and the backend enforces every rule. A typical rental runs listing to approval, application, contract, ledger-driven rent charges, Stripe payment, and a notification plus an audit record on every payment. Full detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Tech stack
 
@@ -125,12 +174,13 @@ Bug, feature, and documentation issues use structured templates, and every pull 
 |---|---|
 | [`SECURITY.md`](SECURITY.md) | Security policy, how to report an issue, production safety rules |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to contribute, git rules, and commit standards |
+| [`WYNCREST_PRODUCTION_READINESS_REPORT.md`](WYNCREST_PRODUCTION_READINESS_REPORT.md) | The full readiness audit: every defect found and fixed before treating the platform as ready |
 | [`docs/README.md`](docs/README.md) | Index of every doc in the `docs/` folder |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | How the system is put together, and why |
 | [`docs/AUTHORIZATION.md`](docs/AUTHORIZATION.md) | Roles, admin capabilities, and how access is enforced |
 | [`docs/DATABASE.md`](docs/DATABASE.md) | The main data areas and how they relate |
 | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Local setup, running the app, common problems |
-| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Deployment checklist and the live demo box |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Deployment checklist and what a real deployment still needs |
 | [`docs/SEEDING.md`](docs/SEEDING.md) | Demo data, production seeding, and the two seeding modes |
 | [`docs/TESTING.md`](docs/TESTING.md) | What is tested, and how to verify before pushing |
 | [`docs/LEDGER.md`](docs/LEDGER.md) | How rent, payments, and balances work |

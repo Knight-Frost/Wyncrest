@@ -366,9 +366,10 @@ A **demo/staging** instance is live. This is a showcase box, **not** hardened pr
 
 - **URL:** http://18.216.245.190; **HTTP only, no domain/TLS.** (So Stripe webhooks
   and secure cookies do NOT work; auth is Bearer-token so login works fine.)
-- **Host:** `ec2-user@18.216.245.190` · region us-east-2 (Ohio) · instance
-  `i-0f4e0733ca1f463bc` · t3.micro (912 MB RAM) · Amazon Linux 2023.
-  SSH key: `~/Downloads/Wyncrest.pem` (must be `chmod 600`). Ports 22 + 80 open in the SG.
+- **Host:** a single t3.micro (912 MB RAM) running Amazon Linux 2023.
+  Connection details, instance identifier, region, security-group rules and the SSH key
+  path are deliberately not recorded in this public file. They live in the local
+  operator notes only.
 - **App dir:** `/var/www/wyncrest` (owner `ec2-user:apache`; `storage/`,
   `bootstrap/cache/`, `database/` are `775` group-writable so php-fpm, user `apache`, can write).
 - **Stack:** PHP 8.3 + php-fpm (socket `/run/php-fpm/www.sock`,
