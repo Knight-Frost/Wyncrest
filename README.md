@@ -87,12 +87,12 @@ Finding your own IDOR and cache leak before anyone else does is the outcome an a
 
 ## Test verification
 
-Run on 2 September 2026 against `main` at `d40f3ae6`.
+Run on 3 September 2026 against `main` at `ca667c21`.
 
 | Check | Command | Result |
 |---|---|---|
-| Backend suite | `php artisan test` | **1,101 passed**, 4,507 assertions, 0 failed, 25.31s |
-| Frontend build | `npm run build` (frontend/) | Passed in 3.91s |
+| Backend suite | `php artisan test` | **1,101 passed**, 4,507 assertions, 0 failed, 27.44s |
+| Frontend build | `npm run build` (frontend/) | Passed in 3.50s |
 | Lint | `npm run lint` (frontend/) | Passed, 0 errors, 2 react-refresh warnings |
 | CI | `.github/workflows/ci.yml` | Passing on `main` |
 
