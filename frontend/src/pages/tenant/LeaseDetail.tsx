@@ -389,7 +389,7 @@ export function LeaseDetail() {
             }
           />
           <Row label="Monthly rent" value={formatCents(contract.rent_amount)} />
-          <Row label="Rent due" value={`Day ${contract.payment_day} of each cycle`} />
+          <Row label="Rent due" value={`Day ${(contract.rent_due_day ?? contract.payment_day)} of each cycle`} />
           <Row label="Billing cycle" value={humanize(contract.billing_cycle)} />
           <Row label="Property" value={property?.name ?? '—'} />
           <Row label="Unit" value={unit?.unit_number ? `Unit ${unit.unit_number}` : 'Whole property'} />
@@ -405,7 +405,7 @@ export function LeaseDetail() {
         </h2>
         <div className="lr-grid2">
           <Row label="Monthly rent" value={formatCents(contract.rent_amount)} />
-          <Row label="Rent due" value={`Day ${contract.payment_day} of each cycle`} />
+          <Row label="Rent due" value={`Day ${(contract.rent_due_day ?? contract.payment_day)} of each cycle`} />
           {unit?.security_deposit && <Row label="Security deposit" value={formatDollars(unit.security_deposit)} />}
           <Row label="Current balance" value={formatCents(balanceCents)} />
           <Row label="Next payment due" value={nextDue ? formatDate(nextDue.due_date) : '—'} />

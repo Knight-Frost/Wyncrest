@@ -13,7 +13,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { tenantApi } from '@/lib/endpoints';
-import { fieldErrors } from '@/lib/api';
+import { fieldErrors, normalizeError } from '@/lib/api';
 import { formatDate, humanize } from '@/lib/format';
 import { useApi } from '@/hooks/useApi';
 import {
@@ -390,8 +390,9 @@ export function DocumentsPage() {
         await tenantApi.deleteDocument(id);
         showToast('Document deleted.');
         void reload();
-      } catch {
-        showToast('Delete failed. Please try again.');
+      } catch (e) {
+        // The server explains a retained document (409) in plain words.
+        showToast(normalizeError(e).message || 'Delete failed. Please try again.');
       } finally {
         setDeleting((s) => {
           const next = new Set(s);
@@ -757,6 +758,19 @@ export function DocumentsPage() {
                           ✕
                         </button>
                       </>
+                    ) : doc.deletion_blocked_reason ? (
+                      // WYN-012: evidence a verification case or submitted
+                      // application relies on is kept; say why instead of
+                      // offering a delete the server will refuse.
+                      <button
+                        className="dx-iconbtn"
+                        aria-label={`Cannot delete ${doc.original_filename}: ${doc.deletion_blocked_reason}`}
+                        title={doc.deletion_blocked_reason}
+                        onClick={() => showToast(doc.deletion_blocked_reason!)}
+                        style={{ opacity: 0.45 }}
+                      >
+                        <IconTrash size={17} />
+                      </button>
                     ) : (
                       <button
                         className="dx-iconbtn"

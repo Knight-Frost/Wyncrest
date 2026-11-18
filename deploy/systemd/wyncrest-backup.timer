@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Wyncrest backup at 03:15 (after the 01:00-02:00 billing jobs)
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+Unit=wyncrest-backup.service
+
+[Install]
+WantedBy=timers.target

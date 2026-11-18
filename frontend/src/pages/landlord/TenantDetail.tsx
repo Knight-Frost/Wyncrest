@@ -473,7 +473,7 @@ export function TenantDetail() {
             <Kv label="Start date" value={formatDate(contract.start_date)} />
             <Kv label="End date" value={formatDate(contract.end_date)} />
             <Kv label="Monthly rent" value={formatCents(contract.rent_amount)} />
-            <Kv label="Payment day" value={`Day ${contract.payment_day}`} />
+            <Kv label="Payment day" value={`Day ${(contract.rent_due_day ?? contract.payment_day)}`} />
             <Kv label="Billing cycle" value={humanize(contract.billing_cycle)} />
             {contract.listing?.unit?.security_deposit && (
               <Kv label="Security deposit (advertised)" value={formatDollars(contract.listing.unit.security_deposit)} />

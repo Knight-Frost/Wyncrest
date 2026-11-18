@@ -65,6 +65,9 @@ import type {
   InitiatePaymentResponse,
   LedgerEntry,
   LedgerEntryCaseFile,
+  DueDateAdjustmentPreview,
+  RentSchedule,
+  RentScheduleChangePreview,
   LedgerListResponse,
   LedgerQueryParams,
   LandlordLedgerResponse,
@@ -1091,7 +1094,8 @@ export const landlordApi = {
     // real tenant id server-side (StoreContractRequest::prepareForValidation).
     tenant_email: string;
     rent_amount: number;
-    payment_day: number;
+    // No payment_day: new leases are due on the 1st (owner policy); only an
+    // admin can change a lease's due day afterwards.
     start_date: string;
     // Optional at the backend (`end_date` is nullable). Omit for an open-ended
     // lease rather than sending an empty string.
@@ -1716,6 +1720,61 @@ export const adminApi = {
   async generateLateFee(id: string, amountCents: number): Promise<void> {
     await portalHttp.admin.post(`/admin/ledger/${id}/late-fee`, { amount_cents: amountCents });
   },
+  /** Preview moving one unpaid rent charge's due date (never writes). manage_ledger. */
+  async previewDueDate(id: string, dueDate: string): Promise<DueDateAdjustmentPreview> {
+    const { data } = await portalHttp.admin.get<DueDateAdjustmentPreview>(`/admin/ledger/${id}/due-date/preview`, {
+      params: { due_date: dueDate },
+    });
+    return data;
+  },
+  /**
+   * Move one unpaid rent charge's due date. expected_* come from the preview:
+   * a stale preview is refused with 409 so the admin re-checks.
+   */
+  async adjustDueDate(
+    id: string,
+    body: { due_date: string; reason: string; expected_due_date: string; expected_status: string },
+  ): Promise<{ changed: boolean; message: string; entry: LedgerEntry }> {
+    const { data } = await portalHttp.admin.post<{ changed: boolean; message: string; entry: LedgerEntry }>(
+      `/admin/ledger/${id}/due-date`,
+      body,
+    );
+    return data;
+  },
+  /** A lease's due-day schedule (readable by every admin). */
+  async rentSchedule(contractId: string): Promise<RentSchedule> {
+    const { data } = await portalHttp.admin.get<RentSchedule>(`/admin/contracts/${contractId}/rent-schedule`);
+    return data;
+  },
+  async previewRentSchedule(contractId: string, dueDay: number, effectiveMonth: string): Promise<RentScheduleChangePreview> {
+    const { data } = await portalHttp.admin.get<RentScheduleChangePreview>(
+      `/admin/contracts/${contractId}/rent-schedule/preview`,
+      { params: { due_day: dueDay, effective_month: effectiveMonth } },
+    );
+    return data;
+  },
+  /** From effective_month on, rent for this lease is due on due_day. manage_ledger. */
+  async changeRentSchedule(
+    contractId: string,
+    body: { due_day: number; effective_month: string; reason: string; expected_version: number },
+  ): Promise<{ changed: boolean; message: string; schedule: RentSchedule }> {
+    const { data } = await portalHttp.admin.post<{ changed: boolean; message: string; schedule: RentSchedule }>(
+      `/admin/contracts/${contractId}/rent-schedule`,
+      body,
+    );
+    return data;
+  },
+  /** Return future rent to the first-of-month default from effective_month. manage_ledger. */
+  async resetRentSchedule(
+    contractId: string,
+    body: { effective_month: string; reason: string; expected_version: number },
+  ): Promise<{ changed: boolean; message: string; schedule: RentSchedule }> {
+    const { data } = await portalHttp.admin.post<{ changed: boolean; message: string; schedule: RentSchedule }>(
+      `/admin/contracts/${contractId}/rent-schedule/reset`,
+      body,
+    );
+    return data;
+  },
   /** CSV export of the (optionally filtered) platform ledger. Audit-logged server-side. */
   async exportLedger(params?: LedgerQueryParams): Promise<void> {
     await downloadCsv(portalHttp.admin, '/admin/ledger/export', 'wyncrest-ledger.csv', params as Record<string, unknown> | undefined);
@@ -1991,6 +2050,13 @@ export const notificationApi = {
   async getPreferences(): Promise<Record<string, { email: boolean; sms: boolean }>> {
     const { data } = await activePortalClient().get<Record<string, { email: boolean; sms: boolean }>>(
       crossRolePath('/notification-preferences'),
+    );
+    return data;
+  },
+  /** Which channels this deployment can actually send through (SMS needs a provider). */
+  async getChannels(): Promise<{ in_app: boolean; email: boolean; sms: boolean }> {
+    const { data } = await activePortalClient().get<{ in_app: boolean; email: boolean; sms: boolean }>(
+      crossRolePath('/notification-preferences/channels'),
     );
     return data;
   },

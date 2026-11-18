@@ -36,7 +36,6 @@ interface ContractForm {
   listing_id: string;
   tenant_email: string;
   rent_amount: string; // GH₵ major units in the input; × 100 → cents on submit
-  payment_day: string;
   start_date: string;
   end_date: string; // optional; omitted from the payload when blank
 }
@@ -44,7 +43,7 @@ interface ContractForm {
 type FieldErrors = Partial<Record<keyof ContractForm, string>>;
 
 const EMPTY_FORM: ContractForm = {
-  listing_id: '', tenant_email: '', rent_amount: '', payment_day: '1', start_date: '', end_date: '',
+  listing_id: '', tenant_email: '', rent_amount: '', start_date: '', end_date: '',
 };
 
 const STEPS = ['Details', 'Review'];
@@ -109,8 +108,6 @@ export function ContractCreatePage() {
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.tenant_email = 'Enter a valid email address.';
     const rent = Number(form.rent_amount);
     if (!form.rent_amount || !Number.isFinite(rent) || rent <= 0) e.rent_amount = 'Enter a valid monthly rent in GH₵.';
-    const day = Number(form.payment_day);
-    if (!form.payment_day || !Number.isInteger(day) || day < 1 || day > 28) e.payment_day = 'Payment day must be between 1 and 28.';
     if (!form.start_date) e.start_date = 'Start date is required.';
     else if (form.start_date < todayISO()) e.start_date = 'Start date cannot be in the past.';
     if (form.end_date && form.start_date && form.end_date <= form.start_date) e.end_date = 'End date must be after the start date.';
@@ -136,7 +133,6 @@ export function ContractCreatePage() {
         listing_id: Number(form.listing_id),
         tenant_email: form.tenant_email.trim(), // resolved to a tenant id server-side
         rent_amount: rentCents,
-        payment_day: Number(form.payment_day),
         start_date: form.start_date,
         // Omit end_date entirely for an open-ended lease.
         ...(form.end_date ? { end_date: form.end_date } : {}),
@@ -254,11 +250,14 @@ export function ContractCreatePage() {
                     </div>
                   )}
                 </Field>
-                <Field label="Payment day" required error={errors.payment_day} hint="Day of each month, between 1 and 28.">
-                  {(id, invalid) => (
-                    <Input id={id} invalid={invalid} type="number" min={1} max={28} value={form.payment_day} onChange={(e) => setField('payment_day', e.target.value)} />
-                  )}
-                </Field>
+                <div className="cc-policy" role="note">
+                  <span className="cc-policy-k">Rent due</span>
+                  <span className="cc-policy-v">The 1st of each calendar month</span>
+                  <span className="cc-policy-n">
+                    Wyncrest's rent policy. A lease starting mid-month is first billed for the remaining days of that month
+                    (prorated), due on the start date. A platform admin can change the due date afterwards if needed.
+                  </span>
+                </div>
               </div>
 
               <div className="cc-grid">
@@ -292,7 +291,7 @@ export function ContractCreatePage() {
                   <ReviewRow label="Unit" value={selectedListing.unit.unit_number} />
                 )}
                 <ReviewRow label="Monthly rent" value={formatCents(Math.round(Number(form.rent_amount) * 100))} />
-                <ReviewRow label="Payment day" value={`Day ${form.payment_day} of each month`} />
+                <ReviewRow label="Rent due" value="The 1st of each month (prorated first month if starting mid-month)" />
                 <ReviewRow label="Start date" value={form.start_date} />
                 <ReviewRow label="End date" value={form.end_date || 'Open-ended'} />
               </dl>

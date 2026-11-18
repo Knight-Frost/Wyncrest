@@ -95,8 +95,16 @@ class GenerateRentCommand extends Command
         $this->info('📊 Summary:');
         $this->line("   ✅ Created: {$result['created']} rent entries");
         $this->line("   ⏭️  Skipped: {$result['skipped']} contracts (already exists or not eligible)");
+        if ($result['failed'] > 0) {
+            $this->error("   ❌ Failed: {$result['failed']} contracts (retried next run): ".implode(', ', $result['failed_contract_ids']));
+        }
 
         $this->newLine();
+
+        if ($result['failed'] > 0) {
+            // Non-zero exit so the scheduler log and any monitor see the failure.
+            return self::FAILURE;
+        }
 
         if ($result['created'] > 0) {
             $this->info('✨ Rent generation complete!');

@@ -10,6 +10,7 @@ use App\Models\Contract;
 use App\Models\LedgerEntry;
 use App\Models\MediaAsset;
 use App\Models\User;
+use App\Services\Ledger\BillingPeriodCalculator;
 use App\Services\Ledger\LedgerComputationEngine;
 use Carbon\Carbon;
 
@@ -184,6 +185,8 @@ class ContractCaseFileService
             'currency' => $contract->currency,
             'billing_cycle' => $this->enumValue($contract->billing_cycle),
             'payment_day' => $contract->payment_day,
+            'rent_due_day' => $contract->rent_due_day,
+            'billing_anchor' => $contract->billing_anchor?->value,
             'start_date' => $this->iso($contract->start_date),
             'end_date' => $this->iso($contract->end_date),
             'terminated_by' => $this->enumValue($contract->terminated_by),
@@ -399,24 +402,23 @@ class ContractCaseFileService
             'generated' => true,
         ])->values()->all();
 
-        if ($contract->status === ContractStatus::ACTIVE && $contract->end_date?->isFuture()) {
+        // The next ungenerated period comes from the same calculator the
+        // generators use (calendar/anniversary rule, proration and the
+        // admin due-day schedule), so this preview cannot drift from the
+        // charge that will actually be posted.
+        if ($contract->status === ContractStatus::ACTIVE && (! $contract->end_date || $contract->end_date->isFuture())) {
             $last = $entries->last();
-            $nextStart = $last
-                ? Carbon::parse($last->billing_period_end)->addDay()
-                : Carbon::parse($contract->start_date);
+            $calculator = app(BillingPeriodCalculator::class);
+            $next = $last
+                ? $calculator->periodAfter($contract, $last->billing_period_end)
+                : $calculator->firstPeriod($contract);
 
-            if ($nextStart->lte($contract->end_date)) {
-                $nextEnd = $nextStart->copy()->addMonth()->subDay();
-                $dueDate = $nextStart->copy()->day($contract->payment_day);
-                if ($dueDate->lt($nextStart)) {
-                    $dueDate->addMonth();
-                }
-
+            if ($next) {
                 $periods[] = [
-                    'billing_period_start' => $this->iso($nextStart),
-                    'billing_period_end' => $this->iso($nextEnd),
-                    'due_date' => $this->iso($dueDate),
-                    'amount_cents' => $contract->rent_amount,
+                    'billing_period_start' => $this->iso($next['start']),
+                    'billing_period_end' => $this->iso($next['end']),
+                    'due_date' => $this->iso($next['due_date']),
+                    'amount_cents' => $next['amount_cents'],
                     'status' => 'upcoming',
                     'generated' => false,
                 ];
@@ -627,6 +629,8 @@ class ContractCaseFileService
             'rent_amount_cents' => $contract->rent_amount,
             'billing_cycle' => $this->enumValue($contract->billing_cycle),
             'payment_day' => $contract->payment_day,
+            'rent_due_day' => $contract->rent_due_day,
+            'billing_anchor' => $contract->billing_anchor?->value,
             'security_deposit_cents' => $unit?->security_deposit !== null ? (int) round(((float) $unit->security_deposit) * 100) : null,
             'grace_period' => $notSpecified,
             'late_fee_rule' => $notSpecified,

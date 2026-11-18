@@ -48,6 +48,7 @@ class LedgerReconciliationService
         $issues = array_merge($issues, $this->checkPaidWithoutPayment($filters));
         $issues = array_merge($issues, $this->checkOutstandingMatchesSignedSum($filters));
         $issues = array_merge($issues, $this->checkMissingRentGeneration());
+        $issues = array_merge($issues, $this->checkRentPeriodGaps());
 
         $hasFail = collect($issues)->contains(fn ($i) => $i['severity'] === 'fail');
         $hasWarning = collect($issues)->contains(fn ($i) => $i['severity'] === 'warning');
@@ -152,11 +153,17 @@ class LedgerReconciliationService
     }
 
     /**
-     * Rule 6a: no two RENT entries for the same contract + billing period.
+     * Rule 6a: no two LIVE RENT entries for the same contract + billing period.
+     * A waived duplicate is the documented correction (it contributes 0 to the
+     * balance), so it is excluded, matching the partial unique index
+     * ledger_entries_unique_live_rent_period (forensic audit WYN-001).
      */
     protected function checkDuplicateRentPeriods(array $filters): array
     {
-        $dupes = $this->engine->applyFilters(LedgerEntry::where('type', LedgerType::RENT), $filters)
+        $dupes = $this->engine->applyFilters(
+            LedgerEntry::where('type', LedgerType::RENT)->where('status', '!=', LedgerStatus::WAIVED->value),
+            $filters
+        )
             ->selectRaw('contract_id, billing_period_start, billing_period_end, COUNT(*) as c')
             ->groupBy('contract_id', 'billing_period_start', 'billing_period_end')
             ->havingRaw('COUNT(*) > 1')
@@ -317,23 +324,100 @@ class LedgerReconciliationService
     {
         $missing = [];
 
-        Contract::where('status', ContractStatus::ACTIVE)->each(function (Contract $contract) use (&$missing) {
+        $noFirstRent = [];
+
+        Contract::where('status', ContractStatus::ACTIVE)->each(function (Contract $contract) use (&$missing, &$noFirstRent) {
+            // WYN-020: a lease that was activated but never received its
+            // opening charge (first-rent generation failed) is caught here
+            // even when its start date is still in the future.
+            if (! LedgerEntry::where('contract_id', $contract->id)->where('type', LedgerType::RENT)->exists()) {
+                $noFirstRent[] = $contract->id;
+
+                return;
+            }
+
             $period = $this->automation->getCurrentBillingPeriod($contract);
 
-            if ($period && ! $this->automation->rentExistsForPeriod($contract, $period['start'], $period['end'])) {
+            if ($period && ! $this->automation->rentExistsForPeriod($contract, $period['start'])) {
                 $missing[] = $contract->id;
             }
         });
 
-        if (empty($missing)) {
+        $issues = [];
+
+        if ($noFirstRent) {
+            $issues[] = $this->issue(
+                'fail',
+                'missing_first_rent',
+                'Active contracts have no rent charge at all (first-rent generation failed at activation).',
+                contractIds: $noFirstRent,
+            );
+        }
+
+        if ($missing) {
+            $issues[] = $this->issue(
+                'warning',
+                'missing_rent_generation',
+                'Active contracts have no rent charge generated for their current billing period.',
+                contractIds: $missing,
+            );
+        }
+
+        return $issues;
+    }
+
+    /**
+     * Rule 11 (launch closeout): no billing period of an active lease, from
+     * its first charge up to its current period, may be missing. A gap means
+     * a month was never billed (scheduler outage before catch-up existed, or
+     * a failed run). The calculator defines the periods, so the expected
+     * sequence is the same one the generators produce.
+     */
+    protected function checkRentPeriodGaps(): array
+    {
+        $gaps = [];
+        $calculator = app(BillingPeriodCalculator::class);
+
+        Contract::where('status', ContractStatus::ACTIVE)->each(function (Contract $contract) use (&$gaps, $calculator) {
+            $starts = LedgerEntry::where('contract_id', $contract->id)->where('type', LedgerType::RENT)
+                ->pluck('billing_period_start')->map(fn ($d) => Carbon::parse($d)->toDateString())->flip();
+            if ($starts->isEmpty()) {
+                return; // reported by missing_first_rent
+            }
+
+            // Only periods up to today's are expected; a lease that has not
+            // started (or is outside its term) has no expected history yet.
+            $current = $this->automation->getCurrentBillingPeriod($contract);
+            if (! $current) {
+                return;
+            }
+            $period = $calculator->firstPeriod($contract);
+            $missing = [];
+            for ($i = 0; $period && $i < 1200; $i++) {
+                if ($period['start']->gt($current['start'])) {
+                    break;
+                }
+                if (! $starts->has($period['start']->toDateString())) {
+                    $missing[] = $period['start']->toDateString();
+                }
+                $period = $calculator->periodAfter($contract, $period['end']);
+            }
+
+            if ($missing) {
+                $gaps[$contract->id] = $missing;
+            }
+        });
+
+        if (! $gaps) {
             return [];
         }
 
         return [$this->issue(
             'warning',
-            'missing_rent_generation',
-            'Active contracts have no rent charge generated for their current billing period.',
-            contractIds: $missing,
+            'rent_period_gap',
+            'Active contracts have billing periods that were never charged.',
+            contractIds: array_keys($gaps),
+            metadata: ['missing_period_starts' => $gaps],
         )];
     }
 

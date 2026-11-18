@@ -55,7 +55,10 @@ class StoreContractRequest extends FormRequest
             'rent_amount' => ['required', 'integer', 'min:1', 'max:9999999999'], // Min $0.01, Max ~$99M in cents
             'currency' => ['sometimes', 'string', 'size:3', 'uppercase'],
             'billing_cycle' => ['sometimes', Rule::enum(BillingCycle::class)],
-            'payment_day' => ['required', 'integer', 'min:1', 'max:28'],
+            // Owner policy (Nov 2026): rent is due on the 1st of each calendar
+            // month. Landlords cannot choose another day; an admin with
+            // manage_ledger can change a lease's due day afterwards.
+            'payment_day' => ['sometimes', 'integer', 'in:1'],
             'start_date' => ['required', 'date', 'after_or_equal:today'],
             'end_date' => ['nullable', 'date', 'after:start_date'],
         ];
@@ -80,8 +83,8 @@ class StoreContractRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'payment_day.min' => 'Payment day must be between 1 and 28',
-            'payment_day.max' => 'Payment day must be between 1 and 28',
+            'payment_day.in' => 'Rent is due on the 1st of each month under Wyncrest\'s rent policy. A platform admin can change the due date for a lease after it is created.',
+            'payment_day.integer' => 'Rent is due on the 1st of each month under Wyncrest\'s rent policy.',
             'start_date.after_or_equal' => 'Start date cannot be in the past',
             'end_date.after' => 'End date must be after start date',
         ];

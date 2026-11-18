@@ -150,6 +150,9 @@ export function LedgerPage() {
       cell: (entry) => (
         <span className="whitespace-nowrap text-ink-600">
           {formatDate(entry.due_date ?? entry.occurred_at)}
+          {entry.due_date_adjusted && entry.original_due_date && (
+            <span className="block text-xs text-ink-500">moved from {formatDate(entry.original_due_date)}</span>
+          )}
         </span>
       ),
     },

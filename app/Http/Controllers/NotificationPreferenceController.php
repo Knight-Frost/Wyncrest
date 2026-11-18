@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\NotificationType;
 use App\Models\NotificationPreference;
 use App\Models\User;
+use App\Services\Sms\SmsClientInterface;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -56,6 +57,23 @@ class NotificationPreferenceController extends Controller
     }
 
     /**
+     * Which delivery channels this deployment can actually send through.
+     * In-app notices always work; email needs a mailer; SMS needs Twilio
+     * credentials (absent for the first launch). The Settings page shows an
+     * unavailable channel as unavailable instead of a toggle that cannot work.
+     *
+     * GET /api/notification-preferences/channels
+     */
+    public function channels(SmsClientInterface $sms)
+    {
+        return response()->json([
+            'in_app' => true,
+            'email' => config('mail.default') !== null,
+            'sms' => $sms->isConfigured(),
+        ]);
+    }
+
+    /**
      * Update user's notification preferences
      *
      * PUT /api/notification-preferences
@@ -96,6 +114,9 @@ class NotificationPreferenceController extends Controller
 
         $preferences = $request->all();
         $updated = [];
+        // A channel the deployment cannot send through is never stored as
+        // "on": that would promise SMS that silently never arrives.
+        $smsAvailable = app(SmsClientInterface::class)->isConfigured();
 
         foreach ($preferences as $notificationType => $channels) {
             // Validate notification type exists
@@ -113,7 +134,7 @@ class NotificationPreferenceController extends Controller
                 ],
                 [
                     'email_enabled' => $channels['email'],
-                    'sms_enabled' => $channels['sms'],
+                    'sms_enabled' => $smsAvailable && $channels['sms'],
                 ]
             );
 
@@ -126,6 +147,7 @@ class NotificationPreferenceController extends Controller
         return response()->json([
             'message' => 'Preferences updated successfully',
             'preferences' => $updated,
+            'sms_available' => $smsAvailable,
         ]);
     }
 }

@@ -11,7 +11,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { useApi } from '@/hooks/useApi';
 import { landlordApi } from '@/lib/endpoints';
 import type { LedgerEntry, LedgerAuditEvent } from '@/lib/types';
-import { formatCents } from '@/lib/format';
+import { formatCents, formatCalendar } from '@/lib/format';
 import { LoadingState, ErrorState } from '@/components/ui/states';
 import { I, ENTRY, STATUS, fmtDShort, fmtDT, initials, avStyle, isOpenObligation } from './ledgerShared';
 import { Badge, RecordPaymentModal } from './ledgerComponents';
@@ -20,7 +20,7 @@ import './ledger.css';
 function periodLabel(entry: LedgerEntry): string {
   const iso = entry.billing_period_start ?? entry.due_date;
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+  return formatCalendar(iso, { month: 'short', year: 'numeric' }, 'en-GB');
 }
 
 function severityClass(sev: string | null): string {

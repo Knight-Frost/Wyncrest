@@ -13,7 +13,7 @@ import { tenantApi } from '@/lib/endpoints';
 import { getStripe, stripeConfigured } from '@/lib/stripe';
 import { brand } from '@/config/brand';
 import { normalizeError } from '@/lib/api';
-import { formatCents, formatDate, daysUntil } from '@/lib/format';
+import { formatCents, formatDate, daysUntil, formatCalendar } from '@/lib/format';
 import type {
   Contract,
   LedgerEntry,
@@ -68,10 +68,8 @@ function isSettlement(e: LedgerEntry): boolean {
 
 function monthYear(iso: string | null): string {
   if (!iso) return '';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? ''
-    : d.toLocaleDateString('en-GH', { month: 'long', year: 'numeric' });
+  const label = formatCalendar(iso, { month: 'long', year: 'numeric' });
+  return label === '—' ? '' : label;
 }
 
 /** Human label for an entry, deferring to the server's display_label. */
@@ -321,7 +319,7 @@ function buildModel(
         city: active.listing?.unit?.property?.city ?? null,
         landlordName: active.landlord?.full_name ?? null,
         rentCents: active.rent_amount ?? null,
-        paymentDay: active.payment_day ?? null,
+        paymentDay: active.rent_due_day ?? active.payment_day ?? null,
         endDate: active.end_date ?? null,
       }
     : null;
@@ -719,7 +717,10 @@ function PayPanel({
             {entry.due_date && (
               <div className="pm-pay-review-row pm-muted">
                 <span>Due date</span>
-                <span>{formatDate(entry.due_date)}</span>
+                <span>
+                  {formatDate(entry.due_date)}
+                  {entry.due_date_adjusted && entry.original_due_date && ` (moved from ${formatDate(entry.original_due_date)})`}
+                </span>
               </div>
             )}
             <div className="pm-pay-review-row is-total">

@@ -185,6 +185,12 @@ class LedgerComputationEngineTest extends TestCase
 
     public function test_duplicate_rent_period_is_flagged_by_reconciliation(): void
     {
+        // A live duplicate can no longer be written on SQLite/Postgres (partial
+        // unique index, WYN-001). The reconciler must still catch one on MySQL
+        // (no partial index) or in data written before the index existed, so
+        // model that dataset by removing the index for this test.
+        DB::statement('DROP INDEX IF EXISTS ledger_entries_unique_live_rent_period');
+
         $contract = $this->contract();
         $start = now()->startOfMonth();
         $end = $start->copy()->addMonth()->subDay();
@@ -199,6 +205,24 @@ class LedgerComputationEngineTest extends TestCase
         $this->assertTrue($codes->contains('duplicate_rent_period'));
     }
 
+    public function test_a_waived_duplicate_rent_period_is_resolved_for_reconciliation(): void
+    {
+        // The documented correction for a duplicate charge is to waive it; the
+        // waived row contributes 0 to the balance and must stop failing the
+        // duplicate rule (otherwise a corrected ledger reports "fail" forever).
+        $contract = $this->contract();
+        $start = now()->startOfMonth();
+        $end = $start->copy()->addMonth()->subDay();
+
+        $this->rent($contract, 100_000, ['billing_period_start' => $start, 'billing_period_end' => $end]);
+        $this->rent($contract, 100_000, ['billing_period_start' => $start, 'billing_period_end' => $end, 'status' => LedgerStatus::WAIVED]);
+
+        $codes = collect($this->reconciliation->run()['issues'])->pluck('code');
+
+        $this->assertFalse($codes->contains('duplicate_rent_period'));
+        $this->assertSame(100_000, $this->engine->computeContractBalance($contract->id));
+    }
+
     // ── 9b. Missing rent generation for the current billing period ──────
 
     public function test_missing_rent_generation_is_flagged_by_reconciliation(): void
@@ -208,7 +232,10 @@ class LedgerComputationEngineTest extends TestCase
         $report = $this->reconciliation->run();
         $codes = collect($report['issues'])->pluck('code');
 
-        $this->assertTrue($codes->contains('missing_rent_generation'));
+        // An active lease with NO rent at all is now reported by the stricter
+        // missing_first_rent rule (WYN-020); missing_rent_generation covers a
+        // lease billed before but not for the current period.
+        $this->assertTrue($codes->contains('missing_first_rent'));
     }
 
     public function test_missing_rent_generation_not_flagged_when_current_period_rent_exists(): void

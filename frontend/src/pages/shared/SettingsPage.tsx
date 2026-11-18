@@ -388,6 +388,11 @@ export function SettingsPage() {
     () => (isAdmin ? Promise.resolve<PrefMap>({}) : notificationApi.getPreferences()),
     [isAdmin],
   );
+  const channelsQ = useApi(
+    () => (isAdmin ? Promise.resolve({ in_app: true, email: true, sms: false }) : notificationApi.getChannels()),
+    [isAdmin],
+  );
+  const smsAvailable = channelsQ.data?.sms === true;
   // Optimistic override layered over the fetched prefs — derived during render
   // (no effect mirroring), so the toggles reflect saves immediately.
   const [override, setOverride] = useState<PrefMap | null>(null);
@@ -655,14 +660,21 @@ export function SettingsPage() {
                               label={`${n.name} (email)`}
                             />
                             <Toggle
-                              on={p.sms}
+                              on={smsAvailable && p.sms}
                               onChange={() => toggleChannel(n.type, 'sms')}
-                              label={`${n.name} (SMS)`}
+                              label={smsAvailable ? `${n.name} (SMS)` : `${n.name} (SMS is not available yet)`}
+                              disabled={!smsAvailable}
                             />
                           </div>
                         </div>
                       );
                     })}
+                    {!smsAvailable && channelsQ.data && (
+                      <p className="ac-row-desc" style={{ marginTop: '0.75rem' }}>
+                        Text-message (SMS) alerts are not available on Wyncrest yet. You will receive every notice in the
+                        app, and by email where it is switched on.
+                      </p>
+                    )}
                     <div className="ac-save-state" role="status" aria-live="polite">
                       {saveState === 'saving' && <span className="ac-pending">Saving…</span>}
                       {saveState === 'saved' && <span className="ac-ok">All changes saved</span>}

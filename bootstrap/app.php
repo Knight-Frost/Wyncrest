@@ -47,5 +47,27 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(function ($request, $e) {
             return $request->expectsJson() || $request->is('api/*');
         });
+
+        // Forensic audit WYN-017: when two requests change the same record at
+        // once, the loser used to get a bare 500 ("database is locked" on
+        // SQLite, a serialization/deadlock error on Postgres/MySQL) although
+        // nothing was written. It is a routine, retryable conflict: answer 409
+        // with a plain message so the SPA can say "try again".
+        $exceptions->render(function (\Illuminate\Database\QueryException $e, $request) {
+            if (! \App\Support\Database\Contention::isRetryable($e)) {
+                return null;
+            }
+
+            \Illuminate\Support\Facades\Log::warning('Write contention answered with 409', [
+                'path' => $request->path(),
+                'sqlstate' => $e->errorInfo[0] ?? null,
+                'driver_code' => $e->errorInfo[1] ?? null,
+            ]);
+
+            return response()->json([
+                'message' => 'Another change to this record was being saved at the same moment. Nothing was changed by this request. Refresh and try again.',
+                'code' => 'write_conflict',
+            ], 409);
+        });
     })
     ->create();

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\BillingAnchor;
 use App\Enums\BillingCycle;
 use App\Enums\ContractStatus;
 use App\Enums\TerminatedBy;
@@ -28,6 +29,7 @@ class Contract extends Model
         'currency',
         'billing_cycle',
         'payment_day',
+        'billing_anchor',
         'start_date',
         'end_date',
         'status',
@@ -39,12 +41,47 @@ class Contract extends Model
     protected $casts = [
         'rent_amount' => 'integer',
         'payment_day' => 'integer',
+        'billing_anchor' => BillingAnchor::class,
         'start_date' => 'date',
         'end_date' => 'date',
         'status' => ContractStatus::class,
         'billing_cycle' => BillingCycle::class,
         'terminated_by' => TerminatedBy::class,
     ];
+
+    /**
+     * New leases bill by calendar month (first-of-month policy). The DB
+     * default matches; this keeps unsaved instances consistent too.
+     */
+    protected $attributes = [
+        'billing_anchor' => 'calendar',
+    ];
+
+    /**
+     * rent_due_day: the day of the month rent is due for the lease's NEXT
+     * billing period, after any admin schedule change. Every portal shows
+     * this instead of the signed payment_day so tenant, landlord and admin
+     * read the same effective day.
+     */
+    protected $appends = ['rent_due_day'];
+
+    public function getRentDueDayAttribute(): int
+    {
+        // Fast path: no schedule changes → the signed day (1 for new leases).
+        if (! $this->exists || ! RentDueScheduleChange::where('contract_id', $this->getKey())->exists()) {
+            return (int) ($this->payment_day ?: config('billing.default_due_day', 1));
+        }
+
+        return app(\App\Services\Ledger\RentDueDateService::class)->currentDueDay($this);
+    }
+
+    /**
+     * Append-only due-day timeline (admin "change future rent due dates").
+     */
+    public function dueScheduleChanges(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(RentDueScheduleChange::class)->orderBy('id');
+    }
 
     /**
      * Get the listing associated with the contract

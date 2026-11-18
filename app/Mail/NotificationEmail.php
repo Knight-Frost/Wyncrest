@@ -45,7 +45,10 @@ class NotificationEmail extends Mailable
             view: 'emails.notification',
             with: [
                 'title' => $this->notification->title,
-                'message' => $this->notification->message,
+                // why: `$message` is reserved inside Laravel mail views (it is
+                // the Illuminate\Mail\Message being built), so passing the text
+                // under that name made every notification email fail to render.
+                'body' => $this->notification->message,
                 'data' => $this->notification->data,
                 'created_at' => $this->notification->created_at,
             ],

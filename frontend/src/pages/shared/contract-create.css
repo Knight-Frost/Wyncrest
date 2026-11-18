@@ -104,3 +104,12 @@
   .cc-actions { flex-direction: column-reverse; }
   .cc-actions > * { width: 100%; }
 }
+
+/* First-of-month rent policy note (replaces the old payment-day input). */
+.cc-policy {
+  display: flex; flex-direction: column; gap: 0.2rem; padding: 0.85rem 1rem; border-radius: 14px;
+  background: var(--color-ink-50); border: 1px solid var(--color-ink-100);
+}
+.cc-policy-k { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-ink-500); }
+.cc-policy-v { font-weight: 600; color: var(--color-ink-950); }
+.cc-policy-n { font-size: 0.8rem; color: var(--color-ink-600); line-height: 1.45; }

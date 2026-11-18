@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Ledger\UnappliedPaymentException;
 use App\Services\PaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -97,6 +98,19 @@ class StripeWebhookController extends Controller
             }
 
             return response()->json(['status' => 'success']);
+        } catch (UnappliedPaymentException $e) {
+            // Permanent: captured money that cannot be applied (obligation
+            // already settled, or amount/currency mismatch). PaymentService has
+            // written one critical `payment_unapplied` audit record for a human
+            // to resolve; a retry can never succeed, so acknowledge it and stop
+            // Stripe's multi-day retry loop (forensic audit WYN-003).
+            Log::critical('Stripe payment captured but not applied to the ledger', [
+                'event_type' => $event->type,
+                'event_id' => $event->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json(['status' => 'unapplied']);
         } catch (\Exception $e) {
             Log::error('Error processing Stripe webhook', [
                 'event_type' => $event->type,

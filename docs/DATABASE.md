@@ -55,4 +55,4 @@ erDiagram
 
 ## Local development
 
-Wyncrest uses SQLite by default for local development, stored as a single file on disk. This keeps setup simple: no separate database server to install or run. MySQL and PostgreSQL are both supported for larger deployments; the database type is controlled by an environment setting, not by application code.
+Wyncrest uses SQLite by default for local development, stored as a single file on disk. This keeps setup simple: no separate database server to install or run. SQLite is also the **launch engine**: the only engine whose full test suite, upgrade, concurrency and backup/restore were verified (see `WYNCREST_LAUNCH_CLOSEOUT.md`). It suits a single application host. PostgreSQL 18 installs, seeds and reconciles cleanly but parts of the application (for example `latestOfMany` over UUID keys) still fail there, so it is not supported yet. MySQL is untested and lacks the partial unique indexes that prevent duplicate charges.

@@ -69,6 +69,7 @@ const TYPE_CATEGORY: Record<NotificationType, VisualCategory> = {
   payment_succeeded:      'payments',
   payment_failed:         'payments',
   late_fee_added:         'payments',
+  rent_due_date_changed:  'payments',
   contract_sent:          'lease',
   contract_signed:        'lease',
   contract_terminated:    'lease',
@@ -135,7 +136,7 @@ const TABS: { key: TabKey; label: string }[] = [
 
 const PAYMENT_TYPES = new Set<NotificationType>([
   'rent_generated', 'rent_due_soon', 'rent_overdue',
-  'payment_succeeded', 'payment_failed', 'late_fee_added',
+  'payment_succeeded', 'payment_failed', 'late_fee_added', 'rent_due_date_changed',
 ]);
 
 const CONTRACT_TYPES = new Set<NotificationType>([
@@ -164,6 +165,10 @@ function deepLinkFor(n: AppNotification, role: string | undefined): string | nul
     case 'payment_failed':
     case 'late_fee_added':
       return role === 'tenant' ? '/app/payments' : null;
+    case 'rent_due_date_changed':
+      // Tenants see the new date on Payments; landlords on the lease's ledger.
+      if (role === 'tenant') return '/app/payments';
+      return dataId('contract_id') ? `/app/contracts/${dataId('contract_id')}` : null;
     case 'contract_sent':
     case 'contract_signed':
     case 'contract_terminated':

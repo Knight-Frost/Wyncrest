@@ -381,7 +381,8 @@ class AdminAnalyticsOverviewTest extends TestCase
         $response = $this->getJson('/api/admin/analytics/overview');
         $issues = collect($response->json('analytics.ledger_integrity.issues'));
 
-        $this->assertTrue($issues->contains(fn ($i) => $i['code'] === 'missing_rent_generation'));
+        // No rent at all → the stricter missing_first_rent rule (WYN-020).
+        $this->assertTrue($issues->contains(fn ($i) => $i['code'] === 'missing_first_rent'));
     }
 
     public function test_missing_rent_generation_not_flagged_once_current_period_rent_exists(): void

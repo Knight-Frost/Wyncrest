@@ -108,6 +108,7 @@ export type NotificationType =
   | 'contract_signed'
   | 'contract_terminated'
   | 'contract_renewed'
+  | 'rent_due_date_changed'
   // messaging
   | 'message_received'
   // listings
@@ -471,7 +472,15 @@ export interface Contract {
   rent_amount: number; // cents
   currency: string;
   billing_cycle: BillingCycle;
+  /** The day signed on the lease. Display rent_due_day instead. */
   payment_day: number;
+  /**
+   * Day of the month rent is due for the lease's next billing period, after
+   * any admin schedule change (1 by default). Render this, not payment_day.
+   */
+  rent_due_day?: number;
+  /** 'calendar' (first-of-month policy) or legacy 'anniversary' periods. */
+  billing_anchor?: BillingAnchor;
   start_date: string;
   /** Null = open-ended (no fixed end date). */
   end_date: string | null;
@@ -584,8 +593,88 @@ export interface LedgerEntry {
   occurred_at: string;
   /** Running balance for the contract after this entry, chronologically. Null if not computed for this response. */
   running_balance_cents: number | null;
+  /** The due date as originally posted. due_date is always the effective date. */
+  original_due_date?: string | null;
+  /** True when an admin moved this charge's due date. */
+  due_date_adjusted?: boolean;
 
   created_at: string;
+}
+
+/* ---- Rent due-date controls (admin, manage_ledger) ----------------------- */
+export type BillingAnchor = 'calendar' | 'anniversary';
+
+export interface DueDateAdjustmentPreview {
+  eligible: boolean;
+  problems: string[];
+  entry_id: string;
+  contract_id: string;
+  billing_period_start: string | null;
+  billing_period_end: string | null;
+  amount_cents: number;
+  original_due_date: string | null;
+  current_due_date: string | null;
+  proposed_due_date: string | null;
+  current_status: LedgerStatus;
+  resulting_status: LedgerStatus | null;
+  late_fee: { id: string; status: LedgerStatus; amount_cents: number } | null;
+  impact: string[];
+  window: { earliest: string; latest: string };
+  expected_due_date: string | null;
+  expected_status: LedgerStatus;
+}
+
+export interface RentSchedulePeriod {
+  billing_period_start: string;
+  billing_period_end: string;
+  due_date: string;
+  amount_cents: number;
+  prorated: boolean;
+  /** Preview only: the due date under the current schedule. */
+  current_due_date?: string | null;
+  /** Preview only: the chosen day was clamped to a shorter month. */
+  clamped?: boolean;
+}
+
+export interface RentScheduleStep {
+  id: number;
+  effective_from: string;
+  due_day: number;
+  is_default: boolean;
+  reason: string;
+  admin: string | null;
+  created_at: string | null;
+}
+
+export interface RentSchedule {
+  contract_id: string;
+  billing_anchor: BillingAnchor;
+  billing_anchor_label: string;
+  signed_payment_day: number;
+  default_due_day: number;
+  current_due_day: number;
+  billing_timezone: string;
+  grace_days: number;
+  changeable: boolean;
+  problems: string[];
+  earliest_effective_month: string | null;
+  version: number;
+  timeline: RentScheduleStep[];
+  history: RentScheduleStep[];
+  upcoming: RentSchedulePeriod[];
+}
+
+export interface RentScheduleChangePreview {
+  eligible: boolean;
+  problems: string[];
+  contract_id: string;
+  due_day: number;
+  effective_from: string | null;
+  first_affected_period_start: string | null;
+  current_due_day: number;
+  periods: RentSchedulePeriod[];
+  notes: string[];
+  expected_version: number;
 }
 
 /* ---- Engagement ---------------------------------------------------------- */
@@ -817,6 +906,8 @@ export interface LedgerBalanceRow {
   unit_number: string | null;
   rent_cents: number;
   payment_day: number;
+  /** Effective due day for the next billing period (after admin schedule changes). */
+  rent_due_day?: number;
   start_date: string | null;
   end_date: string | null;
   balance_cents: number;
@@ -847,6 +938,8 @@ export interface LedgerContractStatement {
     status: string;
     rent_cents: number;
     payment_day: number;
+    /** Effective due day for the next billing period (after admin schedule changes). */
+    rent_due_day?: number;
     start_date: string | null;
     end_date: string | null;
     currency: string;
@@ -1250,6 +1343,11 @@ export interface TenantDocument {
   size_bytes: number;
   is_verified: boolean;
   verified_at: string | null;
+  /**
+   * Why the owner cannot delete this document right now (it backs an open or
+   * approved verification case, or a submitted application), or null.
+   */
+  deletion_blocked_reason?: string | null;
   created_at: string;
 }
 
@@ -2889,6 +2987,8 @@ export interface ContractTerms {
   rent_amount_cents: number;
   billing_cycle: string;
   payment_day: number;
+  /** Effective due day for the next billing period (after admin schedule changes). */
+  rent_due_day?: number;
   security_deposit_cents: number | null;
   grace_period: string;
   late_fee_rule: string;
@@ -2928,6 +3028,8 @@ export interface ContractCaseFileDetail {
   currency: string;
   billing_cycle: string;
   payment_day: number;
+  rent_due_day?: number;
+  billing_anchor?: BillingAnchor;
   start_date: string | null;
   end_date: string | null;
   terminated_by: TerminatedBy | null;

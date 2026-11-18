@@ -29,5 +29,10 @@ class AppServiceProvider extends ServiceProvider
         Contract::observe(ContractObserver::class);
         LedgerEntry::observe(LedgerEntryObserver::class);
         Notification::observe(NotificationObserver::class);
+
+        // WYN-010: durable record of every scheduled task outcome.
+        \Illuminate\Support\Facades\Event::listen(\Illuminate\Console\Events\ScheduledTaskFinished::class, [\App\Support\Ops\SchedulerRunLog::class, 'finished']);
+        \Illuminate\Support\Facades\Event::listen(\Illuminate\Console\Events\ScheduledTaskFailed::class, [\App\Support\Ops\SchedulerRunLog::class, 'failed']);
+        \Illuminate\Support\Facades\Event::listen(\Illuminate\Console\Events\ScheduledTaskSkipped::class, [\App\Support\Ops\SchedulerRunLog::class, 'skipped']);
     }
 }

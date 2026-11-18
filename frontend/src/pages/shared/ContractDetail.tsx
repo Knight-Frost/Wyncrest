@@ -287,7 +287,7 @@ export function ContractDetail() {
                 }
               />
               <DetailRow label="Billing cycle" value={humanize(contract.billing_cycle)} />
-              <DetailRow label="Payment day" value={`Day ${contract.payment_day} of each cycle`} />
+              <DetailRow label="Payment day" value={`Day ${(contract.rent_due_day ?? contract.payment_day)} of each cycle`} />
               <DetailRow label="Start date" value={formatDate(contract.start_date)} />
               <DetailRow label="End date" value={formatDate(contract.end_date)} />
               {contract.termination_reason && (
@@ -366,7 +366,7 @@ export function ContractDetail() {
             {[
               { label: 'Monthly Rent', value: formatCents(contract.rent_amount) },
               { label: 'Billing Cycle', value: humanize(contract.billing_cycle) },
-              { label: 'Payment Due', value: `Day ${contract.payment_day}` },
+              { label: 'Payment Due', value: `Day ${(contract.rent_due_day ?? contract.payment_day)}` },
             ].map(({ label, value }) => (
               <div
                 key={label}

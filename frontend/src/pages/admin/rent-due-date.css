@@ -1,0 +1,45 @@
+/* Rent due-date controls (admin). Scoped .wrdd-*, White Liquid Glass tokens. */
+.wrdd-stack { display: flex; flex-direction: column; gap: 1rem; }
+.wrdd-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem; }
+.wrdd-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; }
+.wrdd-facts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem;
+  padding: 1rem 1.1rem; border-radius: 14px;
+  background: var(--color-ink-50); border: 1px solid var(--color-ink-100);
+}
+.wrdd-label {
+  display: block; font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--color-ink-500); margin-bottom: 0.3rem;
+}
+.wrdd-val { font-size: 0.92rem; color: var(--color-ink-900); }
+.wrdd-strong { font-weight: 600; color: var(--color-ink-950); }
+.wrdd-muted { font-size: 0.8rem; color: var(--color-ink-500); }
+.wrdd-field { display: flex; flex-direction: column; min-width: 160px; flex: 1; }
+.wrdd-field input, .wrdd-field select, .wrdd-field textarea {
+  width: 100%; border: 1px solid var(--color-ink-200); background: var(--color-surface);
+  color: var(--color-ink-900); border-radius: 10px; padding: 0.55rem 0.75rem; font: inherit; font-size: 0.9rem;
+}
+.wrdd-field input:focus, .wrdd-field select:focus, .wrdd-field textarea:focus {
+  outline: 2px solid var(--color-brand-500); outline-offset: 1px; border-color: transparent;
+}
+.wrdd-tbl { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+.wrdd-tbl th, .wrdd-tbl td { text-align: left; padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--color-ink-100); }
+.wrdd-tbl thead th { font-family: var(--font-mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-ink-500); font-weight: 500; }
+.wrdd-tbl tbody th { font-weight: 500; color: var(--color-ink-600); }
+.wrdd-num { text-align: right !important; font-variant-numeric: tabular-nums; }
+.wrdd-caption { caption-side: top; text-align: left; font-size: 0.8rem; color: var(--color-ink-500); padding-bottom: 0.4rem; }
+.wrdd-tag {
+  display: inline-block; margin-left: 0.4rem; padding: 0.05rem 0.45rem; border-radius: 999px;
+  font-size: 0.68rem; background: var(--color-brand-50); color: var(--color-brand-700);
+}
+.wrdd-impact { margin: 0; padding-left: 1.1rem; font-size: 0.84rem; color: var(--color-ink-700); display: grid; gap: 0.3rem; }
+.wrdd-history { margin: 0.2rem 0 0; padding-left: 1.1rem; font-size: 0.85rem; display: grid; gap: 0.35rem; color: var(--color-ink-800); }
+.wrdd-form {
+  display: flex; flex-direction: column; gap: 0.9rem; padding: 1rem 1.1rem; border-radius: 14px;
+  border: 1px solid var(--color-ink-200); background: var(--color-surface);
+}
+.wrdd-alert { border-radius: 12px; padding: 0.7rem 0.9rem; font-size: 0.85rem; }
+.wrdd-alert p { margin: 0; }
+.wrdd-alert p + p { margin-top: 0.35rem; }
+.wrdd-alert-danger { background: color-mix(in srgb, var(--color-danger-500, #8a1c2b) 9%, transparent); color: var(--color-danger-700, #6b1420); }
+.wrdd-alert-ok { background: var(--color-brand-50); color: var(--color-brand-800); }

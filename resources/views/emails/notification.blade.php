@@ -57,7 +57,7 @@
     
     <div class="content">
         <div class="message">
-            <p>{{ $message }}</p>
+            <p>{{ $body }}</p>
         </div>
         
         @if($data && isset($data['amount_cents']))

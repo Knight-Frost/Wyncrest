@@ -62,12 +62,29 @@ export function storageUrl(path: string | null | undefined): string | null {
   return `${import.meta.env.VITE_API_URL ?? ''}/storage/${path}`;
 }
 
-export function formatDate(iso: string | null | undefined): string {
+/**
+ * Calendar dates (due dates, billing periods, lease start/end) arrive either
+ * as "YYYY-MM-DD" or as UTC midnight ("…T00:00:00.000000Z"). They are a DAY,
+ * not an instant: formatting them in the viewer's zone showed every due date
+ * one day early west of UTC (launch closeout browser check: due 1 Nov showed
+ * as 31 Oct). Real timestamps still format in the viewer's zone.
+ */
+const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}(T00:00:00(\.0+)?(Z|[+-]00:?00)?)?$/;
+
+/**
+ * Format any date value: calendar dates as the day they name, timestamps in
+ * the viewer's zone. Use this (not `new Date(iso).toLocale…`) for due dates,
+ * billing periods and lease dates.
+ */
+export function formatCalendar(iso: string | null | undefined, options: Intl.DateTimeFormatOptions, locale = 'en-GH'): string {
   if (!iso) return '—';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? '—'
-    : d.toLocaleDateString('en-GH', { year: 'numeric', month: 'short', day: 'numeric' });
+  const calendar = CALENDAR_DATE.test(iso);
+  const d = new Date(calendar ? `${iso.slice(0, 10)}T00:00:00Z` : iso);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString(locale, { ...options, ...(calendar ? { timeZone: 'UTC' } : {}) });
+}
+
+export function formatDate(iso: string | null | undefined): string {
+  return formatCalendar(iso, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 /**

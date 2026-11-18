@@ -41,7 +41,15 @@ return new class extends Migration
             $table->enum('status', ['pending', 'paid', 'overdue', 'waived'])->default('pending');
 
             // Late fee reference (nullable - only for late_fee entries)
-            $table->foreignUuid('related_rent_entry_id')->nullable()->constrained('ledger_entries')->onDelete('set null');
+            $relatedRentEntry = $table->foreignUuid('related_rent_entry_id')->nullable();
+
+            // why (forensic audit WYN-009): on Postgres/MySQL Laravel emits this
+            // self-referencing FK before the primary key exists, so a fresh
+            // install failed. SQLite keeps the original inline definition
+            // (byte-identical schema); other engines add it after creation.
+            if (Schema::getConnection()->getDriverName() === 'sqlite') {
+                $relatedRentEntry->constrained('ledger_entries')->onDelete('set null');
+            }
 
             // Audit trail
             $table->timestamp('created_at')->useCurrent();
@@ -56,6 +64,12 @@ return new class extends Migration
             $table->index('billing_period_start');
             $table->index('created_at');
         });
+
+        if (Schema::getConnection()->getDriverName() !== 'sqlite') {
+            Schema::table('ledger_entries', function (Blueprint $table) {
+                $table->foreign('related_rent_entry_id')->references('id')->on('ledger_entries')->onDelete('set null');
+            });
+        }
     }
 
     /**

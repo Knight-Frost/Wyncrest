@@ -10,6 +10,7 @@ use App\Models\Contract;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Services\NotificationService;
+use Illuminate\Support\Facades\DB;
 
 /**
  * ContractLifecycleService — the Contract Engine.
@@ -51,11 +52,12 @@ class ContractLifecycleService
      */
     public function send(Contract $contract, User $landlord): Contract
     {
-        $this->guard($contract, ContractStatus::DRAFT, 'send');
-
-        $contract->update([
-            'status' => ContractStatus::PENDING_TENANT,
-        ]);
+        $this->transition(
+            $contract,
+            fn (ContractStatus $current) => $current === ContractStatus::DRAFT,
+            'send',
+            ['status' => ContractStatus::PENDING_TENANT],
+        );
 
         $this->auditService->log(
             actor: $landlord,
@@ -88,11 +90,12 @@ class ContractLifecycleService
      */
     public function accept(Contract $contract, User $tenant): Contract
     {
-        $this->guardWith($contract->status->canBeAccepted(), 'accept');
-
-        $contract->update([
-            'status' => ContractStatus::ACTIVE,
-        ]);
+        $this->transition(
+            $contract,
+            fn (ContractStatus $current) => $current->canBeAccepted(),
+            'accept',
+            ['status' => ContractStatus::ACTIVE],
+        );
 
         $this->auditService->log(
             actor: $tenant,
@@ -247,11 +250,12 @@ class ContractLifecycleService
      */
     public function expire(Contract $contract): Contract
     {
-        $this->guard($contract, ContractStatus::ACTIVE, 'expire');
-
-        $contract->update([
-            'status' => ContractStatus::EXPIRED,
-        ]);
+        $this->transition(
+            $contract,
+            fn (ContractStatus $current) => $current === ContractStatus::ACTIVE,
+            'expire',
+            ['status' => ContractStatus::EXPIRED],
+        );
 
         $this->auditService->log(
             actor: null, // Scheduled system action
@@ -271,8 +275,6 @@ class ContractLifecycleService
      */
     protected function markTerminated(Contract $contract, TerminatedBy $by, string $reason, ?Admin $admin = null): void
     {
-        $this->guardWith($contract->status->canBeTerminated(), 'terminate');
-
         $attributes = [
             'status' => ContractStatus::TERMINATED,
             'terminated_by' => $by,
@@ -283,15 +285,44 @@ class ContractLifecycleService
             $attributes['admin_id'] = $admin->id;
         }
 
-        $contract->update($attributes);
+        $this->transition(
+            $contract,
+            fn (ContractStatus $current) => $current->canBeTerminated(),
+            'terminate',
+            $attributes,
+        );
     }
 
     /**
-     * Guard a transition that is only legal from a single source status.
+     * Apply a status transition against the PERSISTED status, not the
+     * caller's in-memory copy (forensic audit WYN-002).
+     *
+     * Route-model binding loads the contract at the start of a request, so two
+     * overlapping requests (double-click, two tabs, a retried POST) used to
+     * both pass the guard on their own stale copy and both write. For accept
+     * that re-fired the activation observer and billed the first month twice;
+     * for accept-vs-terminate the later write silently won. The row is re-read
+     * inside a transaction (row-locked on MySQL/Postgres; SQLite serializes
+     * the write) and the guard runs on that fresh status. The activation
+     * observer, and so first-rent generation, runs inside the same
+     * transaction, making "contract ACTIVE" and "first charge exists" atomic.
+     * The caller's instance is then synced to the persisted state.
+     *
+     * @param  callable(ContractStatus): bool  $allowedFrom
+     * @param  array<string, mixed>  $attributes
      */
-    protected function guard(Contract $contract, ContractStatus $requiredFrom, string $transition): void
+    protected function transition(Contract $contract, callable $allowedFrom, string $name, array $attributes): void
     {
-        $this->guardWith($contract->status === $requiredFrom, $transition);
+        DB::transaction(function () use ($contract, $allowedFrom, $name, $attributes) {
+            \App\Support\Database\WriteLock::row('contracts', $contract->getKey());
+            $current = Contract::whereKey($contract->getKey())->firstOrFail();
+
+            $this->guardWith($allowedFrom($current->status), $name);
+
+            $current->update($attributes);
+
+            $contract->setRawAttributes($current->getAttributes(), true);
+        });
     }
 
     /**

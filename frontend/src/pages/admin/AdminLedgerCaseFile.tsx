@@ -22,6 +22,7 @@ import { IconArrowLeft, IconCheckCircle, IconInfo } from '@/components/ui/icons'
 import { help } from '@/lib/helpText';
 import { InfoHint } from '@/components/ui/InfoHint';
 import type { LedgerEntry, LedgerEntryCaseFile, LedgerType } from '@/lib/types';
+import { AdjustDueDateModal } from './RentDueDateControls';
 import './ledger-case-file.css';
 
 const TYPE_LABEL: Record<LedgerType, string> = {
@@ -76,6 +77,7 @@ export function AdminLedgerCaseFile() {
   const [lateFeeOpen, setLateFeeOpen] = useState(false);
   const [lateFeeDollars, setLateFeeDollars] = useState('25.00');
   const [lateFeeBusy, setLateFeeBusy] = useState(false);
+  const [dueDateOpen, setDueDateOpen] = useState(false);
 
   const { data: entry, loading, error, reload } = useApi<LedgerEntryCaseFile>(
     () => adminApi.ledgerEntry(id!),
@@ -91,6 +93,8 @@ export function AdminLedgerCaseFile() {
     canManageLedger && ['rent', 'late_fee'].includes(entry.type) && ['pending', 'overdue'].includes(entry.status);
   const hasLateFee = entry.linked_entries.some((e) => e.type === 'late_fee');
   const canGenerateLateFee = canManageLedger && entry.type === 'rent' && entry.status === 'overdue' && !hasLateFee;
+  // Server-side eligibility is authoritative; this only decides whether to offer it.
+  const canAdjustDueDate = canManageLedger && entry.type === 'rent' && ['pending', 'overdue'].includes(entry.status);
 
   async function handleWaive(reason?: string) {
     if (!reason) return;
@@ -158,6 +162,11 @@ export function AdminLedgerCaseFile() {
               <InfoHint text={help.waived} label="About waiving" />
             </span>
           )}
+          {canAdjustDueDate && (
+            <Button variant="secondary" size="sm" onClick={() => setDueDateOpen(true)}>
+              Adjust due date
+            </Button>
+          )}
           {canGenerateLateFee && (
             <Button variant="secondary" size="sm" onClick={() => setLateFeeOpen((v) => !v)}>
               Generate late fee
@@ -207,7 +216,21 @@ export function AdminLedgerCaseFile() {
             value={entry.running_balance_cents != null ? formatCents(entry.running_balance_cents) : '—'}
           />
           <DL label="Status" value={humanize(entry.status)} />
-          <DL label="Due date" value={entry.due_date ? formatDate(entry.due_date) : '—'} />
+          <DL
+            label="Due date"
+            value={
+              entry.due_date ? (
+                <>
+                  {formatDate(entry.due_date)}
+                  {entry.due_date_adjusted && entry.original_due_date && (
+                    <span style={{ color: 'var(--color-ink-500)', fontSize: '0.8rem' }}> (moved from {formatDate(entry.original_due_date)})</span>
+                  )}
+                </>
+              ) : (
+                '—'
+              )
+            }
+          />
           <DL
             label="Billing period"
             value={
@@ -312,9 +335,14 @@ export function AdminLedgerCaseFile() {
 
       <div className="adl-immutable" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-ink-500)', fontSize: '0.82rem', padding: '0.5rem 0.2rem' }}>
         <IconInfo size={14} />
-        This entry is immutable. It cannot be edited or deleted — corrections are recorded as new,
-        linked entries.
+        The amount, billing period and posted due date of this entry can never change, and it
+        cannot be deleted. An admin may move an unpaid rent charge's due date (recorded in the
+        audit trail above) or waive it; Wyncrest has no reversing entries or refunds.
       </div>
+
+      {canAdjustDueDate && (
+        <AdjustDueDateModal entry={entry} open={dueDateOpen} onClose={() => setDueDateOpen(false)} onDone={reload} />
+      )}
 
       <DestructiveConfirmDialog
         open={waiveOpen}

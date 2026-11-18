@@ -14,8 +14,14 @@ return new class extends Migration
             $table->foreignId('property_id')->constrained('properties')->cascadeOnDelete();
             $table->foreignId('unit_id')->nullable()->constrained('units')->nullOnDelete();
             $table->foreignId('landlord_id')->constrained('users')->cascadeOnDelete();
-            // contracts uses UUID PK — reference as string
-            $table->string('contract_id', 36)->unique(); // one review per contract
+            // contracts uses a UUID PK. why (forensic audit WYN-009): Postgres
+            // refuses a varchar FK to a uuid column, so non-SQLite engines use
+            // a real uuid column; SQLite keeps the original (identical) varchar.
+            if (Schema::getConnection()->getDriverName() === 'sqlite') {
+                $table->string('contract_id', 36)->unique(); // one review per contract
+            } else {
+                $table->uuid('contract_id')->unique(); // one review per contract
+            }
             $table->foreign('contract_id')->references('id')->on('contracts')->cascadeOnDelete();
             $table->unsignedTinyInteger('rating'); // 1..5 enforced in service/validation
             $table->string('title')->nullable();

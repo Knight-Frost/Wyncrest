@@ -42,6 +42,7 @@ import type {
 // Imported here too (not just AdminContractsPage) so a direct deep-link to
 // /app/contracts/:id — reached without ever mounting the list page — still
 // loads these styles on first paint.
+import { RentSchedulePanel } from './RentDueDateControls';
 import './contract-case-file.css';
 
 /* ── Local presentational helpers (mirrors AuditLogDetail's Card/DL pattern) ── */
@@ -218,6 +219,7 @@ export function AdminContractCaseFile() {
   const { id = '' } = useParams<{ id: string }>();
   const { user: viewer } = useAuth();
   const canManage = adminHasCapability(viewer, 'manage_contracts');
+  const canManageLedger = adminHasCapability(viewer, 'manage_ledger');
 
   const { data, loading, error, reload } = useApi<CaseFileBundle>(async () => {
     const [detail, ledger, payments, schedule, timeline, documents] = await Promise.all([
@@ -449,7 +451,7 @@ export function AdminContractCaseFile() {
       {/* 01 — Overview */}
       <Section id="overview" index="01" title="Overview" hint="Computed by the ledger engine">
         <div className="ccf-sumgrid">
-          <SumCard label="Monthly rent" value={formatCents(detail.financials.monthly_rent_cents)} sub={`due day ${detail.payment_day}`} />
+          <SumCard label="Monthly rent" value={formatCents(detail.financials.monthly_rent_cents)} sub={`due day ${detail.rent_due_day ?? detail.payment_day}`} />
           <SumCard
             label="Current balance"
             value={formatCents(detail.financials.current_balance_cents)}
@@ -576,7 +578,7 @@ export function AdminContractCaseFile() {
           <DL label="Lease end" value={detail.terms.end_date ? formatDate(detail.terms.end_date) : 'Open-ended'} />
           <DL label="Duration" value={detail.terms.duration_months ? `${detail.terms.duration_months} months` : 'Not specified'} />
           <DL label="Rent" value={`${formatCents(detail.terms.rent_amount_cents)} / ${detail.terms.billing_cycle}`} />
-          <DL label="Payment due day" value={`Day ${detail.terms.payment_day} of each month`} />
+          <DL label="Payment due day" value={`Day ${detail.terms.rent_due_day ?? detail.terms.payment_day} of each month`} />
           <DL label="Security deposit" value={detail.terms.security_deposit_cents !== null ? formatCents(detail.terms.security_deposit_cents) : 'Not specified'} />
           <DL label="Grace period" value={detail.terms.grace_period} />
           <DL label="Late fee rule" value={detail.terms.late_fee_rule} />
@@ -714,6 +716,12 @@ export function AdminContractCaseFile() {
             ))}
           </div>
         )}
+        <div style={{ marginTop: '1.25rem' }}>
+          <h3 className="ccf-sub" style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', margin: '0 0 0.75rem' }}>
+            When rent is due
+          </h3>
+          <RentSchedulePanel contractId={id} canManage={canManageLedger} />
+        </div>
       </Section>
 
       {/* 09 — Documents */}

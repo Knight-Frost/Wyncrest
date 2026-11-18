@@ -68,7 +68,7 @@ enum AdminCapability: string
             self::MANAGE_FEATURES => 'Enable or disable per-landlord platform features (API only; no admin UI surface yet)',
             self::VIEW_AUDIT => 'Read and export the immutable audit log',
             self::MANAGE_CONTRACTS => 'Add case notes and force-terminate contracts (every admin can already view contracts)',
-            self::MANAGE_LEDGER => 'Apply late fees on ledger entries (every admin can already view the ledger)',
+            self::MANAGE_LEDGER => 'Apply late fees, waive charges, and change rent due dates (one charge, or a lease\'s future months). Every admin can already view the ledger',
             self::VIEW_ANALYTICS => 'View platform-wide analytics dashboards',
             self::MANAGE_SETTINGS => 'Change global platform configuration',
             self::MANAGE_MAINTENANCE => 'Assign case owners, escalate, add internal notes, override-close/reopen, and export maintenance requests (every admin can already view the maintenance queue)',

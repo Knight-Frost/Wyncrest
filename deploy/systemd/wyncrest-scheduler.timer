@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the Wyncrest scheduler every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+AccuracySec=1s
+# Run a missed tick after a reboot or downtime (the billing jobs are idempotent).
+Persistent=true
+Unit=wyncrest-scheduler.service
+
+[Install]
+WantedBy=timers.target

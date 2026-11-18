@@ -5,7 +5,7 @@ namespace App\Console\Commands;
 use App\Enums\ContractStatus;
 use App\Models\Contract;
 use App\Services\Contracts\ContractLifecycleService;
-use Carbon\Carbon;
+use App\Support\Billing\BillingClock;
 use Illuminate\Console\Command;
 
 /**
@@ -27,7 +27,7 @@ class MarkExpiredContractsCommand extends Command
     {
         $expired = Contract::where('status', ContractStatus::ACTIVE)
             ->whereNotNull('end_date')
-            ->whereDate('end_date', '<', Carbon::today())
+            ->whereDate('end_date', '<', BillingClock::today()->toDateString())
             ->get();
 
         foreach ($expired as $contract) {

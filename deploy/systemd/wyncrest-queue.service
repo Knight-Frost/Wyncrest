@@ -1,0 +1,23 @@
+# Background queue worker. Required whenever QUEUE_CONNECTION is not "sync"
+# (the launch configuration uses "database"): queued listeners such as the
+# listing-approved / listing-rejected notifications only run here.
+[Unit]
+Description=Wyncrest queue worker (php artisan queue:work)
+After=network-online.target
+
+[Service]
+Type=simple
+User=apache
+Group=apache
+WorkingDirectory=/var/www/wyncrest
+Environment=HOME=/var/www/wyncrest
+# --max-time recycles the process hourly (fresh code/memory); systemd restarts it.
+ExecStart=/usr/bin/php /var/www/wyncrest/artisan queue:work --queue=default,analytics-invalidation --tries=3 --backoff=10 --max-time=3600 --sleep=3 --no-interaction
+Restart=always
+RestartSec=5
+# Deploys run `php artisan queue:restart`; the worker exits cleanly and systemd restarts it on new code.
+KillSignal=SIGTERM
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target

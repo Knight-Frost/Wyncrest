@@ -30,6 +30,9 @@ jobs:
           cp .env.example .env
           php artisan key:generate
 
+      - name: Check code style (Pint)
+        run: ./vendor/bin/pint --test
+
       - name: Run backend tests
         run: php artisan test
 
@@ -51,6 +54,10 @@ jobs:
       - name: Install npm dependencies
         working-directory: frontend
         run: npm ci
+
+      - name: Type check
+        working-directory: frontend
+        run: npx tsc --noEmit -p .
 
       - name: Run lint
         working-directory: frontend

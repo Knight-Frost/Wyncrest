@@ -317,7 +317,7 @@ class ContractWorkflowTest extends TestCase
                 'listing_id' => $this->listing->id,
                 'tenant_id' => $this->tenant->id,
                 'rent_amount' => 250000,
-                'payment_day' => 29, // Invalid - must be 1-28
+                'payment_day' => 29, // Invalid - policy fixes new leases to the 1st
                 'start_date' => now()->addDays(7)->format('Y-m-d'),
             ]);
 

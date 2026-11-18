@@ -7,7 +7,7 @@
  */
 import { type CSSProperties, type ReactNode } from 'react';
 import type { LedgerEntry, LedgerType } from '@/lib/types';
-import { formatCents } from '@/lib/format';
+import { formatCents, formatCalendar } from '@/lib/format';
 
 /* ---------- money / dates ------------------------------------------------- */
 
@@ -23,11 +23,11 @@ export function signedCents(cents: number): string {
 
 export function fmtD(iso: string | null | undefined): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return formatCalendar(iso, { day: 'numeric', month: 'short', year: 'numeric' }, 'en-GB');
 }
 export function fmtDShort(iso: string | null | undefined): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return formatCalendar(iso, { day: 'numeric', month: 'short' }, 'en-GB');
 }
 export function fmtDT(iso: string | null | undefined): string {
   if (!iso) return '—';

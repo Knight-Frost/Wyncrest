@@ -61,7 +61,19 @@ class Document extends Model
      *
      * @var list<string>
      */
-    protected $appends = ['is_verified'];
+    protected $appends = ['is_verified', 'deletion_blocked_reason'];
+
+    /**
+     * Verification-case statuses during which (or after which) the evidence
+     * must be kept: the case is open, or it was approved on this evidence.
+     */
+    public const PROTECTED_VERIFICATION_STATUSES = ['pending', 'under_review', 'needs_more_information', 'approved'];
+
+    /**
+     * Application statuses after submission in which attached documents are
+     * part of what the landlord is (or was) deciding on.
+     */
+    public const PROTECTED_APPLICATION_STATUSES = ['submitted', 'in_review', 'landlord_review', 'needs_action', 'approved'];
 
     // -------------------------------------------------------------------------
     // Accessors
@@ -73,6 +85,34 @@ class Document extends Model
     public function getIsVerifiedAttribute(): bool
     {
         return $this->verified_at !== null;
+    }
+
+    /**
+     * Why the owner may not delete this document right now, or null if they
+     * may (forensic audit WYN-012). Unsubmitted uploads, and documents on a
+     * draft/withdrawn/rejected application or a rejected verification case,
+     * stay removable. Staff access is unaffected.
+     */
+    public function getDeletionBlockedReasonAttribute(): ?string
+    {
+        if ($this->related_type === null || $this->related_id === null) {
+            return null;
+        }
+
+        $related = $this->related;
+        $status = $related?->status instanceof \BackedEnum ? $related->status->value : $related?->status;
+
+        if ($this->related_type === VerificationRequest::class && in_array($status, self::PROTECTED_VERIFICATION_STATUSES, true)) {
+            return $status === 'approved'
+                ? 'This document is evidence for your approved identity verification, so it is kept on file and cannot be deleted.'
+                : 'This document is part of a verification request that is still being reviewed, so it cannot be deleted until the review is finished.';
+        }
+
+        if ($this->related_type === Application::class && in_array($status, self::PROTECTED_APPLICATION_STATUSES, true)) {
+            return 'This document is attached to a submitted rental application, so it cannot be deleted while the application is open or after it was approved. Withdraw the application first if you need to remove it.';
+        }
+
+        return null;
     }
 
     // -------------------------------------------------------------------------

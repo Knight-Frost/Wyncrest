@@ -5,7 +5,7 @@ namespace App\Services\Ledger;
 use App\Enums\LedgerStatus;
 use App\Enums\LedgerType;
 use App\Models\LedgerEntry;
-use Carbon\Carbon;
+use App\Support\Billing\BillingClock;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -159,7 +159,10 @@ class LedgerComputationEngine
             LedgerType::REFUND => 'REF',
         };
 
-        $date = ($entry->due_date ?? $entry->created_at)->format('Ymd');
+        // why: the reference is printed on receipts and statements, so it is
+        // built from the POSTED due date; an admin due-date adjustment must
+        // never change a charge's reference.
+        $date = ($entry->original_due_date ?? $entry->due_date ?? $entry->created_at)->format('Ymd');
         $idPart = strtoupper(substr((string) $entry->id, 0, 6));
 
         return "{$prefix}-{$date}-{$idPart}";
@@ -183,6 +186,10 @@ class LedgerComputationEngine
             'reference' => $this->reference($entry),
             'occurred_at' => $entry->created_at?->toIso8601String(),
             'running_balance_cents' => $runningBalanceCents,
+            // Effective vs posted due date (admin adjustments). due_date above
+            // is always the effective date every view and export uses.
+            'original_due_date' => $entry->original_due_date?->toDateString(),
+            'due_date_adjusted' => $entry->hasAdjustedDueDate(),
         ]);
     }
 
@@ -376,7 +383,7 @@ class LedgerComputationEngine
             $query->limit($limit);
         }
 
-        $today = Carbon::today();
+        $today = BillingClock::today();
 
         return $query->get()->map(function (LedgerEntry $entry) use ($today) {
             $decorated = $this->decorateEntry($entry);
@@ -514,12 +521,14 @@ class LedgerComputationEngine
      */
     protected function overdueQuery(Builder $query): Builder
     {
-        $today = Carbon::today()->toDateString();
+        // Same billing-calendar cutoff (today − grace) as the overdue sweep
+        // and LedgerEntry::isOverdue(), so every surface agrees.
+        $cutoff = BillingClock::overdueBeforeDate();
 
-        return $query->where(function (Builder $q) use ($today) {
+        return $query->where(function (Builder $q) use ($cutoff) {
             $q->where('status', LedgerStatus::OVERDUE)
-                ->orWhere(function (Builder $q2) use ($today) {
-                    $q2->where('status', LedgerStatus::PENDING)->whereDate('due_date', '<', $today);
+                ->orWhere(function (Builder $q2) use ($cutoff) {
+                    $q2->where('status', LedgerStatus::PENDING)->whereDate('due_date', '<', $cutoff);
                 });
         });
     }

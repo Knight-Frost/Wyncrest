@@ -8,7 +8,7 @@ It is not a property-management dashboard with a ledger bolted on. The ledger an
 |---|---|
 | Backend | Laravel 12, tests run via `php artisan test` (see verification block below) |
 | Frontend | React 18 + TypeScript, builds clean, lint clean, no automated test suite (see Known limitations) |
-| Database | SQLite for local development, MySQL and PostgreSQL supported |
+| Database | SQLite (the verified launch engine, single host). PostgreSQL installs and seeds but is not yet verified end to end; MySQL is untested |
 | Authentication | Token-based login, separate tenant/landlord and admin accounts |
 | Live demo | <http://18.216.245.190> (HTTP only, no TLS. A single-instance showcase, not a production environment.) |
 | Current state | Actively developed. Runs locally via a one-command setup. |
@@ -36,15 +36,18 @@ Wyncrest never stores a balance as an editable number. A balance is always the s
 
 ## How the ledger stays honest
 
-Ledger entries are immutable at the policy layer: `LedgerEntryPolicy::update()` and `::delete()` both unconditionally return `false`, and `ledger_entries` has no `updated_at` column at all (the migration's own comment: "Ledger entries are IMMUTABLE. Corrections require compensating entries."). If a charge was wrong, Wyncrest never rewrites it; it adds a new, opposite-signed entry next to it, so the mistake and its correction stay visible together.
+A ledger entry's posted terms (amount, type, parties, billing period and posted due date) never change, and entries are never deleted. This is enforced in three places: the `LedgerEntry` model refuses `update()`, `save()` and `delete()`; status changes go only through a compare-and-swap (`transitionStatus()`); and on SQLite and PostgreSQL, database triggers refuse any `DELETE` of a ledger row and any `UPDATE` of a posted term, and refuse to delete a contract or user that still has ledger history (migration `2026_11_18_000003`).
+
+The only correction is a **waiver**: an admin moves an unpaid charge to the terminal `waived` state with a reason, which is kept in the audit log, and the charge then counts as zero. Wyncrest has no reversing or compensating entries, partial payments or refunds. An admin may also move an unpaid rent charge's **due date** (never its amount or period); the posted date is kept in `original_due_date` and every move is recorded in `ledger_due_date_revisions`.
 
 ```mermaid
 flowchart TD
-    A[Original entry recorded<br/>e.g. rent charge, positive amount] --> B{Turns out to be wrong}
-    B -->|Attempt to edit or delete| X[Blocked: policy returns false,<br/>no updated_at column exists]
-    B -->|Correct path| C[New compensating entry created<br/>opposite sign, same contract]
-    C --> D[Balance recalculated as the sum<br/>of every entry, original + correction]
-    D --> E[Both entries remain forever,<br/>full history stays visible]
+    A[Rent charge posted<br/>amount, period, due date] --> B{Something needs to change}
+    B -->|Edit amount/period or delete| X[Refused: model guard<br/>+ database trigger]
+    B -->|Charge was wrong| C[Admin waives it, with a reason<br/>status = waived, counts as 0]
+    B -->|Tenant needs more time| D[Admin moves the due date<br/>amount and period unchanged]
+    C --> E[Original row and audit trail<br/>remain forever]
+    D --> E
 ```
 
 All derived numbers (collected, outstanding, overdue, running balance) are computed in one place, `app/Services/Ledger/LedgerComputationEngine.php`, so the admin, landlord, and tenant views can never quietly disagree about what a tenant owes. Full detail: [`docs/LEDGER.md`](docs/LEDGER.md).
@@ -134,7 +137,7 @@ The frontend never decides what a user is allowed to do. It only asks the backen
 |---|---|
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS |
 | Backend | Laravel 12, PHP 8.2+ |
-| Database | SQLite locally, MySQL or PostgreSQL supported |
+| Database | SQLite (verified); PostgreSQL partially verified; MySQL untested |
 | Authentication | Laravel Sanctum (token-based) |
 | Payments | Stripe |
 | Messaging | Twilio (SMS) |

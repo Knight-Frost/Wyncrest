@@ -178,7 +178,7 @@ export function LeaseAndRentPage() {
           <StatusCard
             label="Monthly rent"
             value={activeContract ? formatCents(activeContract.rent_amount) : '—'}
-            sub={activeContract ? `Due day ${activeContract.payment_day} of each cycle` : 'No active lease'}
+            sub={activeContract ? `Due day ${(activeContract.rent_due_day ?? activeContract.payment_day)} of each cycle` : 'No active lease'}
             icon={<IconWallet size={18} />}
             role="neutral"
           />
@@ -296,7 +296,7 @@ export function LeaseAndRentPage() {
                     <div className="ct-meta" style={{ gridColumn: '1 / -1' }}>
                       <IconCalendar size={14} />
                       <span>
-                        {formatDate(c.start_date)} to {formatDate(c.end_date)} · due day {c.payment_day}
+                        {formatDate(c.start_date)} to {formatDate(c.end_date)} · due day {(c.rent_due_day ?? c.payment_day)}
                       </span>
                     </div>
                   </div>

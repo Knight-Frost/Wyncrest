@@ -6,10 +6,12 @@ use App\Enums\LedgerStatus;
 use App\Enums\LedgerType;
 use App\Events\PaymentFailed;
 use App\Events\PaymentSucceeded;
+use App\Models\AuditLog;
 use App\Models\LedgerEntry;
 use App\Models\User;
 use App\Services\Ledger\LedgerComputationEngine;
 use App\Services\Ledger\PaymentEntryFactory;
+use App\Services\Ledger\UnappliedPaymentException;
 use Illuminate\Support\Facades\DB;
 use Stripe\Exception\ApiErrorException;
 use Stripe\StripeClient;
@@ -106,7 +108,17 @@ class PaymentService
             }
         }
 
-        // Create new PaymentIntent
+        // Create new PaymentIntent.
+        //
+        // why (WYN-005): every checkout open used to mint a NEW intent for the
+        // same obligation, so two open panels could each capture a charge. A
+        // deterministic idempotency key makes Stripe return the same intent for
+        // the same obligation (amount and currency are immutable on a ledger
+        // entry, so the request parameters never differ). Stripe retains keys
+        // for 24h; after that a fresh intent can be created, and a late capture
+        // on an already-settled obligation is surfaced by WYN-003's audit record.
+        $idempotencyKey = 'wyncrest-ledger-'.$entry->id.'-'.$entry->amount_cents.'-'.strtolower($entry->currency);
+
         try {
             $intent = $this->getStripeClient()->paymentIntents->create([
                 'amount' => $entry->amount_cents,
@@ -118,7 +130,7 @@ class PaymentService
                     'entry_type' => $entry->type->value,
                 ],
                 'description' => "Payment for {$entry->type->value} - {$entry->billing_period_start->format('M Y')}",
-            ]);
+            ], ['idempotency_key' => $idempotencyKey]);
 
             // Audit log
             $this->auditService->log(
@@ -204,43 +216,16 @@ class PaymentService
                 metadata: ['stripe_payment_intent_id' => $paymentIntentId],
                 severity: 'critical'
             );
-            throw new \Exception("Payment intent {$paymentIntentId} amount/currency does not match the obligation");
+            $this->recordUnappliedPayment($originalEntry, $paymentIntentId, 'amount_or_currency_mismatch', (int) $received, (string) $intent->currency);
         }
 
-        $paymentEntry = DB::transaction(function () use ($originalEntry, $paymentIntentId) {
-            // Re-read under lock so a concurrent webhook/manual payment
-            // cannot settle the same obligation twice.
-            $lockedEntry = LedgerEntry::whereKey($originalEntry->id)->lockForUpdate()->first();
-
-            $duplicate = LedgerEntry::where('stripe_payment_intent_id', $paymentIntentId)
-                ->where('type', LedgerType::PAYMENT)
-                ->lockForUpdate()
-                ->first();
-            if ($duplicate) {
-                return $duplicate;
-            }
-
-            if (! $lockedEntry->canBePaid()) {
-                throw new \Exception("Ledger entry {$lockedEntry->id} is not payable (status: {$lockedEntry->status->value})");
-            }
-
-            // Create PAYMENT ledger entry (negative amount = money received).
-            // Shared shape lives in PaymentEntryFactory; the Stripe identity is
-            // the settling payment intent id.
-            $paymentEntry = LedgerEntry::create(
-                $this->paymentEntries->forObligation($lockedEntry, [
-                    'stripe_payment_intent_id' => $paymentIntentId,
-                ])
+        try {
+            $paymentEntry = $this->settleObligation($originalEntry, $paymentIntentId);
+        } catch (UnappliedPaymentException) {
+            $this->recordUnappliedPayment(
+                $originalEntry->fresh(), $paymentIntentId, 'obligation_already_settled', (int) $received, (string) $intent->currency
             );
-
-            // Settle the obligation itself so it stops being due (and can no
-            // longer be marked overdue, fined, or paid a second time).
-            if (! $lockedEntry->transitionStatus(LedgerStatus::PAID, $paymentIntentId)) {
-                throw new \Exception("Ledger entry {$lockedEntry->id} changed state while recording payment");
-            }
-
-            return $paymentEntry;
-        });
+        }
 
         // Redelivered/concurrent webhook resolved to the existing entry.
         if (! $paymentEntry->wasRecentlyCreated) {
@@ -265,6 +250,96 @@ class PaymentService
         event(new PaymentSucceeded($paymentEntry, $originalEntry, $tenant));
 
         return $paymentEntry;
+    }
+
+    /**
+     * Book the PAYMENT entry and settle the obligation, atomically.
+     *
+     * @throws UnappliedPaymentException If the obligation is no longer payable.
+     */
+    protected function settleObligation(LedgerEntry $originalEntry, string $paymentIntentId): LedgerEntry
+    {
+        return DB::transaction(function () use ($originalEntry, $paymentIntentId) {
+            // Re-read under lock so a concurrent webhook/manual payment
+            // cannot settle the same obligation twice.
+            \App\Support\Database\WriteLock::row('ledger_entries', $originalEntry->id);
+            $lockedEntry = LedgerEntry::whereKey($originalEntry->id)->lockForUpdate()->first();
+
+            $duplicate = LedgerEntry::where('stripe_payment_intent_id', $paymentIntentId)
+                ->where('type', LedgerType::PAYMENT)
+                ->lockForUpdate()
+                ->first();
+            if ($duplicate) {
+                return $duplicate;
+            }
+
+            if (! $lockedEntry->canBePaid()) {
+                throw new UnappliedPaymentException("Ledger entry {$lockedEntry->id} is not payable (status: {$lockedEntry->status->value})");
+            }
+
+            // Create PAYMENT ledger entry (negative amount = money received).
+            // Shared shape lives in PaymentEntryFactory; the Stripe identity is
+            // the settling payment intent id.
+            $paymentEntry = LedgerEntry::create(
+                $this->paymentEntries->forObligation($lockedEntry, [
+                    'stripe_payment_intent_id' => $paymentIntentId,
+                ])
+            );
+
+            // Settle the obligation itself so it stops being due (and can no
+            // longer be marked overdue, fined, or paid a second time).
+            if (! $lockedEntry->transitionStatus(LedgerStatus::PAID, $paymentIntentId)) {
+                // Settled by a concurrent manual payment/waiver between the
+                // lock and the swap (SQLite does not row-lock): the payment
+                // row rolls back with this throw and the capture is unapplied.
+                throw new UnappliedPaymentException("Ledger entry {$lockedEntry->id} changed state while recording payment");
+            }
+
+            return $paymentEntry;
+        });
+    }
+
+    /**
+     * Write ONE durable, critical record of money Stripe captured that the
+     * ledger cannot apply (WYN-003), then throw so the webhook acknowledges it.
+     * Deduplicated per payment intent so Stripe redeliveries add no noise. No
+     * ledger entry is created: whether to refund or hold a credit is an owner
+     * decision, and the ledger only records what Wyncrest has applied.
+     *
+     * @throws UnappliedPaymentException Always.
+     */
+    protected function recordUnappliedPayment(LedgerEntry $obligation, string $paymentIntentId, string $reason, int $receivedCents, string $currency): never
+    {
+        $alreadyRecorded = AuditLog::where('action', 'payment_unapplied')
+            ->where('subject_type', $obligation->getMorphClass())
+            ->where('subject_id', $obligation->getKey())
+            ->get()
+            ->contains(fn (AuditLog $row) => ($row->metadata['stripe_payment_intent_id'] ?? null) === $paymentIntentId);
+
+        if (! $alreadyRecorded) {
+            $this->auditService->log(
+                actor: null, // System action from webhook
+                action: 'payment_unapplied',
+                subject: $obligation,
+                description: "Stripe captured {$receivedCents} {$currency} on {$paymentIntentId} but it could not be applied to ledger entry {$obligation->id} ({$reason}, status {$obligation->status->value}). Refund or credit required.",
+                metadata: [
+                    'stripe_payment_intent_id' => $paymentIntentId,
+                    'reason' => $reason,
+                    'received_cents' => $receivedCents,
+                    'currency' => strtolower($currency),
+                    'obligation_status' => $obligation->status->value,
+                ],
+                severity: 'critical'
+            );
+        }
+
+        $detail = $reason === 'amount_or_currency_mismatch'
+            ? 'amount/currency does not match the obligation'
+            : 'the obligation is already settled';
+
+        throw new UnappliedPaymentException(
+            "Payment intent {$paymentIntentId} was captured but could not be applied: {$detail}"
+        );
     }
 
     /**

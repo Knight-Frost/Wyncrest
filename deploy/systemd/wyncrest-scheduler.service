@@ -1,0 +1,18 @@
+# Runs Laravel's scheduler once. Triggered every minute by wyncrest-scheduler.timer.
+# Install: see deploy/README.md. Runs as the same account as php-fpm (apache)
+# so files it creates (logs, SQLite journal) stay writable by the web app.
+[Unit]
+Description=Wyncrest scheduler tick (php artisan schedule:run)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=apache
+Group=apache
+WorkingDirectory=/var/www/wyncrest
+Environment=HOME=/var/www/wyncrest
+ExecStart=/usr/bin/php /var/www/wyncrest/artisan schedule:run --no-interaction
+# A failing tick is recorded by systemd (journalctl -u wyncrest-scheduler) and,
+# per task, in storage/logs/scheduler-runs.log. It never blocks the next tick.
+TimeoutStartSec=50min
+Nice=5

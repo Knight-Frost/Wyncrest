@@ -19,6 +19,13 @@ return new class extends Migration
             $table->index('stripe_payment_intent_id');
         });
 
+        // why (forensic audit WYN-009): the rebuild below is raw SQLite DDL. On
+        // Postgres/MySQL it failed a fresh install, and it is unnecessary there:
+        // the create migration already defines 'payment'/'refund' in the enum.
+        if (Schema::getConnection()->getDriverName() !== 'sqlite') {
+            return;
+        }
+
         // Update the type enum to include payment and refund
         // This is SQLite-specific - recreate the table with new enum values
         DB::statement("
@@ -73,6 +80,18 @@ return new class extends Migration
      */
     public function down(): void
     {
+        // WARNING (forensic audit): on SQLite this rollback DELETES every
+        // payment/refund ledger row. Never roll back past this migration on a
+        // database holding real payments; restore from backup instead.
+        if (Schema::getConnection()->getDriverName() !== 'sqlite') {
+            Schema::table('ledger_entries', function (Blueprint $table) {
+                $table->dropIndex(['stripe_payment_intent_id']);
+                $table->dropColumn('stripe_payment_intent_id');
+            });
+
+            return;
+        }
+
         // Recreate table without payment/refund types and stripe column
         DB::statement("
             CREATE TABLE ledger_entries_old (

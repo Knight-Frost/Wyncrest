@@ -123,7 +123,7 @@ export function LedgerStatement() {
           <Si k="Unit" v={unit_number ? `Unit ${unit_number}` : '—'} />
           <Si k="Monthly rent" v={formatCents(contract.rent_cents)} />
           <Si k="Email" v={tenant?.email ?? '—'} />
-          <Si k="Payment day" v={`${contract.payment_day} of the month`} />
+          <Si k="Payment day" v={`${(contract.rent_due_day ?? contract.payment_day)} of the month`} />
         </div>
 
         <div className="stmt-sum">

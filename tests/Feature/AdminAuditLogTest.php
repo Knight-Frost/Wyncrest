@@ -263,8 +263,11 @@ class AdminAuditLogTest extends TestCase
 
     public function test_filter_search_by_action(): void
     {
-        AuditLog::factory()->create(['action' => 'account_suspended']);
-        AuditLog::factory()->create(['action' => 'listing_published']);
+        // why: the factory derives `description` from a RANDOM action before the
+        // override applies, so the second row's description could itself say
+        // "account_suspended" (~1 in 8 runs). Pin descriptions to the actions.
+        AuditLog::factory()->create(['action' => 'account_suspended', 'description' => 'Account suspended']);
+        AuditLog::factory()->create(['action' => 'listing_published', 'description' => 'Listing published']);
         $this->actingAs($this->admin, 'admin');
 
         $response = $this->getJson('/api/admin/audit-logs?search=account_suspended');

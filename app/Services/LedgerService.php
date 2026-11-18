@@ -13,6 +13,7 @@ use App\Models\LedgerEntry;
 use App\Models\User;
 use App\Services\Ledger\BillingPeriodCalculator;
 use App\Services\Ledger\PaymentEntryFactory;
+use App\Services\Ledger\RentChargeWriter;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -28,6 +29,7 @@ class LedgerService
         protected AuditService $auditService,
         protected BillingPeriodCalculator $billingPeriods,
         protected PaymentEntryFactory $paymentEntries,
+        protected RentChargeWriter $rentWriter,
     ) {}
 
     /**
@@ -35,18 +37,25 @@ class LedgerService
      */
     public function generateFirstRentEntry(Contract $contract): LedgerEntry
     {
-        // Billing period + start-anchored due date (see BillingPeriodCalculator).
+        // Opening period, prorated amount and due date (BillingPeriodCalculator).
         $period = $this->billingPeriods->firstPeriod($contract);
         $billingStart = $period['start'];
         $billingEnd = $period['end'];
         $dueDate = $period['due_date'];
 
-        $entry = LedgerEntry::create([
+        // Idempotent (WYN-001): a repeated or concurrent activation resolves to
+        // the charge that already exists for this period, with no second audit
+        // row or notification. The partial unique index is the final guard.
+        if ($existing = $this->rentWriter->existingFor($contract->id, $billingStart)) {
+            return $existing;
+        }
+
+        $entry = $this->rentWriter->createOnce([
             'contract_id' => $contract->id,
             'tenant_id' => $contract->tenant_id,
             'landlord_id' => $contract->landlord_id,
             'type' => LedgerType::RENT,
-            'amount_cents' => $contract->rent_amount,
+            'amount_cents' => $period['amount_cents'],
             'currency' => $contract->currency,
             'billing_period_start' => $billingStart,
             'billing_period_end' => $billingEnd,
@@ -54,12 +63,17 @@ class LedgerService
             'status' => LedgerStatus::PENDING,
         ]);
 
+        if ($entry === null) {
+            return $this->rentWriter->existingFor($contract->id, $billingStart);
+        }
+
         // Audit log
         $this->auditService->log(
             actor: null, // System-generated
             action: 'rent_entry_created',
             subject: $entry,
             description: "Rent entry created for contract {$contract->id}: {$billingStart->format('M Y')}",
+            metadata: $this->periodMetadata($period),
             severity: 'info'
         );
 
@@ -94,19 +108,21 @@ class LedgerService
             return $this->generateFirstRentEntry($contract);
         }
 
-        // Next billing period starts the day after the last one ended;
-        // start-anchored due date (see BillingPeriodCalculator).
-        $period = $this->billingPeriods->periodAfter($lastEntry->billing_period_end, $contract->payment_day);
+        // Next billing period starts the day after the last one ended.
+        $period = $this->billingPeriods->periodAfter($contract, $lastEntry->billing_period_end);
+        if ($period === null) {
+            throw new \InvalidArgumentException("Contract {$contract->id} has no billing period after {$lastEntry->billing_period_end->toDateString()}: the lease has ended.");
+        }
         $billingStart = $period['start'];
         $billingEnd = $period['end'];
         $dueDate = $period['due_date'];
 
-        $entry = LedgerEntry::create([
+        $entry = $this->rentWriter->createOnce([
             'contract_id' => $contract->id,
             'tenant_id' => $contract->tenant_id,
             'landlord_id' => $contract->landlord_id,
             'type' => LedgerType::RENT,
-            'amount_cents' => $contract->rent_amount,
+            'amount_cents' => $period['amount_cents'],
             'currency' => $contract->currency,
             'billing_period_start' => $billingStart,
             'billing_period_end' => $billingEnd,
@@ -114,16 +130,36 @@ class LedgerService
             'status' => LedgerStatus::PENDING,
         ]);
 
+        if ($entry === null) {
+            return $this->rentWriter->existingFor($contract->id, $billingStart);
+        }
+
         // Audit log
         $this->auditService->log(
             actor: null,
             action: 'rent_entry_created',
             subject: $entry,
             description: "Rent entry created for contract {$contract->id}: {$billingStart->format('M Y')}",
+            metadata: $this->periodMetadata($period),
             severity: 'info'
         );
 
         return $entry;
+    }
+
+    /**
+     * @param  array{start: \Carbon\Carbon, end: \Carbon\Carbon, due_date: \Carbon\Carbon, amount_cents: int, prorated: bool}  $period
+     * @return array<string, mixed>
+     */
+    private function periodMetadata(array $period): array
+    {
+        return [
+            'billing_period_start' => $period['start']->toDateString(),
+            'billing_period_end' => $period['end']->toDateString(),
+            'due_date' => $period['due_date']->toDateString(),
+            'amount_cents' => $period['amount_cents'],
+            'prorated' => $period['prorated'],
+        ];
     }
 
     /**
@@ -145,7 +181,7 @@ class LedgerService
         // (or a race between two admins) cannot slip past the existence check
         // and create two late fees for the same rent entry.
         $lateFeeEntry = DB::transaction(function () use ($rentEntry, $lateFeeAmountCents) {
-            LedgerEntry::whereKey($rentEntry->id)->lockForUpdate()->first();
+            \App\Support\Database\WriteLock::row('ledger_entries', $rentEntry->id);
 
             $existingLateFee = LedgerEntry::where('related_rent_entry_id', $rentEntry->id)
                 ->where('type', LedgerType::LATE_FEE)

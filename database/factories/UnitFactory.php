@@ -19,7 +19,7 @@ class UnitFactory extends Factory
 
         return [
             'property_id' => Property::factory(),
-            'unit_number' => fake()->optional()->bothify('##?'),
+            'unit_number' => fake()->optional()->bothify('###??'), // why: '##?' (2,600 values) collided within a property ~1 run in 3 (forensic audit)
             'internal_name' => fake()->optional()->word(),
             'bedrooms' => $bedrooms,
             'bathrooms' => $bathrooms,

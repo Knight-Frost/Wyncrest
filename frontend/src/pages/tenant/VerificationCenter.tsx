@@ -22,6 +22,7 @@ import { Link } from 'react-router';
 import { useAuth } from '@/context/auth';
 import { useApi } from '@/hooks/useApi';
 import { tenantApi } from '@/lib/endpoints';
+import { normalizeError } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useToast } from '@/components/ui/toast';
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/states';
@@ -258,8 +259,8 @@ function UploadedDocsList({
       await tenantApi.deleteDocument(id);
       toast('Document removed.', 'success');
       onDeleted();
-    } catch {
-      toast('Could not remove document. Please try again.', 'error');
+    } catch (e) {
+      toast(normalizeError(e).message || 'Could not remove document. Please try again.', 'error');
     } finally {
       setDeletingId(null);
     }
@@ -277,7 +278,12 @@ function UploadedDocsList({
           <SemanticBadge role={doc.is_verified ? 'success' : 'neutral'} size="sm">
             {doc.is_verified ? 'Verified' : 'Uploaded'}
           </SemanticBadge>
-          {canDelete && (
+          {canDelete && doc.deletion_blocked_reason && (
+            <span className="vfy-doc-meta" title={doc.deletion_blocked_reason}>
+              Kept on file
+            </span>
+          )}
+          {canDelete && !doc.deletion_blocked_reason && (
             <button
               type="button"
               className="vfy-doc-del"

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\LedgerStatus;
 use App\Enums\LedgerType;
+use App\Support\Billing\BillingClock;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -13,13 +14,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * LedgerEntry Model
  *
  * IMMUTABLE FINANCIAL RECORD
- * - General updates are NOT allowed after creation
- * - Deletes are NOT allowed
- * - Status transitions are ONLY allowed via transitionStatus()
- * - Corrections require compensating entries
+ * - Posted terms (amount, type, parties, billing period, original due date)
+ *   never change after creation.
+ * - Deletes are NOT allowed.
+ * - Status changes ONLY via transitionStatus() (compare-and-swap).
+ * - The EFFECTIVE due date changes ONLY via adjustDueDate() (admin, audited,
+ *   with a ledger_due_date_revisions row); original_due_date keeps the posted
+ *   term.
+ * - Corrections are waivers (status -> waived, reason in the audit log).
+ *   Wyncrest has no compensating/reversing-entry mechanism and no refunds.
  *
- * This is the financial source of truth for Homecrest.
- * SECURITY: Strict immutability enforced at model level.
+ * Enforcement: this model refuses update()/save()/delete(); on SQLite and
+ * PostgreSQL database triggers additionally refuse DELETE and any UPDATE of a
+ * posted term (migration 2026_11_18_000003). MySQL has the model guard only.
  */
 class LedgerEntry extends Model
 {
@@ -51,6 +58,7 @@ class LedgerEntry extends Model
         'billing_period_start',
         'billing_period_end',
         'due_date',
+        'original_due_date',
         'status',
         'related_rent_entry_id',
         'stripe_payment_intent_id',
@@ -63,10 +71,21 @@ class LedgerEntry extends Model
         'billing_period_start' => 'date',
         'billing_period_end' => 'date',
         'due_date' => 'date',
+        'original_due_date' => 'date',
         'type' => LedgerType::class,
         'status' => LedgerStatus::class,
         'created_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        // The posted due date is recorded once, at insert, and never changes.
+        static::creating(function (LedgerEntry $entry) {
+            if ($entry->original_due_date === null && $entry->due_date !== null) {
+                $entry->original_due_date = $entry->due_date;
+            }
+        });
+    }
 
     /**
      * Get the contract this entry belongs to.
@@ -174,7 +193,71 @@ class LedgerEntry extends Model
             return false;
         }
 
-        return $this->due_date->isPast();
+        if ($this->status === LedgerStatus::OVERDUE) {
+            return true;
+        }
+
+        // why: due_date->isPast() was true from 00:00:01 ON the due date, so a
+        // charge could be fined on the day it was due while the overdue sweep
+        // (correctly) left it pending. Both now use the billing calendar.
+        return BillingClock::isPastDue($this->due_date);
+    }
+
+    /** Whether the effective due date differs from the posted one. */
+    public function hasAdjustedDueDate(): bool
+    {
+        return $this->original_due_date !== null
+            && $this->due_date !== null
+            && ! $this->original_due_date->isSameDay($this->due_date);
+    }
+
+    /**
+     * Mark a PENDING entry OVERDUE only if, at write time, it is still pending
+     * AND still past the overdue cutoff. Guarding on the due date as well as
+     * the status means an admin extension that lands between the sweep's
+     * SELECT and this UPDATE wins, instead of the sweep marking a charge that
+     * is no longer late.
+     */
+    public function markOverdueIfPastDue(string $dueBefore): bool
+    {
+        $updated = static::where('id', $this->id)
+            ->where('status', LedgerStatus::PENDING->value)
+            ->whereDate('due_date', '<', $dueBefore)
+            ->update(['status' => LedgerStatus::OVERDUE->value]);
+
+        if ($updated) {
+            $this->status = LedgerStatus::OVERDUE;
+        }
+
+        return (bool) $updated;
+    }
+
+    /**
+     * Move the effective due date (and, when an extension makes an overdue
+     * charge current again, its status back to PENDING) in ONE
+     * compare-and-swap on the status and due date the caller previewed.
+     * Returns false if another writer (payment, waiver, sweep, a second
+     * admin) changed either first. Only RentDueDateService may call this: it
+     * owns eligibility, the revision row and the audit log.
+     *
+     * @internal
+     */
+    public function adjustDueDate(\DateTimeInterface $newDueDate, LedgerStatus $newStatus, LedgerStatus $expectedStatus, string $expectedDueDate): bool
+    {
+        if (! in_array($expectedStatus, [LedgerStatus::PENDING, LedgerStatus::OVERDUE], true)
+            || ! in_array($newStatus, [LedgerStatus::PENDING, LedgerStatus::OVERDUE], true)) {
+            throw new \InvalidArgumentException('Only an unpaid (pending or overdue) charge can have its due date adjusted.');
+        }
+
+        $updated = static::where('id', $this->id)
+            ->where('status', $expectedStatus->value)
+            ->whereDate('due_date', $expectedDueDate)
+            ->update([
+                'due_date' => $newDueDate->format('Y-m-d'),
+                'status' => $newStatus->value,
+            ]);
+
+        return (bool) $updated;
     }
 
     /**
@@ -251,6 +334,34 @@ class LedgerEntry extends Model
             'Ledger entries are immutable and cannot be updated directly. '.
             'Use transitionStatus() for status changes or create a compensating entry.'
         );
+    }
+
+    /**
+     * Prevent save()/saveQuietly()/touch()/push() on an existing entry.
+     *
+     * why (forensic audit WYN-006): overriding update() alone left save() open,
+     * because Eloquent's save() on an existing model calls performUpdate(), not
+     * update(). This is the single funnel for every Eloquent instance update.
+     * transitionStatus() is unaffected: it is a query-builder compare-and-swap.
+     *
+     * @throws \LogicException Always
+     */
+    protected function performUpdate(\Illuminate\Database\Eloquent\Builder $query)
+    {
+        throw new \LogicException(
+            'Ledger entries are immutable and cannot be saved after creation. '.
+            'Use transitionStatus() for status changes or create a compensating entry.'
+        );
+    }
+
+    /**
+     * Prevent increment()/decrement() on an entry (they bypass performUpdate).
+     *
+     * @throws \LogicException Always
+     */
+    protected function incrementOrDecrement($column, $amount, $extra, $method)
+    {
+        throw new \LogicException('Ledger entries are immutable: amounts cannot be incremented or decremented.');
     }
 
     /**

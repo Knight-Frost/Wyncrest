@@ -17,7 +17,7 @@ Copy `.env.example` to `.env` and set at minimum:
 | `FRONTEND_URL` | The frontend's real address |
 | `SANCTUM_STATEFUL_DOMAINS` | Must include the frontend's production address |
 | `CORS_ALLOWED_ORIGINS` | Must include the frontend's production address |
-| `DB_CONNECTION` | `sqlite` by default; `mysql` or `pgsql` for larger deployments |
+| `DB_CONNECTION` | `sqlite` (the only verified engine; single host). Also set `DB_JOURNAL_MODE=wal` and `DB_BUSY_TIMEOUT=10000` |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Required for real rent payments |
 | `TWILIO_SID`, `TWILIO_TOKEN`, `TWILIO_FROM` | Required for SMS notifications |
 

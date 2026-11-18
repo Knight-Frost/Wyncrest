@@ -1,0 +1,11 @@
+[Unit]
+Description=Wyncrest consistent backup (SQLite + uploaded files)
+
+[Service]
+Type=oneshot
+User=apache
+Group=apache
+Environment=WYNCREST_APP_DIR=/var/www/wyncrest
+Environment=WYNCREST_BACKUP_DIR=/var/backups/wyncrest
+Environment=WYNCREST_BACKUP_KEEP_DAYS=14
+ExecStart=/var/www/wyncrest/deploy/backup/wyncrest-backup.sh

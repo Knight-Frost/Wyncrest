@@ -122,6 +122,26 @@ class DocumentController extends Controller
     {
         $this->authorize('delete', $document);
 
+        // WYN-012: evidence that an open or approved verification case, or a
+        // submitted application, relies on is kept. The refusal is audited so
+        // staff can see attempted removals of evidence.
+        if ($reason = $document->deletion_blocked_reason) {
+            app(AuditService::class)->log(
+                actor: $request->user(),
+                action: 'document_delete_refused',
+                subject: $document,
+                description: 'Owner tried to delete a document that a verification case or application still relies on',
+                metadata: [
+                    'document_type' => $document->document_type->value,
+                    'related_type' => class_basename((string) $document->related_type),
+                    'related_id' => $document->related_id,
+                ],
+                severity: 'warning'
+            );
+
+            return response()->json(['message' => $reason, 'code' => 'document_retained'], 409);
+        }
+
         // Remove the physical file from private storage
         Storage::disk($document->disk)->delete($document->stored_path);
 

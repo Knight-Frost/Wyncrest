@@ -546,7 +546,7 @@ function ActiveLeaseSummary({
             </div>
             <div>
               <span className="td-fig-lab">Next due</span>
-              <span className="td-fig-val num-old">{nextDueDate ? formatDate(nextDueDate) : `${contract.payment_day}th`}</span>
+              <span className="td-fig-val num-old">{nextDueDate ? formatDate(nextDueDate) : `Day ${(contract.rent_due_day ?? contract.payment_day)}`}</span>
               {daysLeft != null && (
                 <span className={`td-fig-hint${daysLeft <= 0 ? ' over' : ''}`}>
                   {daysLeft <= 0 ? 'Overdue' : `in ${daysLeft} days`}

@@ -20,6 +20,7 @@ use App\Http\Controllers\Admin\AdminLedgerController;
 use App\Http\Controllers\Admin\AdminListingModerationController;
 use App\Http\Controllers\Admin\AdminMaintenanceController;
 use App\Http\Controllers\Admin\AdminNotificationController;
+use App\Http\Controllers\Admin\AdminRentDueDateController;
 use App\Http\Controllers\Admin\AdminReviewController;
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\AdminVerificationController;
@@ -422,6 +423,7 @@ Route::middleware(['metrics'])->group(function () {
         Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
         Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
         Route::get('/notification-preferences', [NotificationPreferenceController::class, 'index']);
+        Route::get('/notification-preferences/channels', [NotificationPreferenceController::class, 'channels']);
         Route::put('/notification-preferences', [NotificationPreferenceController::class, 'update']);
         Route::get('/weather', [WeatherController::class, 'current']);
 
@@ -536,7 +538,15 @@ Route::middleware(['metrics'])->group(function () {
         Route::middleware('admin.can:manage_ledger')->group(function () {
             Route::post('/ledger/{ledgerEntry}/late-fee', [AdminLedgerController::class, 'generateLateFee']);
             Route::post('/ledger/{ledgerEntry}/waive', [AdminLedgerController::class, 'waive']);
+            // Rent due-date controls (launch closeout): preview never writes.
+            Route::get('/ledger/{ledgerEntry}/due-date/preview', [AdminRentDueDateController::class, 'previewEntry']);
+            Route::post('/ledger/{ledgerEntry}/due-date', [AdminRentDueDateController::class, 'adjustEntry']);
+            Route::get('/contracts/{contract}/rent-schedule/preview', [AdminRentDueDateController::class, 'previewSchedule']);
+            Route::post('/contracts/{contract}/rent-schedule', [AdminRentDueDateController::class, 'changeSchedule'])->name('admin.contracts.rent-schedule.change');
+            Route::post('/contracts/{contract}/rent-schedule/reset', [AdminRentDueDateController::class, 'resetSchedule'])->name('admin.contracts.rent-schedule.reset');
         });
+        // Reading a lease's due-date schedule is open to every admin.
+        Route::get('/contracts/{contract}/rent-schedule', [AdminRentDueDateController::class, 'schedule']);
 
         // Maintenance oversight. Viewing (index/summary/analytics/show) is a
         // baseline admin privilege, same as Contracts/Ledger above. Mutating
@@ -634,6 +644,7 @@ Route::middleware(['metrics'])->group(function () {
     // ============================================================================
     Route::middleware(['auth:sanctum', 'rate.limit.role'])->group(function () {
         Route::get('/notification-preferences', [NotificationPreferenceController::class, 'index']);
+        Route::get('/notification-preferences/channels', [NotificationPreferenceController::class, 'channels']);
         Route::put('/notification-preferences', [NotificationPreferenceController::class, 'update']);
     });
 

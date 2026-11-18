@@ -45,7 +45,7 @@ export function downloadLeaseSummary(contract: Contract, tenantName: string, ten
     '',
     `Status: ${humanize(contract.status)}`,
     `Term: ${formatDate(contract.start_date)} to ${formatDate(contract.end_date)}`,
-    `Rent: ${formatCents(contract.rent_amount)} per month (${humanize(contract.billing_cycle)}), due day ${contract.payment_day} of each cycle`,
+    `Rent: ${formatCents(contract.rent_amount)} per month (${humanize(contract.billing_cycle)}), due day ${(contract.rent_due_day ?? contract.payment_day)} of each cycle`,
     ...(unit?.security_deposit ? [`Security deposit: ${formatDollars(unit.security_deposit)}`] : []),
     ...(contract.termination_reason ? ['', `Termination reason: ${contract.termination_reason}`] : []),
     '',

@@ -66,6 +66,9 @@ class LedgerAutomationTest extends TestCase
             'tenant_id' => $this->tenant->id,
             'status' => ContractStatus::ACTIVE,
             'start_date' => Carbon::parse('2025-01-15'),
+            // Legacy anniversary lease (signed before the first-of-month policy):
+            // these tests pin that its period identities carry forward unchanged.
+            'billing_anchor' => 'anniversary',
             'end_date' => null,
             'rent_amount' => 250000,
             'payment_day' => 1,
@@ -84,7 +87,7 @@ class LedgerAutomationTest extends TestCase
         $this->assertEquals('2025-02-15', $entry->billing_period_start->format('Y-m-d'));
         $this->assertEquals('2025-03-14', $entry->billing_period_end->format('Y-m-d'));
 
-        // Verify due date: March 1 (payment_day of month containing period_end)
+        // Verify due date: March 1 (first payment_day on/after the period start)
         $this->assertEquals('2025-03-01', $entry->due_date->format('Y-m-d'));
 
         // Verify audit log
@@ -106,6 +109,9 @@ class LedgerAutomationTest extends TestCase
             'tenant_id' => $this->tenant->id,
             'status' => ContractStatus::ACTIVE,
             'start_date' => Carbon::parse('2025-01-15'),
+            // Legacy anniversary lease (signed before the first-of-month policy):
+            // these tests pin that its period identities carry forward unchanged.
+            'billing_anchor' => 'anniversary',
             'rent_amount' => 250000,
             'payment_day' => 1,
         ]);
@@ -138,6 +144,9 @@ class LedgerAutomationTest extends TestCase
             'tenant_id' => $this->tenant->id,
             'status' => ContractStatus::DRAFT,
             'start_date' => Carbon::parse('2025-01-15'),
+            // Legacy anniversary lease (signed before the first-of-month policy):
+            // these tests pin that its period identities carry forward unchanged.
+            'billing_anchor' => 'anniversary',
             'rent_amount' => 250000,
             'payment_day' => 1,
         ]);
@@ -270,6 +279,9 @@ class LedgerAutomationTest extends TestCase
             'tenant_id' => $this->tenant->id,
             'status' => ContractStatus::ACTIVE,
             'start_date' => Carbon::parse('2025-01-15'),
+            // Legacy anniversary lease (signed before the first-of-month policy):
+            // these tests pin that its period identities carry forward unchanged.
+            'billing_anchor' => 'anniversary',
             'rent_amount' => 250000,
             'payment_day' => 1,
         ]);
@@ -314,6 +326,9 @@ class LedgerAutomationTest extends TestCase
             'tenant_id' => $this->tenant->id,
             'status' => ContractStatus::ACTIVE,
             'start_date' => Carbon::parse('2025-01-15'),
+            // Legacy anniversary lease (signed before the first-of-month policy):
+            // these tests pin that its period identities carry forward unchanged.
+            'billing_anchor' => 'anniversary',
             'end_date' => Carbon::parse('2025-03-31'), // Contract ended
             'rent_amount' => 250000,
             'payment_day' => 1,
@@ -352,6 +367,9 @@ class LedgerAutomationTest extends TestCase
                 'tenant_id' => $this->tenant->id,
                 'status' => ContractStatus::ACTIVE,
                 'start_date' => Carbon::parse('2025-01-15'),
+                // Legacy anniversary lease (signed before the first-of-month policy):
+                // these tests pin that its period identities carry forward unchanged.
+                'billing_anchor' => 'anniversary',
                 'rent_amount' => 250000,
                 'payment_day' => 1,
             ]);
@@ -381,6 +399,9 @@ class LedgerAutomationTest extends TestCase
             'tenant_id' => $this->tenant->id,
             'status' => ContractStatus::ACTIVE,
             'start_date' => Carbon::parse('2025-01-15'),
+            // Legacy anniversary lease (signed before the first-of-month policy):
+            // these tests pin that its period identities carry forward unchanged.
+            'billing_anchor' => 'anniversary',
             'rent_amount' => 250000,
             'payment_day' => 30, // Invalid for Feb
         ]);
@@ -390,9 +411,11 @@ class LedgerAutomationTest extends TestCase
         // Should handle gracefully (use last day of month)
         $this->assertNotNull($entry);
 
-        // Period: Feb 15 - Mar 14
-        // Due date should be Mar 30 (payment_day in month containing period_end)
-        $this->assertEquals('2025-03-30', $entry->due_date->format('Y-m-d'));
+        // Period: Feb 15 - Mar 14. Forensic audit WYN-015: the old end-anchored
+        // rule gave Mar 30, i.e. AFTER the period had ended. The due date is
+        // now the first day-30 on/after the period start, clamped to February.
+        $this->assertEquals('2025-02-28', $entry->due_date->format('Y-m-d'));
+        $this->assertTrue($entry->due_date->between($entry->billing_period_start, $entry->billing_period_end));
 
         Carbon::setTestNow();
     }

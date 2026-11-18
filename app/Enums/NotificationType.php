@@ -15,6 +15,7 @@ enum NotificationType: string
     case PAYMENT_SUCCEEDED = 'payment_succeeded';
     case PAYMENT_FAILED = 'payment_failed';
     case LATE_FEE_ADDED = 'late_fee_added';
+    case RENT_DUE_DATE_CHANGED = 'rent_due_date_changed';
     case CONTRACT_SIGNED = 'contract_signed';
     case CONTRACT_SENT = 'contract_sent';
     case CONTRACT_TERMINATED = 'contract_terminated';

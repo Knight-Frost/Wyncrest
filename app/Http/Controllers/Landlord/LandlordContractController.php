@@ -81,7 +81,10 @@ class LandlordContractController extends Controller
             'rent_amount' => $request->rent_amount,
             'currency' => $request->currency ?? 'USD',
             'billing_cycle' => $request->billing_cycle ?? \App\Enums\BillingCycle::MONTHLY,
-            'payment_day' => $request->payment_day,
+            // First-of-month policy: every new lease bills by calendar month,
+            // due on the default day (1). See config/billing.php.
+            'payment_day' => (int) config('billing.default_due_day', 1),
+            'billing_anchor' => \App\Enums\BillingAnchor::CALENDAR,
             'start_date' => $request->start_date,
             'end_date' => $request->end_date,
             'status' => ContractStatus::DRAFT,

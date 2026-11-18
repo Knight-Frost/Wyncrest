@@ -65,6 +65,10 @@ class LedgerWorkflowTest extends TestCase
             'status' => ContractStatus::PENDING_TENANT,
             'rent_amount' => 250000, // $2500
             'payment_day' => 1,
+            // A full calendar month from the 1st, so the opening charge is the
+            // full rent (mid-month starts are prorated; see RentPolicy tests).
+            'start_date' => now()->addMonthNoOverflow()->startOfMonth(),
+            'end_date' => null,
         ]);
 
         $this->ledgerService = app(LedgerService::class);

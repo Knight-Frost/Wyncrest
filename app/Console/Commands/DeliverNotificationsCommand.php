@@ -50,7 +50,7 @@ class DeliverNotificationsCommand extends Command
             $this->line("   ✅ Delivered: {$result['delivered']}");
             $this->line("   ❌ Failed: {$result['failed']}");
 
-            return Command::SUCCESS;
+            return $result['failed'] > 0 ? Command::FAILURE : Command::SUCCESS;
         }
 
         // Get pending count before delivery
@@ -80,7 +80,7 @@ class DeliverNotificationsCommand extends Command
         $remainingCount = $deliveryService->getPendingCount();
         if ($remainingCount > 0) {
             $this->warn("⚠️  {$remainingCount} notification(s) still pending");
-        } else {
+        } elseif ($result['failed'] === 0) {
             $this->info('✨ All pending notifications delivered!');
         }
 
@@ -92,6 +92,8 @@ class DeliverNotificationsCommand extends Command
             $this->line('   Run with --retry to attempt redelivery');
         }
 
-        return Command::SUCCESS;
+        // A run in which deliveries failed is a failed run: the non-zero exit
+        // lands in storage/logs/scheduler-runs.log and ops:scheduler-status.
+        return $result['failed'] > 0 ? Command::FAILURE : Command::SUCCESS;
     }
 }

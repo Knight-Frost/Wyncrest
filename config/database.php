@@ -47,7 +47,18 @@ return [
             'busy_timeout' => env('DB_BUSY_TIMEOUT', 5000),
             'journal_mode' => env('DB_JOURNAL_MODE'),
             'synchronous' => env('DB_SYNCHRONOUS'),
-            'transaction_mode' => 'DEFERRED',
+            // why (launch closeout): with DEFERRED, a transaction that reads and
+            // then writes (rent generation, contract acceptance, due-date
+            // changes) gets SQLITE_BUSY *immediately* when another connection
+            // already holds the write lock: SQLite refuses to wait to avoid a
+            // deadlock, so busy_timeout never applies. Rehearsal: the Dec 1
+            // rent run lost one lease to "database is locked" while the
+            // notification job and queue worker were writing. IMMEDIATE takes
+            // the write lock at BEGIN, so concurrent writers queue for up to
+            // busy_timeout instead of failing. NOTE: Laravel honours this only
+            // on PHP 8.4+; on PHP 8.3 the critical transactions take the lock
+            // explicitly via App\Support\Database\WriteLock.
+            'transaction_mode' => env('DB_TRANSACTION_MODE', 'IMMEDIATE'),
         ],
 
         'mysql' => [

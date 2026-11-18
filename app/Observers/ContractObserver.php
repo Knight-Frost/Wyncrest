@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Enums\ContractStatus;
 use App\Models\Contract;
+use App\Services\AuditService;
 use App\Services\LedgerService;
 use App\Support\Cache\AnalyticsCacheInvalidator;
 use Illuminate\Support\Facades\Log;
@@ -64,8 +65,10 @@ class ContractObserver
             return false;
         }
 
+        // why: getOriginal() returns the enum-cast value, so comparing it to the
+        // string 'active' was always true. Compare the raw stored value.
         return $contract->status === ContractStatus::ACTIVE
-            && $contract->getOriginal('status') !== ContractStatus::ACTIVE->value;
+            && $contract->getRawOriginal('status') !== ContractStatus::ACTIVE->value;
     }
 
     /**
@@ -76,11 +79,36 @@ class ContractObserver
         try {
             $this->ledgerService->generateFirstRentEntry($contract);
         } catch (\Exception $e) {
-            // Log but don't fail the contract activation
-            Log::error('Failed to generate initial rent entry', [
+            // Don't fail the activation, but never fail silently either
+            // (forensic audit WYN-020): a critical audit row is durable,
+            // visible in the admin audit log, and `ledger:reconcile` reports
+            // the same contract under missing_rent_generation until staff
+            // resolve it (docs/OPERATIONS.md "First rent failed").
+            Log::critical('Failed to generate initial rent entry', [
                 'contract_id' => $contract->id,
                 'error' => $e->getMessage(),
             ]);
+
+            try {
+                app(AuditService::class)->log(
+                    actor: null,
+                    action: 'first_rent_generation_failed',
+                    subject: $contract,
+                    description: "First rent charge could not be generated when contract {$contract->id} was activated. Run `php artisan ledger:reconcile` and see docs/OPERATIONS.md.",
+                    metadata: [
+                        'contract_id' => $contract->id,
+                        'start_date' => $contract->start_date?->toDateString(),
+                        'error_class' => $e::class,
+                        'error' => mb_substr($e->getMessage(), 0, 500),
+                    ],
+                    severity: 'critical'
+                );
+            } catch (\Throwable $auditFailure) {
+                Log::critical('Could not record first_rent_generation_failed audit row', [
+                    'contract_id' => $contract->id,
+                    'error' => $auditFailure->getMessage(),
+                ]);
+            }
         }
     }
 
